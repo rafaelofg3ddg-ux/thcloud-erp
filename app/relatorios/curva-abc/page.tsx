@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Venda = {
   id: string;
@@ -291,8 +292,21 @@ export default function CurvaABCPage() {
     );
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "CURVA ABC DE PRODUTOS",
+      ["Código", "Produto", "Un", "Qtd", "Faturamento", "Part. %", "Acum. %", "Classe"],
+      produtosABC.map((item) => [
+        item.codigo,
+        item.nome,
+        item.unidade,
+        numero(item.quantidade),
+        moeda(item.faturamento),
+        `${item.participacao.toFixed(2)}%`,
+        `${item.acumulado.toFixed(2)}%`,
+        item.classe,
+      ])
+    );
   }
 
   useEffect(() => {

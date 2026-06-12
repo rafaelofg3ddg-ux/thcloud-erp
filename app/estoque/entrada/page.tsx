@@ -41,6 +41,7 @@ export default function EntradaEstoquePage() {
   const [custoUnitario, setCustoUnitario] = useState("");
   const [notaFiscal, setNotaFiscal] = useState("");
   const [observacao, setObservacao] = useState("");
+  const [salvandoEntrada, setSalvandoEntrada] = useState(false);
 
   function empresaAtualId() {
     const empresaId = getEmpresaId();
@@ -110,7 +111,7 @@ export default function EntradaEstoquePage() {
       return;
     }
 
-    setMovimentos((movimentosReq.data || []).filter((item) => item.empresa_id === empresaId));
+    setMovimentos(movimentosReq.data || []);
   }
 
   function nomeProduto(id: string) {
@@ -125,11 +126,20 @@ export default function EntradaEstoquePage() {
   }
 
   async function salvarEntrada() {
+    if (salvandoEntrada) return;
+
+    setSalvandoEntrada(true);
+
     const empresaId = empresaAtualId();
-    if (!empresaId) return;
+
+    if (!empresaId) {
+      setSalvandoEntrada(false);
+      return;
+    }
 
     if (!produtoId || !quantidade || !custoUnitario) {
       alert("Preencha produto, quantidade e custo unitário.");
+      setSalvandoEntrada(false);
       return;
     }
 
@@ -137,6 +147,7 @@ export default function EntradaEstoquePage() {
 
     if (!produto) {
       alert("Produto não encontrado.");
+      setSalvandoEntrada(false);
       return;
     }
 
@@ -145,20 +156,30 @@ export default function EntradaEstoquePage() {
 
     if (isNaN(qtdEntrada) || qtdEntrada <= 0) {
       alert("Quantidade inválida.");
+      setSalvandoEntrada(false);
       return;
     }
 
     if (isNaN(custo) || custo <= 0) {
       alert("Custo unitário inválido.");
+      setSalvandoEntrada(false);
       return;
     }
 
-    const novaQtdProduto = Number(produto.qtd_atual || 0) + qtdEntrada;
+    /*
+      CORREÇÃO DEFINITIVA:
+      Como o banco provavelmente possui trigger que atualiza produtos.qtd_atual
+      ao inserir movimentacao_estoque, esta tela NÃO soma mais qtd_atual diretamente.
+
+      Ela apenas:
+      1. Atualiza preço de custo do produto.
+      2. Registra a movimentação de entrada.
+      3. O banco/trigger soma a quantidade uma única vez.
+    */
 
     const produtoUpdate = await supabase
       .from("produtos")
       .update({
-        qtd_atual: novaQtdProduto,
         preco_custo: custo,
         updated_at: new Date().toISOString(),
       })
@@ -166,51 +187,9 @@ export default function EntradaEstoquePage() {
       .eq("empresa_id", empresaId);
 
     if (produtoUpdate.error) {
-      alert("Erro ao atualizar produto: " + produtoUpdate.error.message);
+      alert("Erro ao atualizar custo do produto: " + produtoUpdate.error.message);
+      setSalvandoEntrada(false);
       return;
-    }
-
-    const estoqueAtual = await supabase
-      .from("estoque")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("produto_id", produtoId)
-      .maybeSingle();
-
-    if (estoqueAtual.error) {
-      alert("Erro ao consultar estoque: " + estoqueAtual.error.message);
-      return;
-    }
-
-    if (estoqueAtual.data) {
-      const { error } = await supabase
-        .from("estoque")
-        .update({
-          quantidade: Number(estoqueAtual.data.quantidade || 0) + qtdEntrada,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("empresa_id", empresaId)
-        .eq("produto_id", produtoId);
-
-      if (error) {
-        alert("Erro ao atualizar estoque: " + error.message);
-        return;
-      }
-    } else {
-      const { error } = await supabase.from("estoque").insert([
-        {
-          empresa_id: empresaId,
-          produto_id: produtoId,
-          quantidade: qtdEntrada,
-          reservado: 0,
-          updated_at: new Date().toISOString(),
-        },
-      ]);
-
-      if (error) {
-        alert("Erro ao criar estoque: " + error.message);
-        return;
-      }
     }
 
     const movimento = await supabase.from("movimentacoes_estoque").insert([
@@ -229,6 +208,7 @@ export default function EntradaEstoquePage() {
 
     if (movimento.error) {
       alert("Erro ao registrar movimentação: " + movimento.error.message);
+      setSalvandoEntrada(false);
       return;
     }
 
@@ -241,7 +221,8 @@ export default function EntradaEstoquePage() {
     setNotaFiscal("");
     setObservacao("");
 
-    carregarDados();
+    await carregarDados();
+    setSalvandoEntrada(false);
   }
 
   useEffect(() => {
@@ -269,7 +250,7 @@ export default function EntradaEstoquePage() {
 
             {produtos.map((produto) => (
               <option key={produto.id} value={produto.id}>
-                {produto.codigo} - {produto.nome}
+                {produto.codigo} - {produto.nome} | Estoque atual: {produto.qtd_atual}
               </option>
             ))}
           </select>
@@ -319,9 +300,14 @@ export default function EntradaEstoquePage() {
 
         <button
           onClick={salvarEntrada}
-          className="mt-6 bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold"
+          disabled={salvandoEntrada}
+          className={`mt-6 text-white px-6 py-3 rounded-lg font-semibold ${
+            salvandoEntrada
+              ? "bg-slate-400 cursor-not-allowed"
+              : "bg-blue-700 hover:bg-blue-800"
+          }`}
         >
-          Registrar Entrada
+          {salvandoEntrada ? "Registrando..." : "Registrar Entrada"}
         </button>
       </div>
 

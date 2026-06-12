@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Venda = {
   id: string;
@@ -312,8 +313,21 @@ export default function RelatorioLucratividadePage() {
     setMargemMedia(receita > 0 ? (lucro / receita) * 100 : 0);
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "LUCRATIVIDADE",
+      ["Código", "Produto", "Un", "Qtd", "Receita", "Custo", "Lucro", "Margem"],
+      produtosLucro.map((item) => [
+        item.codigo,
+        item.nome,
+        item.unidade,
+        numero(item.quantidade),
+        moeda(item.receita),
+        moeda(item.custo),
+        moeda(item.lucro),
+        `${item.margem.toFixed(2)}%`,
+      ])
+    );
   }
 
   useEffect(() => {

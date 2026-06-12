@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type PagamentoVenda = {
   id: string;
@@ -265,8 +266,18 @@ export default function FormasPagamentoPage() {
     setMaiorForma(resumoLista[0]?.forma || "-");
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "FORMAS DE PAGAMENTO",
+      ["Forma", "Quantidade", "Valor", "Percentual", "Ticket Médio"],
+      resumo.map((item) => [
+        item.forma,
+        numero(item.quantidade),
+        moeda(item.valor),
+        `${item.percentual.toFixed(2)}%`,
+        moeda(item.ticket_medio),
+      ])
+    );
   }
 
   useEffect(() => {

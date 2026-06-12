@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Produto = {
   id: string;
@@ -190,8 +191,22 @@ export default function RelatorioEstoquePage() {
     );
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "RELATÓRIO DE ESTOQUE",
+      ["Código", "Produto", "Un", "Qtd Atual", "Qtd Mínima", "Custo", "Venda", "Status", "Localização"],
+      produtos.map((item) => [
+        item.codigo || "-",
+        item.nome,
+        item.unidade || "-",
+        formatarNumero(item.qtd_atual),
+        formatarNumero(item.qtd_minima),
+        moeda(Number(item.preco_custo || 0)),
+        moeda(Number(item.preco_venda || 0)),
+        statusProduto(item).texto,
+        item.localizacao || "-",
+      ])
+    );
   }
 
   useEffect(() => {

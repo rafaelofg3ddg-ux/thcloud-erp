@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Cliente = {
   id: string;
@@ -280,8 +281,21 @@ export default function RelatorioInadimplentesPage() {
     gerarRanking(vencidas);
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "CLIENTES INADIMPLENTES",
+      ["Cliente", "CPF/CNPJ", "Telefone", "Descrição", "Vencimento", "Dias", "Faixa", "Valor"],
+      inadimplentes.map((item) => [
+        item.cliente,
+        item.cpf_cnpj,
+        item.telefone,
+        item.descricao,
+        formatarDataBR(item.vencimento),
+        numero(item.dias_atraso),
+        item.faixa,
+        moeda(item.valor),
+      ])
+    );
   }
 
   useEffect(() => {

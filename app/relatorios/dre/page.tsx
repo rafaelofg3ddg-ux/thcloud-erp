@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { getEmpresaId } from "../../../lib/empresa";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Venda = {
   id: string;
@@ -151,8 +152,21 @@ export default function RelatorioDREPage() {
     setQuantidadeDespesas(listaDespesas.length);
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "DRE - DEMONSTRATIVO DE RESULTADO",
+      ["Indicador", "Valor"],
+      [
+        ["Receita Bruta", moeda(receitaBruta)],
+        ["Descontos", moeda(descontos)],
+        ["Receita Líquida", moeda(receitaLiquida)],
+        ["Despesas Pagas", moeda(despesasPagas)],
+        ["Resultado", moeda(resultado)],
+        ["Margem do Resultado", `${margemResultado.toFixed(2)}%`],
+        ["Quantidade de Vendas", quantidadeVendas],
+        ["Quantidade de Despesas", quantidadeDespesas],
+      ]
+    );
   }
 
   useEffect(() => {

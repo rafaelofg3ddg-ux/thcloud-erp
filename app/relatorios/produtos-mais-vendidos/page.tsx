@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Produto = {
   id: string;
@@ -248,8 +249,21 @@ export default function ProdutosMaisVendidosPage() {
     setTicketMedioGeral(qtdLista > 0 ? fatLista / qtdLista : 0);
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "PRODUTOS MAIS VENDIDOS",
+      ["Posição", "Código", "Produto", "Un", "Qtd", "Total", "Ticket", "Participação"],
+      ranking.map((item, index) => [
+        posicaoEmoji(index),
+        item.codigo,
+        item.nome,
+        item.unidade,
+        numero(item.quantidade),
+        moeda(item.valor_total),
+        moeda(item.ticket_medio),
+        `${item.participacao.toFixed(2)}%`,
+      ])
+    );
   }
 
   useEffect(() => {

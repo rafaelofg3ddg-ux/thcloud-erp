@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { getEmpresaId } from "../../../lib/empresa";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Venda = {
   id: string;
@@ -196,8 +197,18 @@ export default function RelatorioFluxoCaixaPage() {
     setMovimentos(listaMovimentos);
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "FLUXO DE CAIXA",
+      ["Data", "Tipo", "Descrição", "Forma", "Valor"],
+      movimentos.map((item) => [
+        formatarDataBR(item.data),
+        item.tipo,
+        item.descricao,
+        item.forma,
+        moeda(item.valor),
+      ])
+    );
   }
 
   useEffect(() => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Produto = {
   id: string;
@@ -201,8 +202,21 @@ export default function RelatorioProdutosPage() {
     );
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "RELATÓRIO DE PRODUTOS",
+      ["Código", "Barras", "Produto", "Un", "Qtd", "Custo", "Venda", "Status"],
+      produtos.map((item) => [
+        item.codigo || "-",
+        item.codigo_barras || "-",
+        item.nome,
+        item.unidade || "-",
+        numero(Number(item.qtd_atual || 0)),
+        moeda(Number(item.preco_custo || 0)),
+        moeda(Number(item.preco_venda || 0)),
+        statusProduto(item).texto,
+      ])
+    );
   }
 
   useEffect(() => {

@@ -58,6 +58,41 @@ type PagamentoVenda = {
   valor: number;
 };
 
+type ItemVendaConsulta = {
+  id: string;
+  venda_id: string;
+  produto_id: string;
+  quantidade: number;
+  valor_unitario: number;
+  subtotal: number;
+  produtos?: {
+    nome: string;
+    codigo: string | null;
+  } | null;
+};
+
+type VendaDetalhada = {
+  id: string;
+  numero_venda?: number | null;
+  cliente_id: string | null;
+  valor_total: number;
+  created_at: string | null;
+  status: string | null;
+  forma_pagamento: string | null;
+  desconto: number | null;
+  itens_venda?: ItemVendaConsulta[];
+  pagamentos_venda?: PagamentoVenda[];
+};
+
+type EmpresaDados = {
+  nome_fantasia: string;
+  razao_social: string;
+  cnpj: string;
+  telefone: string;
+  email: string;
+  endereco: string;
+};
+
 type ItemCarrinho = {
   produto_id: string;
   codigo: string;
@@ -66,6 +101,26 @@ type ItemCarrinho = {
   quantidade: number;
   valor_unitario: number;
   subtotal: number;
+};
+
+type OrcamentoPdv = {
+  id: string;
+  numero_orcamento: number | null;
+  cliente_id: string | null;
+  cliente_nome: string | null;
+  cliente_documento: string | null;
+  cliente_whatsapp: string | null;
+  desconto: number;
+  valor_total: number;
+  observacao: string;
+  itens: {
+    produto_id: string | null;
+    codigo: string | null;
+    produto_nome: string;
+    quantidade: number;
+    valor_unitario: number;
+    subtotal: number;
+  }[];
 };
 
 export default function PdvPage() {
@@ -79,6 +134,18 @@ export default function PdvPage() {
   const [codigoBusca, setCodigoBusca] = useState("");
   const [pesquisaProduto, setPesquisaProduto] = useState("");
   const [modalProdutos, setModalProdutos] = useState(false);
+  const [modalPagamento, setModalPagamento] = useState(false);
+  const [modalDelivery, setModalDelivery] = useState(false);
+  const [modalAtalhos, setModalAtalhos] = useState(false);
+  const [modalConsultarVendas, setModalConsultarVendas] = useState(false);
+  const [modalDevolucao, setModalDevolucao] = useState(false);
+  const [modoTelaCheia, setModoTelaCheia] = useState(false);
+
+  const [vendasDetalhadas, setVendasDetalhadas] = useState<VendaDetalhada[]>([]);
+  const [vendaDevolucao, setVendaDevolucao] = useState<VendaDetalhada | null>(null);
+  const [tipoDevolucao, setTipoDevolucao] = useState<"estorno" | "credito">("estorno");
+  const [motivoDevolucao, setMotivoDevolucao] = useState("");
+  const [processandoDevolucao, setProcessandoDevolucao] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
   const [pesquisaCliente, setPesquisaCliente] = useState("");
@@ -93,6 +160,8 @@ export default function PdvPage() {
   const [operadorCaixa, setOperadorCaixa] = useState("Admin");
   const [valorAbertura, setValorAbertura] = useState("0,00");
   const [observacaoCaixa, setObservacaoCaixa] = useState("");
+  const [loginOperacao, setLoginOperacao] = useState("");
+  const [senhaOperacao, setSenhaOperacao] = useState("");
 
   const [fechDinheiro, setFechDinheiro] = useState("0,00");
   const [fechPix, setFechPix] = useState("0,00");
@@ -119,6 +188,7 @@ export default function PdvPage() {
   const [pagDebito, setPagDebito] = useState("0");
   const [pagCredito, setPagCredito] = useState("0");
   const [pagCrediario, setPagCrediario] = useState("0");
+  const [arredondamentoVenda, setArredondamentoVenda] = useState("0");
 
   const [parcelas, setParcelas] = useState("1");
   const [primeiroVencimento, setPrimeiroVencimento] = useState("");
@@ -128,6 +198,30 @@ export default function PdvPage() {
   const [ultimaCompraCliente, setUltimaCompraCliente] = useState("");
 
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
+
+  const [empresaNome, setEmpresaNome] = useState("");
+  const [usuarioNome, setUsuarioNome] = useState("");
+  const [empresaDados, setEmpresaDados] = useState<EmpresaDados>({
+    nome_fantasia: "",
+    razao_social: "",
+    cnpj: "",
+    telefone: "",
+    email: "",
+    endereco: "",
+  });
+
+  const [ehDelivery, setEhDelivery] = useState(false);
+  const [telefoneEntrega, setTelefoneEntrega] = useState("");
+  const [enderecoEntrega, setEnderecoEntrega] = useState("");
+  const [numeroEntrega, setNumeroEntrega] = useState("");
+  const [bairroEntrega, setBairroEntrega] = useState("");
+  const [referenciaEntrega, setReferenciaEntrega] = useState("");
+  const [taxaEntrega, setTaxaEntrega] = useState("0");
+  const [entregador, setEntregador] = useState("");
+  const [observacaoEntrega, setObservacaoEntrega] = useState("");
+  const [usarDadosClienteEntrega, setUsarDadosClienteEntrega] = useState(true);
+  const [finalizandoVenda, setFinalizandoVenda] = useState(false);
+  const [orcamentoPdv, setOrcamentoPdv] = useState<OrcamentoPdv | null>(null);
 
   function empresaAtualId() {
     const empresaId = getEmpresaId();
@@ -151,6 +245,234 @@ export default function PdvPage() {
     }
   }
 
+  function formatarCnpj(cnpj: string) {
+    const numeros = String(cnpj || "").replace(/\D/g, "");
+
+    if (numeros.length !== 14) {
+      return cnpj || "";
+    }
+
+    return numeros.replace(
+      /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
+      "$1.$2.$3/$4-$5"
+    );
+  }
+
+  function enderecoEmpresaFormatado(dados: any) {
+    if (dados.endereco) return dados.endereco;
+
+    const partes = [
+      dados.logradouro || dados.rua,
+      dados.numero,
+      dados.bairro,
+      dados.cidade,
+      dados.uf || dados.estado,
+    ].filter(Boolean);
+
+    return partes.join(", ");
+  }
+
+  function carregarEmpresaDoStorage(dadosUsuario: any) {
+    let dadosEmpresa: any = {};
+
+    try {
+      const empresaStorage = localStorage.getItem("th_empresa");
+
+      if (empresaStorage) {
+        dadosEmpresa = JSON.parse(empresaStorage);
+      }
+    } catch {}
+
+    const empresaFinal = {
+      nome_fantasia:
+        dadosEmpresa.nome_fantasia ||
+        dadosEmpresa.nome ||
+        dadosUsuario.empresa_nome ||
+        empresaNome ||
+        "THCloud ERP",
+      razao_social:
+        dadosEmpresa.razao_social ||
+        dadosUsuario.razao_social ||
+        dadosUsuario.empresa_razao_social ||
+        "",
+      cnpj:
+        dadosEmpresa.cnpj ||
+        dadosUsuario.cnpj ||
+        dadosUsuario.empresa_cnpj ||
+        "",
+      telefone:
+        dadosEmpresa.telefone ||
+        dadosEmpresa.whatsapp ||
+        dadosUsuario.telefone ||
+        dadosUsuario.empresa_telefone ||
+        "",
+      email:
+        dadosEmpresa.email ||
+        dadosUsuario.email_empresa ||
+        dadosUsuario.empresa_email ||
+        "",
+      endereco: enderecoEmpresaFormatado({
+        ...dadosUsuario,
+        ...dadosEmpresa,
+      }),
+    };
+
+    setEmpresaDados(empresaFinal);
+    setEmpresaNome(empresaFinal.nome_fantasia);
+  }
+
+function cabecalhoEmpresaCupom() {
+  let empresaAtual: any = {};
+
+  try {
+    const empresaStorage = localStorage.getItem("th_empresa");
+
+    if (empresaStorage) {
+      empresaAtual = JSON.parse(empresaStorage);
+    }
+  } catch {}
+
+  const nome =
+    empresaAtual.nome_fantasia ||
+    empresaDados.nome_fantasia ||
+    empresaNome ||
+    "THCloud ERP";
+
+  const razao =
+    empresaAtual.razao_social ||
+    empresaDados.razao_social ||
+    "";
+
+  const documento =
+    empresaAtual.tipo_pessoa === "fisica"
+      ? empresaAtual.cpf || ""
+      : empresaAtual.cnpj || empresaDados.cnpj || "";
+
+  const telefone =
+    empresaAtual.whatsapp ||
+    empresaAtual.telefone ||
+    empresaDados.telefone ||
+    "";
+
+  const email =
+    empresaAtual.email ||
+    empresaDados.email ||
+    "";
+
+  const endereco =
+    [
+      empresaAtual.endereco,
+      empresaAtual.numero,
+      empresaAtual.bairro,
+      empresaAtual.cidade,
+      empresaAtual.estado,
+    ]
+      .filter(Boolean)
+      .join(", ") ||
+    empresaDados.endereco ||
+    "";
+
+  const logo =
+    empresaAtual.logo_url ||
+    "/logo-thcloud-transparente.png";
+
+  return `
+    <div class="center">
+      <img src="${logo}" class="logo" />
+      <h1>${nome}</h1>
+      ${razao ? `<p>${razao}</p>` : ""}
+      ${documento ? `<p><strong>${empresaAtual.tipo_pessoa === "fisica" ? "CPF" : "CNPJ"}:</strong> ${documento}</p>` : ""}
+      ${telefone ? `<p><strong>Telefone:</strong> ${telefone}</p>` : ""}
+      ${email ? `<p><strong>E-mail:</strong> ${email}</p>` : ""}
+      ${endereco ? `<p class="small">${endereco}</p>` : ""}
+    </div>
+  `;
+}
+
+
+
+  async function validarUsuarioOperacao() {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return null;
+
+    if (!loginOperacao.trim() || !senhaOperacao.trim()) {
+      alert("Informe usuário/e-mail e senha para autorizar a operação.");
+      return null;
+    }
+
+    const loginLimpo = loginOperacao.trim().toLowerCase();
+
+    const consultaEmail = await supabase
+      .from("usuarios")
+      .select("id,nome,email,perfil,ativo,empresa_id")
+      .eq("empresa_id", empresaId)
+      .eq("email", loginLimpo)
+      .eq("senha", senhaOperacao)
+      .maybeSingle();
+
+    if (consultaEmail.error) {
+      alert("Erro ao validar usuário: " + consultaEmail.error.message);
+      return null;
+    }
+
+    if (consultaEmail.data) {
+      if (consultaEmail.data.ativo === false) {
+        alert("Usuário inativo.");
+        return null;
+      }
+
+      return consultaEmail.data;
+    }
+
+    const consultaNome = await supabase
+      .from("usuarios")
+      .select("id,nome,email,perfil,ativo,empresa_id")
+      .eq("empresa_id", empresaId)
+      .ilike("nome", loginLimpo)
+      .eq("senha", senhaOperacao)
+      .maybeSingle();
+
+    if (consultaNome.error) {
+      alert("Erro ao validar usuário: " + consultaNome.error.message);
+      return null;
+    }
+
+    if (!consultaNome.data) {
+      alert("Usuário ou senha inválidos para esta empresa.");
+      return null;
+    }
+
+    if (consultaNome.data.ativo === false) {
+      alert("Usuário inativo.");
+      return null;
+    }
+
+    return consultaNome.data;
+  }
+
+  function limparAutorizacaoOperacao() {
+    setLoginOperacao("");
+    setSenhaOperacao("");
+  }
+
+  async function alternarTelaCheia() {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setModoTelaCheia(true);
+      } else {
+        await document.exitFullscreen();
+        setModoTelaCheia(false);
+      }
+    } catch {
+      alert("Não foi possível alterar para tela cheia neste navegador.");
+    }
+  }
+
+  function atualizarStatusTelaCheia() {
+    setModoTelaCheia(!!document.fullscreenElement);
+  }
+
   function converterNumero(valor: string) {
     return Number(String(valor || "0").replace(",", "."));
   }
@@ -167,6 +489,32 @@ export default function PdvPage() {
     return new Date(data).toLocaleString("pt-BR");
   }
 
+  function formatarNumeroVenda(numero: number | null | undefined) {
+    if (!numero) return "-";
+    return String(numero).padStart(6, "0");
+  }
+
+  async function proximoNumeroVenda() {
+    const empresaId = empresaAtualId();
+    if (!empresaId) throw new Error("Empresa não identificada.");
+
+    const { data, error } = await supabase
+      .from("vendas")
+      .select("numero_venda")
+      .eq("empresa_id", empresaId)
+      .not("numero_venda", "is", null)
+      .order("numero_venda", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      throw new Error("Erro ao gerar número da venda: " + error.message);
+    }
+
+    const ultimoNumero = Number(data?.[0]?.numero_venda || 0);
+
+    return ultimoNumero + 1;
+  }
+
   function totalBruto() {
     return carrinho.reduce((total, item) => total + item.subtotal, 0);
   }
@@ -179,8 +527,31 @@ export default function PdvPage() {
     return converterNumero(descontoValor) + valorDescontoPercentual();
   }
 
+  function totalFinalSemArredondamento() {
+    return Math.max(
+      totalBruto() - valorDescontoTotal() + converterNumero(taxaEntrega),
+      0
+    );
+  }
+
+  function valorArredondamento() {
+    return converterNumero(arredondamentoVenda);
+  }
+
   function totalFinal() {
-    return Math.max(totalBruto() - valorDescontoTotal(), 0);
+    return Math.max(totalFinalSemArredondamento() + valorArredondamento(), 0);
+  }
+
+  function aplicarArredondamento(tipo: "baixo" | "cima") {
+    const totalBase = totalFinalSemArredondamento();
+    const totalArredondado = tipo === "cima" ? Math.ceil(totalBase) : Math.floor(totalBase);
+    const diferenca = Number((totalArredondado - totalBase).toFixed(2));
+
+    setArredondamentoVenda(String(diferenca.toFixed(2)).replace(".", ","));
+  }
+
+  function limparArredondamento() {
+    setArredondamentoVenda("0");
   }
 
   function totalPago() {
@@ -216,6 +587,92 @@ export default function PdvPage() {
   function clienteSelecionado() {
     const cliente = clientes.find((item) => item.id === clienteId);
     return cliente ? cliente.nome : "Consumidor Final";
+  }
+
+  function preencherDeliveryComDadosCliente() {
+    const cliente = clientes.find((item) => item.id === clienteId);
+
+    if (!cliente) {
+      return;
+    }
+
+    if (cliente.whatsapp && !telefoneEntrega.trim()) {
+      setTelefoneEntrega(cliente.whatsapp);
+    }
+  }
+
+  function carregarOrcamentoPendenteParaPdv() {
+    try {
+      const salvo = localStorage.getItem("th_orcamento_para_pdv");
+
+      if (!salvo) return;
+
+      const orcamento = JSON.parse(salvo) as OrcamentoPdv;
+
+      if (!orcamento?.id || !Array.isArray(orcamento.itens)) {
+        localStorage.removeItem("th_orcamento_para_pdv");
+        return;
+      }
+
+      const itensConvertidos: ItemCarrinho[] = orcamento.itens.map((item) => ({
+        produto_id: item.produto_id || "",
+        codigo: item.codigo || "-",
+        nome: item.produto_nome,
+        foto_url: null,
+        quantidade: Number(item.quantidade || 0),
+        valor_unitario: Number(item.valor_unitario || 0),
+        subtotal: Number(item.subtotal || 0),
+      }));
+
+      setCarrinho(itensConvertidos);
+      setClienteId(orcamento.cliente_id || "");
+      setDescontoValor(String(Number(orcamento.desconto || 0)).replace(".", ","));
+      setDescontoPercentual("0");
+      setOrcamentoPdv(orcamento);
+
+      localStorage.removeItem("th_orcamento_para_pdv");
+
+      setTimeout(() => {
+        alert(
+          `Orçamento Nº ${formatarNumeroVenda(orcamento.numero_orcamento)} carregado no PDV. Confira os itens e finalize a venda.`
+        );
+      }, 500);
+    } catch {
+      localStorage.removeItem("th_orcamento_para_pdv");
+    }
+  }
+
+  function cancelarOrcamentoNoPdv() {
+    const confirmar = confirm("Remover o orçamento carregado do PDV e limpar a venda atual?");
+
+    if (!confirmar) return;
+
+    setOrcamentoPdv(null);
+    limparVenda();
+  }
+
+  function abrirFluxoFinalizacao() {
+    if (!caixaAberto) {
+      alert("Abra o caixa antes de finalizar uma venda.");
+      setModalAbrirCaixa(true);
+      return;
+    }
+
+    if (carrinho.length === 0) {
+      alert("Adicione produtos ao carrinho.");
+      return;
+    }
+
+    if (ehDelivery) {
+      if (usarDadosClienteEntrega) {
+        preencherDeliveryComDadosCliente();
+      }
+
+      setModalDelivery(true);
+      return;
+    }
+
+    setModalPagamento(true);
   }
 
   function totalVendasCaixa() {
@@ -329,10 +786,12 @@ export default function PdvPage() {
     if (caixaReq.data?.id) {
       await carregarMovimentosCaixa(caixaReq.data.id);
       await carregarVendasCaixa(caixaReq.data.id);
+      await carregarVendasDetalhadas(caixaReq.data.id);
     } else {
       setMovimentosCaixa([]);
       setVendasCaixa([]);
       setPagamentosCaixa([]);
+      setVendasDetalhadas([]);
     }
   }
 
@@ -353,6 +812,122 @@ export default function PdvPage() {
     }
 
     setMovimentosCaixa(req.data || []);
+  }
+
+
+  async function carregarVendasDetalhadas(caixaId: string) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    /*
+      Correção importante:
+      Esta consulta NÃO usa relacionamento automático entre vendas e pagamentos_venda,
+      porque no seu Supabase ainda não existe FK entre pagamentos_venda.venda_id e vendas.id.
+      Por isso carregamos vendas, itens e pagamentos em consultas separadas.
+    */
+
+    const vendasReq = await supabase
+      .from("vendas")
+      .select("id,numero_venda,cliente_id,valor_total,created_at,status,forma_pagamento,desconto,caixa_id,empresa_id")
+      .eq("empresa_id", empresaId)
+      .eq("caixa_id", caixaId)
+      .order("created_at", { ascending: false });
+
+    if (vendasReq.error) {
+      alert("Erro ao carregar vendas: " + vendasReq.error.message);
+      return;
+    }
+
+    const vendas = vendasReq.data || [];
+
+    if (vendas.length === 0) {
+      setVendasDetalhadas([]);
+      return;
+    }
+
+    const vendaIds = vendas.map((venda) => venda.id);
+
+    const itensReq = await supabase
+      .from("itens_venda")
+      .select("id,venda_id,produto_id,quantidade,valor_unitario,subtotal,empresa_id")
+      .eq("empresa_id", empresaId)
+      .in("venda_id", vendaIds);
+
+    if (itensReq.error) {
+      alert("Erro ao carregar itens das vendas: " + itensReq.error.message);
+      return;
+    }
+
+    const itens = itensReq.data || [];
+    const produtoIds = Array.from(
+      new Set(itens.map((item) => item.produto_id).filter(Boolean))
+    );
+
+    let produtosItens: any[] = [];
+
+    if (produtoIds.length > 0) {
+      const produtosReq = await supabase
+        .from("produtos")
+        .select("id,codigo,nome")
+        .eq("empresa_id", empresaId)
+        .in("id", produtoIds);
+
+      if (produtosReq.error) {
+        alert("Erro ao carregar nomes dos produtos: " + produtosReq.error.message);
+        return;
+      }
+
+      produtosItens = produtosReq.data || [];
+    }
+
+    const pagamentosReq = await supabase
+      .from("pagamentos_venda")
+      .select("id,venda_id,forma_pagamento,valor,empresa_id")
+      .eq("empresa_id", empresaId)
+      .in("venda_id", vendaIds);
+
+    if (pagamentosReq.error) {
+      alert("Erro ao carregar pagamentos das vendas: " + pagamentosReq.error.message);
+      return;
+    }
+
+    const pagamentos = pagamentosReq.data || [];
+
+    const vendasMontadas = vendas.map((venda: any) => {
+      const itensDaVenda = itens
+        .filter((item: any) => item.venda_id === venda.id)
+        .map((item: any) => {
+          const produto = produtosItens.find((prod: any) => prod.id === item.produto_id);
+
+          return {
+            id: item.id,
+            venda_id: item.venda_id,
+            produto_id: item.produto_id,
+            quantidade: Number(item.quantidade || 0),
+            valor_unitario: Number(item.valor_unitario || 0),
+            subtotal: Number(item.subtotal || 0),
+            produtos: {
+              nome: produto?.nome || "Produto",
+              codigo: produto?.codigo || "-",
+            },
+          };
+        });
+
+      return {
+        id: venda.id,
+        numero_venda: Number(venda.numero_venda || 0),
+        cliente_id: venda.cliente_id,
+        valor_total: Number(venda.valor_total || 0),
+        created_at: venda.created_at,
+        status: venda.status,
+        forma_pagamento: venda.forma_pagamento,
+        desconto: Number(venda.desconto || 0),
+        itens_venda: itensDaVenda,
+        pagamentos_venda: pagamentos.filter((pag: any) => pag.venda_id === venda.id),
+      };
+    });
+
+    setVendasDetalhadas(vendasMontadas as VendaDetalhada[]);
   }
 
   async function carregarVendasCaixa(caixaId: string) {
@@ -446,7 +1021,15 @@ export default function PdvPage() {
       return;
     }
 
-    if (!operadorCaixa) {
+    const usuarioAutorizado = await validarUsuarioOperacao();
+
+    if (!usuarioAutorizado) {
+      return;
+    }
+
+    const operadorValidado = usuarioAutorizado.nome || operadorCaixa || operadorAtual();
+
+    if (!operadorValidado) {
       alert("Informe o operador do caixa.");
       return;
     }
@@ -461,7 +1044,7 @@ export default function PdvPage() {
     const { error } = await supabase.from("caixas").insert([
       {
         empresa_id: empresaId,
-        usuario: operadorCaixa || operadorAtual(),
+        usuario: operadorValidado,
         valor_abertura: valor,
         valor_fechamento: null,
         status: "aberto",
@@ -480,9 +1063,390 @@ export default function PdvPage() {
 
     setValorAbertura("0,00");
     setObservacaoCaixa("");
+    limparAutorizacaoOperacao();
     setModalAbrirCaixa(false);
 
     await carregarDados();
+  }
+
+
+  function abrirDevolucao(venda: VendaDetalhada) {
+    if (venda.status === "cancelada" || venda.status === "devolvida") {
+      alert("Esta venda já está cancelada/devolvida.");
+      return;
+    }
+
+    setVendaDevolucao(venda);
+    setTipoDevolucao("estorno");
+    setMotivoDevolucao("");
+    setLoginOperacao("");
+    setSenhaOperacao("");
+    setModalDevolucao(true);
+  }
+
+  function nomeClienteVenda(clienteIdVenda: string | null) {
+    if (!clienteIdVenda) return "Consumidor Final";
+    const cliente = clientes.find((item) => item.id === clienteIdVenda);
+    return cliente?.nome || "Consumidor Final";
+  }
+
+  function totalVendaDevolucao() {
+    return Number(vendaDevolucao?.valor_total || 0);
+  }
+
+  async function devolverVenda() {
+    if (processandoDevolucao) return;
+
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    if (!caixaAberto) {
+      alert("Abra o caixa antes de registrar uma devolução.");
+      return;
+    }
+
+    if (!vendaDevolucao) {
+      alert("Nenhuma venda selecionada.");
+      return;
+    }
+
+    if (!motivoDevolucao.trim()) {
+      alert("Informe o motivo da devolução.");
+      return;
+    }
+
+    const usuarioAutorizado = await validarUsuarioOperacao();
+
+    if (!usuarioAutorizado) return;
+
+    const confirmar = confirm(
+      `Confirmar devolução da venda ${vendaDevolucao.id}?\n\nValor: ${formatarMoeda(totalVendaDevolucao())}\nTipo: ${
+        tipoDevolucao === "estorno" ? "Estorno/saída do caixa" : "Crédito para cliente"
+      }`
+    );
+
+    if (!confirmar) return;
+
+    setProcessandoDevolucao(true);
+
+    try {
+      const itens = vendaDevolucao.itens_venda || [];
+
+      for (const item of itens) {
+        const movimento = await supabase.from("movimentacoes_estoque").insert([
+          {
+            empresa_id: empresaId,
+            produto_id: item.produto_id,
+            tipo: "entrada",
+            quantidade: Number(item.quantidade || 0),
+            custo_unitario: 0,
+            nota_fiscal: null,
+            fornecedor_id: null,
+            observacao: `Devolução venda ${vendaDevolucao.id}`,
+            usuario: usuarioAutorizado.nome || operadorAtual(),
+          },
+        ]);
+
+        if (movimento.error) throw new Error(movimento.error.message);
+      }
+
+      if (tipoDevolucao === "estorno") {
+        const movimentoCaixa = await supabase.from("movimentacoes_caixa").insert([
+          {
+            caixa_id: caixaAberto.id,
+            empresa_id: empresaId,
+            tipo: "sangria",
+            valor: totalVendaDevolucao(),
+            descricao: `Estorno devolução venda ${vendaDevolucao.id} - ${motivoDevolucao}`,
+            usuario: usuarioAutorizado.nome || operadorAtual(),
+          },
+        ]);
+
+        if (movimentoCaixa.error) throw new Error(movimentoCaixa.error.message);
+      } else {
+        if (!vendaDevolucao.cliente_id) {
+          throw new Error("Para gerar crédito, a venda precisa ter cliente selecionado.");
+        }
+
+        const credito = await supabase.from("contas_receber").insert([
+          {
+            empresa_id: empresaId,
+            cliente_id: vendaDevolucao.cliente_id,
+            descricao: `Crédito de devolução da venda ${vendaDevolucao.id}`,
+            valor: totalVendaDevolucao() * -1,
+            vencimento: new Date().toISOString().split("T")[0],
+            status: "credito",
+          },
+        ]);
+
+        if (credito.error) throw new Error(credito.error.message);
+      }
+
+      const vendaUpdate = await supabase
+        .from("vendas")
+        .update({
+          status: "devolvida",
+          observacao: `Devolução: ${motivoDevolucao}`,
+        })
+        .eq("empresa_id", empresaId)
+        .eq("id", vendaDevolucao.id);
+
+      if (vendaUpdate.error) throw new Error(vendaUpdate.error.message);
+
+      alert("Devolução registrada com sucesso!");
+
+      setModalDevolucao(false);
+      setVendaDevolucao(null);
+      setMotivoDevolucao("");
+      limparAutorizacaoOperacao();
+
+      await carregarDados();
+    } catch (error: any) {
+      alert("Erro ao registrar devolução: " + error.message);
+    }
+
+    setProcessandoDevolucao(false);
+  }
+
+  function montarRelatorioFechamentoCaixa(dados: {
+    caixa: Caixa;
+    dataFechamento: string;
+    dinheiroSistema: number;
+    pixSistema: number;
+    debitoSistema: number;
+    creditoSistema: number;
+    crediarioSistema: number;
+    valorInformado: number;
+    saldoSistema: number;
+    diferenca: number;
+    observacao: string;
+  }) {
+    const movimentos = movimentosCaixa
+      .map((mov) => {
+        return `
+          <tr>
+            <td>${formatarData(mov.created_at)}</td>
+            <td>${String(mov.tipo || "").toUpperCase()}</td>
+            <td style="text-align:right;">${formatarMoeda(Number(mov.valor || 0))}</td>
+          </tr>
+          <tr>
+            <td colspan="3" class="small">${mov.descricao || "-"}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Fechamento de Caixa</title>
+
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              width: 300px;
+              margin: 0 auto;
+              color: #111827;
+              font-size: 12px;
+            }
+
+            .center {
+              text-align: center;
+            }
+
+            h1 {
+              font-size: 17px;
+              margin: 4px 0;
+            }
+
+            h2 {
+              font-size: 14px;
+              margin: 8px 0 4px;
+            }
+
+            p {
+              margin: 3px 0;
+            }
+
+            hr {
+              border: none;
+              border-top: 1px dashed #111827;
+              margin: 10px 0;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            td {
+              padding: 3px 0;
+              vertical-align: top;
+            }
+
+            .total {
+              font-size: 16px;
+              font-weight: bold;
+            }
+
+            .small {
+              font-size: 11px;
+            }
+
+            .assinatura {
+              margin-top: 28px;
+              border-top: 1px solid #111827;
+              text-align: center;
+              padding-top: 4px;
+            }
+
+            @media print {
+              body {
+                width: 80mm;
+              }
+
+              button {
+                display: none;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          ${cabecalhoEmpresaCupom()}
+
+          <div class="center">
+            <p class="small">Relatório de Fechamento de Caixa</p>
+            <p class="small">Cupom de Conferência Interna</p>
+          </div>
+
+          <hr />
+
+          <p><strong>Caixa:</strong> ${dados.caixa.id}</p>
+          <p><strong>Operador:</strong> ${dados.caixa.usuario || operadorAtual()}</p>
+          <p><strong>Abertura:</strong> ${formatarData(dados.caixa.data_abertura)}</p>
+          <p><strong>Fechamento:</strong> ${formatarData(dados.dataFechamento)}</p>
+          <p><strong>Valor abertura:</strong> ${formatarMoeda(Number(dados.caixa.valor_abertura || 0))}</p>
+
+          <hr />
+
+          <h2>Vendas por Forma de Pagamento</h2>
+
+          <table>
+            <tbody>
+              <tr>
+                <td>Dinheiro</td>
+                <td style="text-align:right;">${formatarMoeda(dados.dinheiroSistema)}</td>
+              </tr>
+              <tr>
+                <td>PIX</td>
+                <td style="text-align:right;">${formatarMoeda(dados.pixSistema)}</td>
+              </tr>
+              <tr>
+                <td>Débito</td>
+                <td style="text-align:right;">${formatarMoeda(dados.debitoSistema)}</td>
+              </tr>
+              <tr>
+                <td>Crédito</td>
+                <td style="text-align:right;">${formatarMoeda(dados.creditoSistema)}</td>
+              </tr>
+              <tr>
+                <td>Crediário</td>
+                <td style="text-align:right;">${formatarMoeda(dados.crediarioSistema)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <hr />
+
+          <h2>Resumo do Caixa</h2>
+
+          <table>
+            <tbody>
+              <tr>
+                <td>Vendas realizadas</td>
+                <td style="text-align:right;">${vendasCaixa.length}</td>
+              </tr>
+              <tr>
+                <td>Total vendido</td>
+                <td style="text-align:right;">${formatarMoeda(totalVendasCaixa())}</td>
+              </tr>
+              <tr>
+                <td>Suprimentos</td>
+                <td style="text-align:right;">${formatarMoeda(totalSuprimentos())}</td>
+              </tr>
+              <tr>
+                <td>Sangrias</td>
+                <td style="text-align:right;">${formatarMoeda(totalSangrias())}</td>
+              </tr>
+              <tr>
+                <td>Saldo esperado</td>
+                <td style="text-align:right;">${formatarMoeda(dados.saldoSistema)}</td>
+              </tr>
+              <tr>
+                <td>Valor informado</td>
+                <td style="text-align:right;">${formatarMoeda(dados.valorInformado)}</td>
+              </tr>
+              <tr class="total">
+                <td>Diferença</td>
+                <td style="text-align:right;">${formatarMoeda(dados.diferenca)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <hr />
+
+          <h2>Movimentações</h2>
+
+          ${
+            movimentos
+              ? `<table><tbody>${movimentos}</tbody></table>`
+              : `<p class="small">Nenhuma sangria ou suprimento registrado.</p>`
+          }
+
+          <hr />
+
+          <p><strong>Observação:</strong></p>
+          <p class="small">${dados.observacao || "-"}</p>
+
+          <div class="assinatura">
+            Assinatura do Operador
+          </div>
+
+          <div class="assinatura">
+            Conferência do Gerente
+          </div>
+
+          <hr />
+
+          <div class="center">
+            <p class="small">THCloud ERP</p>
+            <p class="small">Relatório interno para conferência de caixa.</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+  }
+
+  function imprimirRelatorioFechamentoCaixa(html: string) {
+    const janela = window.open("", "_blank", "width=420,height=700");
+
+    if (!janela) {
+      alert("O navegador bloqueou a janela de impressão. Libere pop-ups para imprimir o fechamento.");
+      return;
+    }
+
+    janela.document.open();
+    janela.document.write(html);
+    janela.document.close();
   }
 
   async function fecharCaixa() {
@@ -514,6 +1478,21 @@ export default function PdvPage() {
       crediarioSistema;
 
     const diferenca = valorInformado - saldoSistema;
+    const dataFechamento = new Date().toISOString();
+
+    const relatorioFechamento = montarRelatorioFechamentoCaixa({
+      caixa: caixaAberto,
+      dataFechamento,
+      dinheiroSistema,
+      pixSistema,
+      debitoSistema,
+      creditoSistema,
+      crediarioSistema,
+      valorInformado,
+      saldoSistema,
+      diferenca,
+      observacao: observacaoCaixa,
+    });
 
     const { error } = await supabase
       .from("caixas")
@@ -528,7 +1507,7 @@ export default function PdvPage() {
         valor_informado: valorInformado,
         diferenca,
         status: "fechado",
-        data_fechamento: new Date().toISOString(),
+        data_fechamento: dataFechamento,
         observacao: observacaoCaixa,
       })
       .eq("id", caixaAberto.id)
@@ -540,6 +1519,8 @@ export default function PdvPage() {
     }
 
     alert("Caixa fechado com sucesso!");
+
+    imprimirRelatorioFechamentoCaixa(relatorioFechamento);
 
     setFechDinheiro("0,00");
     setFechPix("0,00");
@@ -574,6 +1555,12 @@ export default function PdvPage() {
       return;
     }
 
+    const usuarioAutorizado = await validarUsuarioOperacao();
+
+    if (!usuarioAutorizado) {
+      return;
+    }
+
     const valor = converterNumero(valorMovimentoCaixa);
 
     if (isNaN(valor) || valor <= 0) {
@@ -588,7 +1575,7 @@ export default function PdvPage() {
         tipo: tipoMovimentoCaixa,
         valor,
         descricao: descricaoMovimentoCaixa,
-        usuario: caixaAberto.usuario || operadorAtual(),
+        usuario: usuarioAutorizado.nome || caixaAberto.usuario || operadorAtual(),
       },
     ]);
 
@@ -605,6 +1592,7 @@ export default function PdvPage() {
 
     setValorMovimentoCaixa("0,00");
     setDescricaoMovimentoCaixa("");
+    limparAutorizacaoOperacao();
     setModalMovimentoCaixa(false);
 
     await carregarDados();
@@ -723,6 +1711,51 @@ export default function PdvPage() {
     setCarrinho(carrinho.filter((item) => item.produto_id !== produtoId));
   }
 
+  function cancelarUltimoItem() {
+    if (carrinho.length === 0) {
+      alert("Nenhum item para cancelar.");
+      return;
+    }
+
+    const ultimoItem = carrinho[carrinho.length - 1];
+
+    const confirmar = confirm(`Deseja cancelar o último item?\n\n${ultimoItem.nome}`);
+
+    if (!confirmar) return;
+
+    removerItem(ultimoItem.produto_id);
+  }
+
+  function cancelarVendaAtual() {
+    if (carrinho.length === 0) {
+      alert("Nenhuma venda em andamento.");
+      return;
+    }
+
+    const confirmar = confirm("Deseja cancelar a venda atual? Todos os itens serão removidos.");
+
+    if (!confirmar) return;
+
+    limparVenda();
+  }
+
+  function emitirCupomNaoFiscal() {
+    if (carrinho.length === 0) {
+      alert("Adicione produtos ao carrinho para emitir um cupom.");
+      return;
+    }
+
+    imprimirCupom("PRE-VENDA");
+  }
+
+  function emitirNfce() {
+    alert("Módulo NFC-e será integrado na etapa fiscal. No momento o sistema emite cupom não fiscal.");
+  }
+
+  function abrirRelatoriosCaixa() {
+    alert("Relatório de fechamento de caixa será criado no próximo passo. Por enquanto use Fechar Caixa para conferência.");
+  }
+
   function limparVenda() {
     setCarrinho([]);
     setClienteId("");
@@ -736,11 +1769,23 @@ export default function PdvPage() {
     setPagDebito("0");
     setPagCredito("0");
     setPagCrediario("0");
+    setArredondamentoVenda("0");
     setParcelas("1");
     setPrimeiroVencimento("");
+    setEhDelivery(false);
+    setTelefoneEntrega("");
+    setEnderecoEntrega("");
+    setNumeroEntrega("");
+    setBairroEntrega("");
+    setReferenciaEntrega("");
+    setTaxaEntrega("0");
+    setEntregador("");
+    setObservacaoEntrega("");
+    setUsarDadosClienteEntrega(true);
     setTotalCompradoCliente(0);
     setTotalAbertoCliente(0);
     setUltimaCompraCliente("");
+    setOrcamentoPdv(null);
   }
 
   function selecionarCliente(cliente: Cliente) {
@@ -807,64 +1852,37 @@ export default function PdvPage() {
       throw new Error("Produto não encontrado.");
     }
 
-    const novaQtdProduto = Number(produto.qtd_atual || 0) - item.quantidade;
+    const quantidadeVendida = Number(item.quantidade || 0);
 
-    if (novaQtdProduto < 0) {
+    if (quantidadeVendida <= 0) {
+      throw new Error(`Quantidade inválida para ${produto.nome}.`);
+    }
+
+    const quantidadeAtual = Number(produto.qtd_atual || 0);
+
+    if (quantidadeVendida > quantidadeAtual) {
       throw new Error(`Estoque insuficiente para ${produto.nome}.`);
     }
 
-    const produtoUpdate = await supabase
-      .from("produtos")
-      .update({
-        qtd_atual: novaQtdProduto,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", item.produto_id)
-      .eq("empresa_id", empresaId);
+    /*
+      CORREÇÃO DEFINITIVA:
+      Seu banco provavelmente possui trigger no Supabase que atualiza produtos.qtd_atual
+      quando uma movimentação é inserida em movimentacoes_estoque.
 
-    if (produtoUpdate.error) {
-      throw new Error(produtoUpdate.error.message);
-    }
+      Por isso, se o código atualizar produtos.qtd_atual e depois inserir a movimentação,
+      o estoque baixa 2 vezes.
 
-    const estoqueAtual = await supabase
-      .from("estoque")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .eq("produto_id", item.produto_id)
-      .maybeSingle();
-
-    if (estoqueAtual.error) {
-      throw new Error(estoqueAtual.error.message);
-    }
-
-    if (estoqueAtual.data) {
-      const novaQtdEstoque =
-        Number(estoqueAtual.data.quantidade || 0) - item.quantidade;
-
-      if (novaQtdEstoque < 0) {
-        throw new Error(`Estoque insuficiente para ${produto.nome}.`);
-      }
-
-      const estoqueUpdate = await supabase
-        .from("estoque")
-        .update({
-          quantidade: novaQtdEstoque,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("empresa_id", empresaId)
-        .eq("produto_id", item.produto_id);
-
-      if (estoqueUpdate.error) {
-        throw new Error(estoqueUpdate.error.message);
-      }
-    }
+      Agora o PDV NÃO altera produtos.qtd_atual diretamente.
+      Ele apenas registra a movimentação de saída.
+      A trigger/banco faz a baixa do estoque uma única vez.
+    */
 
     const movimento = await supabase.from("movimentacoes_estoque").insert([
       {
         empresa_id: empresaId,
         produto_id: item.produto_id,
         tipo: "saida",
-        quantidade: item.quantidade,
+        quantidade: quantidadeVendida,
         custo_unitario: 0,
         nota_fiscal: null,
         fornecedor_id: null,
@@ -1033,7 +2051,182 @@ export default function PdvPage() {
     alert("PIX Copia e Cola copiado com sucesso!");
   }
 
-  function montarCupom(vendaId: string) {
+
+  function montarCupomVendaSalva(venda: VendaDetalhada) {
+    const linhasItens = (venda.itens_venda || [])
+      .map((item) => {
+        return `
+          <tr>
+            <td>${item.quantidade}x ${item.produtos?.nome || "Produto"}</td>
+            <td style="text-align:right;">${formatarMoeda(Number(item.subtotal || 0))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const pagamentos = (venda.pagamentos_venda || [])
+      .map((pag) => {
+        return `
+          <tr>
+            <td>${pag.forma_pagamento}</td>
+            <td style="text-align:right;">${formatarMoeda(Number(pag.valor || 0))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Reimpressão Venda ${formatarNumeroVenda(venda.numero_venda)}</title>
+
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              width: 300px;
+              margin: 0 auto;
+              color: #111827;
+              font-size: 12px;
+            }
+
+            .center {
+              text-align: center;
+            }
+
+            .logo {
+              max-width: 120px;
+              max-height: 70px;
+              object-fit: contain;
+              margin-bottom: 6px;
+            }
+
+            h1 {
+              font-size: 18px;
+              margin: 4px 0;
+            }
+
+            p {
+              margin: 3px 0;
+            }
+
+            hr {
+              border: none;
+              border-top: 1px dashed #111827;
+              margin: 10px 0;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            td {
+              padding: 3px 0;
+              vertical-align: top;
+            }
+
+            .total {
+              font-size: 18px;
+              font-weight: bold;
+            }
+
+            .small {
+              font-size: 11px;
+            }
+
+            @media print {
+              body {
+                width: 80mm;
+              }
+
+              button {
+                display: none;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          ${cabecalhoEmpresaCupom()}
+
+          <p class="center small">Cupom Não Fiscal - Reimpressão</p>
+
+          <hr />
+
+          <p><strong>Nº Venda:</strong> ${formatarNumeroVenda(venda.numero_venda)}</p>
+          <p><strong>ID Interno:</strong> ${venda.id}</p>
+          <p><strong>Data:</strong> ${formatarData(venda.created_at)}</p>
+          <p><strong>Operador:</strong> ${caixaAberto?.usuario || operadorAtual()}</p>
+          <p><strong>Cliente:</strong> ${nomeClienteVenda(venda.cliente_id)}</p>
+          <p><strong>Status:</strong> ${venda.status || "finalizada"}</p>
+
+          <hr />
+
+          <table>
+            <tbody>
+              ${linhasItens}
+            </tbody>
+          </table>
+
+          <hr />
+
+          <table>
+            <tbody>
+              <tr>
+                <td>Desconto</td>
+                <td style="text-align:right;">${formatarMoeda(Number(venda.desconto || 0))}</td>
+              </tr>
+
+              <tr class="total">
+                <td>TOTAL</td>
+                <td style="text-align:right;">${formatarMoeda(Number(venda.valor_total || 0))}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <hr />
+
+          <p><strong>Pagamentos</strong></p>
+
+          <table>
+            <tbody>
+              ${pagamentos || "<tr><td>Pagamento não localizado</td></tr>"}
+            </tbody>
+          </table>
+
+          <hr />
+
+          <div class="center">
+            <p>Obrigado pela preferência!</p>
+            <p class="small">Sistema THCloud ERP</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+  }
+
+  function reimprimirCupomVenda(venda: VendaDetalhada) {
+    const janela = window.open("", "_blank", "width=420,height=700");
+
+    if (!janela) {
+      alert("O navegador bloqueou a janela de impressão. Libere pop-ups para reimprimir o cupom.");
+      return;
+    }
+
+    janela.document.open();
+    janela.document.write(montarCupomVendaSalva(venda));
+    janela.document.close();
+  }
+
+  function montarCupom(vendaId: string, numeroVenda?: number) {
     const linhasItens = carrinho
       .map((item) => {
         return `
@@ -1137,16 +2330,14 @@ export default function PdvPage() {
         </head>
 
         <body>
-          <div class="center">
-            <img src="/logo-thcloud.jpeg" class="logo" />
-            <h1>TH Gestão</h1>
-            <p>ERP Inteligente para Varejo</p>
-            <p class="small">Cupom Não Fiscal</p>
-          </div>
+          ${cabecalhoEmpresaCupom()}
+
+          <p class="center small">Cupom Não Fiscal</p>
 
           <hr />
 
-          <p><strong>Venda:</strong> ${vendaId}</p>
+          <p><strong>Nº Venda:</strong> ${formatarNumeroVenda(numeroVenda)}</p>
+          <p><strong>ID Interno:</strong> ${vendaId}</p>
           <p><strong>Data:</strong> ${new Date().toLocaleString("pt-BR")}</p>
           <p><strong>Operador:</strong> ${caixaAberto?.usuario || "Admin"}</p>
           <p><strong>Cliente:</strong> ${clienteSelecionado()}</p>
@@ -1172,6 +2363,28 @@ export default function PdvPage() {
                 <td>Desconto</td>
                 <td style="text-align:right;">${formatarMoeda(valorDescontoTotal())}</td>
               </tr>
+
+              ${
+                valorArredondamento() !== 0
+                  ? `
+                    <tr>
+                      <td>Arredondamento</td>
+                      <td style="text-align:right;">${formatarMoeda(valorArredondamento())}</td>
+                    </tr>
+                  `
+                  : ""
+              }
+
+              ${
+                ehDelivery
+                  ? `
+                    <tr>
+                      <td>Taxa Entrega</td>
+                      <td style="text-align:right;">${formatarMoeda(converterNumero(taxaEntrega))}</td>
+                    </tr>
+                  `
+                  : ""
+              }
 
               <tr class="total">
                 <td>TOTAL</td>
@@ -1227,7 +2440,7 @@ export default function PdvPage() {
     `;
   }
 
-  function imprimirCupom(vendaId: string) {
+  function imprimirCupom(vendaId: string, numeroVenda?: number) {
     const janela = window.open("", "_blank", "width=420,height=700");
 
     if (!janela) {
@@ -1236,32 +2449,244 @@ export default function PdvPage() {
     }
 
     janela.document.open();
-    janela.document.write(montarCupom(vendaId));
+    janela.document.write(montarCupom(vendaId, numeroVenda));
+    janela.document.close();
+  }
+
+  function montarRomaneioEntrega(vendaId: string) {
+    const linhasItens = carrinho
+      .map((item) => {
+        return `
+          <tr>
+            <td>${item.quantidade}x ${item.nome}</td>
+            <td style="text-align:right;">${formatarMoeda(item.subtotal)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Romaneio de Entrega ${vendaId}</title>
+
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              width: 300px;
+              margin: 0 auto;
+              color: #111827;
+              font-size: 12px;
+            }
+
+            .center {
+              text-align: center;
+            }
+
+            h1 {
+              font-size: 17px;
+              margin: 4px 0;
+            }
+
+            h2 {
+              font-size: 14px;
+              margin: 8px 0 4px;
+            }
+
+            p {
+              margin: 3px 0;
+            }
+
+            hr {
+              border: none;
+              border-top: 1px dashed #111827;
+              margin: 10px 0;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            td {
+              padding: 3px 0;
+              vertical-align: top;
+            }
+
+            .total {
+              font-size: 17px;
+              font-weight: bold;
+            }
+
+            .small {
+              font-size: 11px;
+            }
+
+            .assinatura {
+              margin-top: 30px;
+              border-top: 1px solid #111827;
+              text-align: center;
+              padding-top: 4px;
+            }
+
+            @media print {
+              body {
+                width: 80mm;
+              }
+
+              button {
+                display: none;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          ${cabecalhoEmpresaCupom()}
+
+          <div class="center">
+            <h1>ROMANEIO DE ENTREGA</h1>
+            <p class="small">Documento interno de entrega</p>
+          </div>
+
+          <hr />
+
+          <p><strong>Pedido/Venda:</strong> ${vendaId}</p>
+          <p><strong>Data:</strong> ${new Date().toLocaleString("pt-BR")}</p>
+          <p><strong>Operador:</strong> ${caixaAberto?.usuario || operadorAtual()}</p>
+
+          <hr />
+
+          <h2>Dados do Cliente</h2>
+          <p><strong>Cliente:</strong> ${clienteSelecionado()}</p>
+          <p><strong>Telefone:</strong> ${telefoneEntrega || "-"}</p>
+
+          <hr />
+
+          <h2>Endereço de Entrega</h2>
+          <p><strong>Endereço:</strong> ${enderecoEntrega || "-"}</p>
+          <p><strong>Número:</strong> ${numeroEntrega || "-"}</p>
+          <p><strong>Bairro:</strong> ${bairroEntrega || "-"}</p>
+          <p><strong>Referência:</strong> ${referenciaEntrega || "-"}</p>
+          <p><strong>Entregador:</strong> ${entregador || "-"}</p>
+
+          ${
+            observacaoEntrega
+              ? `<p><strong>Obs:</strong> ${observacaoEntrega}</p>`
+              : ""
+          }
+
+          <hr />
+
+          <h2>Itens</h2>
+
+          <table>
+            <tbody>
+              ${linhasItens}
+            </tbody>
+          </table>
+
+          <hr />
+
+          <table>
+            <tbody>
+              <tr>
+                <td>Subtotal</td>
+                <td style="text-align:right;">${formatarMoeda(totalBruto())}</td>
+              </tr>
+              <tr>
+                <td>Desconto</td>
+                <td style="text-align:right;">${formatarMoeda(valorDescontoTotal())}</td>
+              </tr>
+              <tr>
+                <td>Taxa entrega</td>
+                <td style="text-align:right;">${formatarMoeda(converterNumero(taxaEntrega))}</td>
+              </tr>
+              <tr class="total">
+                <td>TOTAL</td>
+                <td style="text-align:right;">${formatarMoeda(totalFinal())}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="assinatura">
+            Assinatura do Cliente
+          </div>
+
+          <div class="assinatura">
+            Assinatura do Entregador
+          </div>
+
+          <hr />
+
+          <div class="center">
+            <p class="small">THCloud ERP</p>
+            <p class="small">Romaneio para conferência de entrega.</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+  }
+
+  function imprimirRomaneioEntrega(vendaId: string) {
+    const janela = window.open("", "_blank", "width=420,height=700");
+
+    if (!janela) {
+      alert("O navegador bloqueou a janela de impressão. Libere pop-ups para imprimir o romaneio.");
+      return;
+    }
+
+    janela.document.open();
+    janela.document.write(montarRomaneioEntrega(vendaId));
     janela.document.close();
   }
 
   async function finalizarVenda() {
+    if (finalizandoVenda) {
+      setFinalizandoVenda(false);
+      return;
+    }
+
+    setFinalizandoVenda(true);
+
     const empresaId = empresaAtualId();
-    if (!empresaId) return;
+
+    if (!empresaId) {
+      setFinalizandoVenda(false);
+      setFinalizandoVenda(false);
+      return;
+    }
 
     if (!caixaAberto) {
       alert("Abra o caixa antes de finalizar uma venda.");
       setModalAbrirCaixa(true);
+      setFinalizandoVenda(false);
       return;
     }
 
     if (carrinho.length === 0) {
       alert("Adicione produtos ao carrinho.");
+      setFinalizandoVenda(false);
       return;
     }
 
     if (totalPago() < totalFinal()) {
       alert("O valor pago é menor que o total da venda.");
+      setFinalizandoVenda(false);
       return;
     }
 
     if (converterNumero(pagPix) > 0 && !chavePix) {
       alert("Informe a chave PIX para gerar o QR Code.");
+      setFinalizandoVenda(false);
       return;
     }
 
@@ -1271,7 +2696,8 @@ export default function PdvPage() {
       );
 
       if (!confirmarPix) {
-        return;
+        setFinalizandoVenda(false);
+      return;
       }
 
       setPixConfirmado(true);
@@ -1279,6 +2705,43 @@ export default function PdvPage() {
 
     if (converterNumero(pagCrediario) > 0 && !clienteId) {
       alert("Para crediário, selecione ou cadastre um cliente.");
+      setFinalizandoVenda(false);
+      return;
+    }
+
+    if (ehDelivery) {
+      if (!clienteId) {
+        alert("Para venda delivery, selecione ou cadastre um cliente.");
+        setFinalizandoVenda(false);
+      return;
+      }
+
+      if (!telefoneEntrega.trim()) {
+        alert("Informe o telefone/WhatsApp da entrega.");
+        setFinalizandoVenda(false);
+      return;
+      }
+
+      if (!enderecoEntrega.trim()) {
+        alert("Informe o endereço da entrega.");
+        setFinalizandoVenda(false);
+      return;
+      }
+
+      if (!bairroEntrega.trim()) {
+        alert("Informe o bairro da entrega.");
+        setFinalizandoVenda(false);
+      return;
+      }
+    }
+
+    let numeroVendaGerado = 0;
+
+    try {
+      numeroVendaGerado = await proximoNumeroVenda();
+    } catch (error: any) {
+      alert(error.message);
+      setFinalizandoVenda(false);
       return;
     }
 
@@ -1289,21 +2752,25 @@ export default function PdvPage() {
           empresa_id: empresaId,
           cliente_id: clienteId || null,
           caixa_id: caixaAberto.id,
+          numero_venda: numeroVendaGerado,
           valor_total: totalFinal(),
           desconto: valorDescontoTotal(),
           forma_pagamento: formaPagamentoResumo(),
           status: "finalizada",
+          orcamento_id: orcamentoPdv?.id || null,
         },
       ])
-      .select("id")
+      .select("id,numero_venda")
       .single();
 
     if (vendaReq.error) {
       alert("Erro ao criar venda: " + vendaReq.error.message);
+      setFinalizandoVenda(false);
       return;
     }
 
     const vendaId = vendaReq.data.id;
+    const numeroVenda = vendaReq.data.numero_venda || numeroVendaGerado;
 
     const itens = carrinho.map((item) => ({
       empresa_id: empresaId,
@@ -1318,6 +2785,7 @@ export default function PdvPage() {
 
     if (itensReq.error) {
       alert("Erro ao salvar itens da venda: " + itensReq.error.message);
+      setFinalizandoVenda(false);
       return;
     }
 
@@ -1329,17 +2797,39 @@ export default function PdvPage() {
       }
 
       await gerarContasReceber(vendaId);
+
+      if (orcamentoPdv?.id) {
+        const statusOrcamento = await supabase
+          .from("orcamentos")
+          .update({
+            status: "aprovado",
+            convertido_venda_id: vendaId,
+            convertido_em: new Date().toISOString(),
+          })
+          .eq("empresa_id", empresaId)
+          .eq("id", orcamentoPdv.id);
+
+        if (statusOrcamento.error) {
+          throw new Error("Venda finalizada, mas não foi possível atualizar o orçamento: " + statusOrcamento.error.message);
+        }
+      }
     } catch (error: any) {
       alert("Venda criada, mas ocorreu erro após salvar: " + error.message);
+      setFinalizandoVenda(false);
       return;
     }
 
-    alert("Venda finalizada com sucesso!");
+    alert(`Venda Nº ${formatarNumeroVenda(numeroVenda)} finalizada com sucesso!`);
 
-    imprimirCupom(vendaId);
+    imprimirCupom(vendaId, numeroVenda);
+
+    if (ehDelivery) {
+      imprimirRomaneioEntrega(vendaId);
+    }
 
     limparVenda();
     await carregarDados();
+    setFinalizandoVenda(false);
   }
 
   useEffect(() => {
@@ -1348,18 +2838,40 @@ export default function PdvPage() {
     if (usuario) {
       try {
         const dados = JSON.parse(usuario);
-        if (dados.nome) setOperadorCaixa(dados.nome);
+
+        setUsuarioNome(dados.nome || "");
+        carregarEmpresaDoStorage(dados);
+
+        if (dados.nome) {
+          setOperadorCaixa(dados.nome);
+        }
       } catch {}
     }
 
     carregarDados();
+    carregarOrcamentoPendenteParaPdv();
+  }, []);
+
+  useEffect(() => {
+    atualizarStatusTelaCheia();
+
+    document.addEventListener("fullscreenchange", atualizarStatusTelaCheia);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", atualizarStatusTelaCheia);
+    };
   }, []);
 
   useEffect(() => {
     function atalhos(event: KeyboardEvent) {
+      if (event.key === "F1") {
+        event.preventDefault();
+        setModalAtalhos(true);
+      }
+
       if (event.key === "F2") {
         event.preventDefault();
-        setModalNovoCliente(true);
+        setModalProdutos(true);
       }
 
       if (event.key === "F3") {
@@ -1374,7 +2886,16 @@ export default function PdvPage() {
 
       if (event.key === "F5") {
         event.preventDefault();
-        if (!caixaAberto) setModalAbrirCaixa(true);
+        if (!caixaAberto) {
+          setModalAbrirCaixa(true);
+        } else {
+          setFechDinheiro(String(saldoEsperado().toFixed(2)).replace(".", ","));
+          setFechPix(String(totalPorForma("pix").toFixed(2)).replace(".", ","));
+          setFechDebito(String(totalPorForma("debito").toFixed(2)).replace(".", ","));
+          setFechCredito(String(totalPorForma("credito").toFixed(2)).replace(".", ","));
+          setFechCrediario(String(totalPorForma("crediario").toFixed(2)).replace(".", ","));
+          setModalFecharCaixa(true);
+        }
       }
 
       if (event.key === "F6") {
@@ -1389,7 +2910,37 @@ export default function PdvPage() {
 
       if (event.key === "F8") {
         event.preventDefault();
-        finalizarVenda();
+        abrirFluxoFinalizacao();
+      }
+
+      if (event.key === "F9") {
+        event.preventDefault();
+        setModalConsultarVendas(true);
+      }
+
+      if (event.key === "F10") {
+        event.preventDefault();
+        emitirCupomNaoFiscal();
+      }
+
+      if (event.key === "F11") {
+        event.preventDefault();
+        emitirNfce();
+      }
+
+      if (event.key === "F12") {
+        event.preventDefault();
+        alternarTelaCheia();
+      }
+
+      if (event.key === "Delete") {
+        event.preventDefault();
+        cancelarUltimoItem();
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === "x") {
+        event.preventDefault();
+        cancelarVendaAtual();
       }
 
       if (event.key === "Escape") {
@@ -1400,6 +2951,11 @@ export default function PdvPage() {
         setModalAbrirCaixa(false);
         setModalFecharCaixa(false);
         setModalMovimentoCaixa(false);
+        setModalPagamento(false);
+        setModalDelivery(false);
+        setModalAtalhos(false);
+        setModalConsultarVendas(false);
+        setModalDevolucao(false);
       }
     }
 
@@ -1438,59 +2994,23 @@ export default function PdvPage() {
   });
 
   return (
-    <div className="p-6 bg-slate-100 min-h-screen">
-      <div className="flex items-center justify-between mb-5 bg-slate-900 rounded-xl p-4 text-white">
-        <div className="flex items-center gap-4">
-          <div className="w-24 h-16 bg-white border border-slate-300 rounded-lg flex items-center justify-center text-slate-500 text-xs">
-            Logo Empresa
-          </div>
-
+    <div className="fixed inset-0 z-50 bg-slate-100 overflow-hidden p-2 flex flex-col gap-2">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm px-3 py-2 flex-none">
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2">
           <div>
-            <h1 className="text-3xl font-bold">PDV Premium - Frente de Caixa</h1>
-            <p className="text-slate-300">
-              F2 Novo Cliente • F3 Cliente • F4 Produto • F5 Caixa • F8 Finalizar
+            <p className="text-sm text-slate-500 font-bold">Menu rápido do caixa</p>
+            <p className="text-slate-800 font-semibold">
+              {caixaAberto
+                ? `Caixa aberto por ${caixaAberto.usuario || operadorAtual()}`
+                : "Caixa fechado. Abra o caixa para iniciar vendas."}
             </p>
           </div>
-        </div>
 
-        <div className="w-24 h-16 bg-white rounded-lg flex items-center justify-center">
-          <img
-            src="/logo-thcloud.jpeg"
-            alt="THCloud"
-            className="max-h-14 max-w-20 object-contain"
-          />
-        </div>
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-xl shadow p-4 mb-5">
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-          <div>
-            <p className="text-sm text-slate-500">Status do Caixa</p>
-
-            {caixaAberto ? (
-              <div>
-                <p className="text-xl font-bold text-green-700">
-                  Caixa Aberto
-                </p>
-                <p className="text-slate-700">
-                  Operador: <strong>{caixaAberto.usuario}</strong> | Abertura:{" "}
-                  <strong>
-                    {formatarMoeda(Number(caixaAberto.valor_abertura || 0))}
-                  </strong>{" "}
-                  | Desde:{" "}
-                  <strong>{formatarData(caixaAberto.data_abertura)}</strong>
-                </p>
-              </div>
-            ) : (
-              <p className="text-xl font-bold text-red-600">Caixa Fechado</p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setModalAbrirCaixa(true)}
               disabled={!!caixaAberto}
-              className={`px-5 py-3 rounded-lg font-semibold text-white ${
+              className={`px-4 py-2 rounded-xl font-bold text-white text-sm ${
                 caixaAberto
                   ? "bg-slate-400 cursor-not-allowed"
                   : "bg-green-600 hover:bg-green-700"
@@ -1502,7 +3022,7 @@ export default function PdvPage() {
             <button
               onClick={() => abrirMovimentoCaixa("sangria")}
               disabled={!caixaAberto}
-              className={`px-5 py-3 rounded-lg font-semibold text-white ${
+              className={`px-4 py-2 rounded-xl font-bold text-white text-sm ${
                 !caixaAberto
                   ? "bg-slate-400 cursor-not-allowed"
                   : "bg-orange-500 hover:bg-orange-600"
@@ -1514,7 +3034,7 @@ export default function PdvPage() {
             <button
               onClick={() => abrirMovimentoCaixa("suprimento")}
               disabled={!caixaAberto}
-              className={`px-5 py-3 rounded-lg font-semibold text-white ${
+              className={`px-4 py-2 rounded-xl font-bold text-white text-sm ${
                 !caixaAberto
                   ? "bg-slate-400 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700"
@@ -1533,7 +3053,7 @@ export default function PdvPage() {
                 setModalFecharCaixa(true);
               }}
               disabled={!caixaAberto}
-              className={`px-5 py-3 rounded-lg font-semibold text-white ${
+              className={`px-4 py-2 rounded-xl font-bold text-white text-sm ${
                 !caixaAberto
                   ? "bg-slate-400 cursor-not-allowed"
                   : "bg-red-600 hover:bg-red-700"
@@ -1541,25 +3061,37 @@ export default function PdvPage() {
             >
               Fechar Caixa
             </button>
+
+            <button
+              onClick={() => setModalConsultarVendas(true)}
+              className="px-4 py-2 rounded-xl font-bold text-white text-sm bg-purple-600 hover:bg-purple-700"
+            >
+              Vendas / Devolução F9
+            </button>
+
+            <button
+              onClick={() => setModalAtalhos(true)}
+              className="px-4 py-2 rounded-xl font-bold text-white text-sm bg-slate-700 hover:bg-slate-800"
+            >
+              Atalhos F1
+            </button>
+
+            <button
+              onClick={alternarTelaCheia}
+              className="px-4 py-2 rounded-xl font-bold text-white text-sm bg-blue-700 hover:bg-blue-800"
+            >
+              {modoTelaCheia ? "Sair Tela Cheia" : "Tela Cheia F12"}
+            </button>
           </div>
         </div>
       </div>
 
-      {caixaAberto && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
-          <Resumo titulo="Vendas do Caixa" valor={formatarMoeda(totalVendasCaixa())} cor="text-blue-700" />
-          <Resumo titulo="Suprimentos" valor={formatarMoeda(totalSuprimentos())} cor="text-green-700" />
-          <Resumo titulo="Sangrias" valor={formatarMoeda(totalSangrias())} cor="text-orange-600" />
-          <Resumo titulo="Dinheiro Esperado" valor={formatarMoeda(saldoEsperado())} cor="text-slate-900" />
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2 bg-white p-5 rounded-xl shadow-lg border border-slate-200">
-          <h2 className="text-2xl font-bold text-slate-800 mb-4">Produtos</h2>
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 flex-1 min-h-0">
+        <div className="xl:col-span-8 bg-white p-4 rounded-2xl shadow-lg border border-slate-200 h-full min-h-0 overflow-hidden flex flex-col">
+          <h2 className="text-xl font-black text-slate-800 mb-3">Produtos</h2>
 
           <div className="relative">
-            <div className="flex gap-3 mb-5">
+            <div className="flex gap-2 mb-3">
               <input
                 value={codigoBusca}
                 onChange={(e) => setCodigoBusca(e.target.value)}
@@ -1567,7 +3099,7 @@ export default function PdvPage() {
                   if (e.key === "Enter") buscarProduto();
                 }}
                 placeholder="Digite ou bipe código interno, barras ou nome"
-                className="w-full border border-slate-300 p-3 rounded-lg text-slate-900 font-medium"
+                className="w-full border border-slate-300 px-3 py-2 rounded-lg text-slate-900 font-medium"
                 autoFocus
                 disabled={!caixaAberto}
               />
@@ -1629,16 +3161,16 @@ export default function PdvPage() {
             )}
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-auto flex-1 min-h-0">
             <table className="w-full">
               <thead>
                 <tr className="bg-blue-700 text-white">
-                  <th className="p-3 text-left">Foto</th>
-                  <th className="p-3 text-left">Produto</th>
-                  <th className="p-3 text-left">Qtd</th>
-                  <th className="p-3 text-left">Unitário</th>
-                  <th className="p-3 text-left">Subtotal</th>
-                  <th className="p-3 text-center">Ação</th>
+                  <th className="p-2 text-left">Foto</th>
+                  <th className="p-2 text-left">Produto</th>
+                  <th className="p-2 text-left">Qtd</th>
+                  <th className="p-2 text-left">Unitário</th>
+                  <th className="p-2 text-left">Subtotal</th>
+                  <th className="p-2 text-center">Ação</th>
                 </tr>
               </thead>
 
@@ -1655,7 +3187,7 @@ export default function PdvPage() {
                       </div>
                     </td>
 
-                    <td className="p-3 text-slate-900 font-medium">
+                    <td className="p-2 text-slate-900 font-medium">
                       {item.codigo} - {item.nome}
                     </td>
 
@@ -1667,15 +3199,15 @@ export default function PdvPage() {
                       />
                     </td>
 
-                    <td className="p-3 text-slate-800">
+                    <td className="p-2 text-slate-800">
                       {formatarMoeda(Number(item.valor_unitario))}
                     </td>
 
-                    <td className="p-3 text-slate-800">
+                    <td className="p-2 text-slate-800">
                       {formatarMoeda(Number(item.subtotal))}
                     </td>
 
-                    <td className="p-3 text-center">
+                    <td className="p-2 text-center">
                       <button
                         onClick={() => removerItem(item.produto_id)}
                         className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
@@ -1728,10 +3260,10 @@ export default function PdvPage() {
           )}
         </div>
 
-        <div className="bg-white p-5 rounded-xl shadow-lg border border-slate-200">
-          <h2 className="text-2xl font-bold text-slate-800 mb-4">Pagamento</h2>
+        <div className="xl:col-span-4 bg-white p-4 rounded-2xl shadow-lg border border-slate-200 h-full min-h-0 overflow-y-auto">
+          <h2 className="text-xl font-black text-slate-800 mb-3">Resumo da Venda</h2>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="flex gap-2">
               <div className="w-full border border-slate-300 p-3 rounded-lg text-slate-900 bg-slate-50">
                 {clienteSelecionado()}
@@ -1761,6 +3293,35 @@ export default function PdvPage() {
               </div>
             )}
 
+            <div className="border border-orange-200 rounded-xl p-3 bg-orange-50">
+              <label className="flex items-center gap-3 font-black text-orange-900 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ehDelivery}
+                  onChange={(e) => {
+                    setEhDelivery(e.target.checked);
+
+                    if (e.target.checked && usarDadosClienteEntrega) {
+                      preencherDeliveryComDadosCliente();
+                    }
+                  }}
+                  className="h-5 w-5"
+                />
+                Venda para Entrega / Delivery
+              </label>
+
+              {ehDelivery && (
+                <div className="mt-3 text-sm text-orange-800">
+                  <p>
+                    Os dados da entrega serão solicitados em um popup antes do pagamento.
+                  </p>
+                  <p className="font-bold mt-1">
+                    Taxa de Entrega: {formatarMoeda(converterNumero(taxaEntrega))}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
               <h3 className="font-bold text-slate-800 mb-2">Descontos</h3>
 
@@ -1777,82 +3338,12 @@ export default function PdvPage() {
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-800 text-white">
-                    <th className="p-2 text-left">Forma</th>
-                    <th className="p-2 text-right w-28">Valor</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {[
-                    ["Dinheiro", pagDinheiro, setPagDinheiro],
-                    ["PIX", pagPix, setPagPix],
-                    ["Débito", pagDebito, setPagDebito],
-                    ["Crédito", pagCredito, setPagCredito],
-                    ["Crediário", pagCrediario, setPagCrediario],
-                  ].map(([label, value, setter]: any) => (
-                    <tr key={label} className="border-b">
-                      <td className="p-2 text-slate-800">{label}</td>
-                      <td className="p-2 text-right">
-                        <input value={value} onChange={(e) => setter(e.target.value)} className="w-24 border p-2 rounded text-slate-900 text-right" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+              <p className="font-black text-blue-900">Pagamento</p>
+              <p className="text-sm text-blue-700 mt-1">
+                Clique em <strong>Finalizar Venda - F8</strong> para abrir a tela de pagamento.
+              </p>
             </div>
-
-            {converterNumero(pagPix) > 0 && (
-              <div className="space-y-3 border border-emerald-200 rounded-lg p-3 bg-emerald-50">
-                <p className="font-bold text-emerald-800">PIX QR Code</p>
-
-                <input value={chavePix} onChange={(e) => setChavePix(e.target.value)} placeholder="Chave PIX da empresa" className="w-full border border-slate-300 p-2 rounded-lg text-slate-900" />
-
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={nomeRecebedorPix} onChange={(e) => setNomeRecebedorPix(e.target.value)} placeholder="Nome recebedor" className="w-full border border-slate-300 p-2 rounded-lg text-slate-900" />
-                  <input value={cidadePix} onChange={(e) => setCidadePix(e.target.value)} placeholder="Cidade" className="w-full border border-slate-300 p-2 rounded-lg text-slate-900" />
-                </div>
-
-                {gerarPixCopiaCola() && (
-                  <div className="bg-white rounded-xl border p-3 text-center">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(gerarPixCopiaCola())}`}
-                      alt="QR Code PIX"
-                      className="mx-auto w-48 h-48"
-                    />
-
-                    <p className="text-sm text-slate-600 mt-2">
-                      Valor PIX: <strong>{formatarMoeda(converterNumero(pagPix))}</strong>
-                    </p>
-
-                    <button type="button" onClick={copiarPix} className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold">
-                      Copiar PIX Copia e Cola
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPixConfirmado(true)}
-                      className={`mt-3 ml-2 px-4 py-2 rounded-lg font-semibold text-white ${pixConfirmado ? "bg-green-700" : "bg-slate-700 hover:bg-slate-800"}`}
-                    >
-                      {pixConfirmado ? "PIX Confirmado" : "Confirmar Recebimento PIX"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {converterNumero(pagCrediario) > 0 && (
-              <div className="space-y-3 border border-blue-200 rounded-lg p-3 bg-blue-50">
-                <p className="font-bold text-blue-800">Crediário da Loja</p>
-
-                <input value={parcelas} onChange={(e) => setParcelas(e.target.value)} placeholder="Quantidade de parcelas" className="w-full border border-slate-300 p-2 rounded-lg text-slate-900" />
-
-                <input type="date" value={primeiroVencimento} onChange={(e) => setPrimeiroVencimento(e.target.value)} className="w-full border border-slate-300 p-2 rounded-lg text-slate-900" />
-              </div>
-            )}
 
             <div className="border-t pt-3">
               <div className="flex justify-between text-slate-700">
@@ -1865,6 +3356,20 @@ export default function PdvPage() {
                 <strong>{formatarMoeda(valorDescontoTotal())}</strong>
               </div>
 
+              {valorArredondamento() !== 0 && (
+                <div className={`flex justify-between ${valorArredondamento() < 0 ? "text-orange-700" : "text-green-700"}`}>
+                  <span>Arredondamento:</span>
+                  <strong>{formatarMoeda(valorArredondamento())}</strong>
+                </div>
+              )}
+
+              {ehDelivery && (
+                <div className="flex justify-between text-orange-700">
+                  <span>Taxa Entrega:</span>
+                  <strong>{formatarMoeda(converterNumero(taxaEntrega))}</strong>
+                </div>
+              )}
+
               <div className="flex justify-between text-slate-700">
                 <span>Total Pago:</span>
                 <strong>{formatarMoeda(totalPago())}</strong>
@@ -1876,37 +3381,759 @@ export default function PdvPage() {
               </div>
             </div>
 
-            <div className="bg-slate-900 text-white rounded-xl p-5">
+            <div className="bg-slate-900 text-white rounded-xl p-4">
               <p className="text-sm text-slate-300">TOTAL DA VENDA</p>
-              <p className="text-4xl font-bold">{formatarMoeda(totalFinal())}</p>
-            </div>
-
-            <div className="bg-green-600 text-white rounded-xl p-5">
-              <p className="text-sm text-green-100">TROCO</p>
-              <p className="text-5xl font-bold">{formatarMoeda(troco())}</p>
+              <p className="text-3xl font-black">{formatarMoeda(totalFinal())}</p>
             </div>
 
             <button
-              onClick={finalizarVenda}
+              onClick={abrirFluxoFinalizacao}
               disabled={!caixaAberto}
-              className={`w-full px-6 py-4 rounded-lg font-bold text-lg text-white ${
+              className={`w-full px-6 py-3 rounded-lg font-black text-white ${
                 !caixaAberto ? "bg-slate-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
               }`}
             >
               Finalizar Venda - F8
             </button>
 
-            <button onClick={limparVenda} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-900 px-6 py-3 rounded-lg font-bold">
+            <button onClick={limparVenda} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-900 px-6 py-3 rounded-lg font-black">
               Limpar Venda
             </button>
+
+
           </div>
         </div>
       </div>
 
+      {modalAtalhos && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900">Atalhos do PDV</h2>
+                <p className="text-slate-500">Use as teclas de função para operar o caixa com mais rapidez.</p>
+              </div>
+
+              <button
+                onClick={() => setModalAtalhos(false)}
+                className="h-11 w-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Atalho tecla="F1" descricao="Abrir tela de atalhos" />
+              <Atalho tecla="F2" descricao="Consulta rápida de produtos" />
+              <Atalho tecla="F3" descricao="Pesquisar/selecionar cliente" />
+              <Atalho tecla="F4" descricao="Pesquisar produto" />
+              <Atalho tecla="F5" descricao="Abrir ou fechar caixa" />
+              <Atalho tecla="F6" descricao="Registrar sangria" />
+              <Atalho tecla="F7" descricao="Registrar suprimento" />
+              <Atalho tecla="F8" descricao="Abrir pagamento/finalizar venda" />
+              <Atalho tecla="F9" descricao="Consultar vendas do caixa" />
+              <Atalho tecla="F10" descricao="Emitir cupom não fiscal da venda atual" />
+              <Atalho tecla="F11" descricao="NFC-e / módulo fiscal" />
+              <Atalho tecla="F12" descricao="Entrar ou sair da tela cheia" />
+              <Atalho tecla="DELETE" descricao="Cancelar último item da venda" />
+              <Atalho tecla="CTRL + X" descricao="Cancelar venda atual" />
+              <Atalho tecla="ESC" descricao="Fechar janelas abertas" />
+            </div>
+
+            <div className="p-6 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setModalAtalhos(false)}
+                className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl font-black"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalConsultarVendas && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900">Consultar Vendas / Devoluções</h2>
+                <p className="text-slate-500">Consulte vendas do caixa, reimprima cupom ou registre devolução.</p>
+              </div>
+
+              <button onClick={() => setModalConsultarVendas(false)} className="h-11 w-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black">
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
+                <Resumo titulo="Vendas" valor={`${vendasDetalhadas.length}`} cor="text-blue-700" />
+                <Resumo titulo="Total Vendido" valor={formatarMoeda(totalVendasCaixa())} cor="text-green-700" />
+                <Resumo titulo="Dinheiro" valor={formatarMoeda(totalPorForma("dinheiro"))} cor="text-slate-900" />
+                <Resumo titulo="PIX" valor={formatarMoeda(totalPorForma("pix"))} cor="text-emerald-700" />
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                <table className="w-full text-sm min-w-[1000px]">
+                  <thead>
+                    <tr className="bg-slate-900 text-white">
+                      <th className="p-3 text-left">Venda</th>
+                      <th className="p-3 text-left">Data</th>
+                      <th className="p-3 text-left">Cliente</th>
+                      <th className="p-3 text-left">Status</th>
+                      <th className="p-3 text-left">Itens</th>
+                      <th className="p-3 text-right">Valor</th>
+                      <th className="p-2 text-center">Ações</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {vendasDetalhadas.map((venda) => (
+                      <tr key={venda.id} className="border-b last:border-b-0 align-top">
+                        <td className="p-3 text-slate-900 font-bold">
+                          <p className="text-blue-700">Nº {formatarNumeroVenda(venda.numero_venda)}</p>
+                          <p className="text-[10px] text-slate-500">{venda.id}</p>
+                        </td>
+                        <td className="p-3 text-slate-700">{formatarData(venda.created_at)}</td>
+                        <td className="p-3 text-slate-700">{nomeClienteVenda(venda.cliente_id)}</td>
+                        <td className="p-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-black ${
+                            venda.status === "devolvida" || venda.status === "cancelada"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-green-100 text-green-700"
+                          }`}>
+                            {venda.status || "finalizada"}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-700">
+                          {(venda.itens_venda || []).slice(0, 3).map((item) => (
+                            <p key={item.id}>{item.quantidade}x {item.produtos?.nome || "Produto"}</p>
+                          ))}
+                          {(venda.itens_venda || []).length > 3 && (
+                            <p className="text-xs text-slate-500">+ {(venda.itens_venda || []).length - 3} item(ns)</p>
+                          )}
+                        </td>
+                        <td className="p-3 text-right text-green-700 font-black">{formatarMoeda(Number(venda.valor_total || 0))}</td>
+                        <td className="p-3">
+                          <div className="flex justify-center gap-2">
+                            <button
+                              onClick={() => reimprimirCupomVenda(venda)}
+                              className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-lg font-bold"
+                            >
+                              Reimprimir
+                            </button>
+
+                            <button
+                              onClick={() => abrirDevolucao(venda)}
+                              disabled={venda.status === "devolvida" || venda.status === "cancelada"}
+                              className={`px-3 py-2 rounded-lg font-bold ${
+                                venda.status === "devolvida" || venda.status === "cancelada"
+                                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                  : "bg-red-100 hover:bg-red-200 text-red-800"
+                              }`}
+                            >
+                              Devolver
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {vendasDetalhadas.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-slate-500">Nenhuma venda encontrada neste caixa.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-200 flex justify-end">
+              <button onClick={() => setModalConsultarVendas(false)} className="bg-slate-700 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-black">
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalDevolucao && vendaDevolucao && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] p-4">
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900">Devolução de Venda</h2>
+                <p className="text-slate-500">A devolução volta os produtos para o estoque e registra saída/crédito.</p>
+              </div>
+
+              <button onClick={() => setModalDevolucao(false)} className="h-11 w-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black">
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <div className="lg:col-span-2 space-y-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                  <p className="font-black text-slate-900">Venda: {vendaDevolucao.id}</p>
+                  <p className="text-slate-700">Cliente: {nomeClienteVenda(vendaDevolucao.cliente_id)}</p>
+                  <p className="text-slate-700">Data: {formatarData(vendaDevolucao.created_at)}</p>
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-900 text-white">
+                        <th className="p-3 text-left">Produto</th>
+                        <th className="p-3 text-right">Qtd</th>
+                        <th className="p-3 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {(vendaDevolucao.itens_venda || []).map((item) => (
+                        <tr key={item.id} className="border-b last:border-b-0">
+                          <td className="p-2 text-slate-800">{item.produtos?.codigo || "-"} - {item.produtos?.nome || "Produto"}</td>
+                          <td className="p-3 text-right text-slate-800">{item.quantidade}</td>
+                          <td className="p-3 text-right text-slate-800">{formatarMoeda(Number(item.subtotal || 0))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="border border-slate-200 rounded-2xl p-4 cursor-pointer">
+                    <input type="radio" checked={tipoDevolucao === "estorno"} onChange={() => setTipoDevolucao("estorno")} className="mr-2" />
+                    <strong>Estornar valor</strong>
+                    <p className="text-sm text-slate-600 mt-1">Registra saída do caixa como sangria/estorno.</p>
+                  </label>
+
+                  <label className="border border-slate-200 rounded-2xl p-4 cursor-pointer">
+                    <input type="radio" checked={tipoDevolucao === "credito"} onChange={() => setTipoDevolucao("credito")} className="mr-2" />
+                    <strong>Crédito para cliente</strong>
+                    <p className="text-sm text-slate-600 mt-1">Gera crédito no financeiro do cliente.</p>
+                  </label>
+                </div>
+
+                <textarea value={motivoDevolucao} onChange={(e) => setMotivoDevolucao(e.target.value)} placeholder="Motivo da devolução" className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 min-h-24" />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input value={loginOperacao} onChange={(e) => setLoginOperacao(e.target.value)} placeholder="Usuário/e-mail autorizador" className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900" />
+                  <input type="password" value={senhaOperacao} onChange={(e) => setSenhaOperacao(e.target.value)} placeholder="Senha" className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900" />
+                </div>
+              </div>
+
+              <div className="bg-slate-900 text-white rounded-2xl p-5 h-fit">
+                <p className="text-slate-300 font-bold">Resumo</p>
+                <p className="text-4xl font-black mt-2">{formatarMoeda(totalVendaDevolucao())}</p>
+
+                <div className="mt-5 space-y-3 text-sm">
+                  <p><strong>Estoque:</strong> os itens voltam para o estoque.</p>
+                  <p><strong>Caixa:</strong> {tipoDevolucao === "estorno" ? "sairá como estorno/sangria." : "não sai dinheiro; gera crédito para cliente."}</p>
+                  <p><strong>Venda:</strong> será marcada como devolvida.</p>
+                </div>
+
+                <button
+                  onClick={devolverVenda}
+                  disabled={processandoDevolucao}
+                  className={`w-full mt-6 px-6 py-4 rounded-2xl font-black text-white ${
+                    processandoDevolucao ? "bg-slate-500 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  {processandoDevolucao ? "Processando..." : "Confirmar Devolução"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalDelivery && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[65] p-4">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900">
+                  Dados da Entrega
+                </h2>
+                <p className="text-slate-500">
+                  Preencha as informações que sairão no romaneio de entrega.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setModalDelivery(false)}
+                className="h-11 w-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="border border-orange-200 bg-orange-50 rounded-2xl p-4">
+                <label className="flex items-center gap-3 font-black text-orange-900 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={usarDadosClienteEntrega}
+                    onChange={(e) => {
+                      setUsarDadosClienteEntrega(e.target.checked);
+
+                      if (e.target.checked) {
+                        preencherDeliveryComDadosCliente();
+                      }
+                    }}
+                    className="h-5 w-5"
+                  />
+                  Usar dados do cliente no romaneio
+                </label>
+
+                <p className="text-sm text-orange-800 mt-2">
+                  Cliente selecionado: <strong>{clienteSelecionado()}</strong>
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <CampoDelivery titulo="Telefone / WhatsApp">
+                  <input
+                    value={telefoneEntrega}
+                    onChange={(e) => setTelefoneEntrega(e.target.value)}
+                    placeholder="Telefone / WhatsApp"
+                    className="input-delivery"
+                  />
+                </CampoDelivery>
+
+                <CampoDelivery titulo="Taxa de Entrega">
+                  <input
+                    value={taxaEntrega}
+                    onChange={(e) => setTaxaEntrega(e.target.value)}
+                    placeholder="0,00"
+                    className="input-delivery"
+                  />
+                </CampoDelivery>
+
+                <CampoDelivery titulo="Endereço" className="md:col-span-2">
+                  <input
+                    value={enderecoEntrega}
+                    onChange={(e) => setEnderecoEntrega(e.target.value)}
+                    placeholder="Rua, avenida, travessa..."
+                    className="input-delivery"
+                  />
+                </CampoDelivery>
+
+                <CampoDelivery titulo="Número">
+                  <input
+                    value={numeroEntrega}
+                    onChange={(e) => setNumeroEntrega(e.target.value)}
+                    placeholder="Número"
+                    className="input-delivery"
+                  />
+                </CampoDelivery>
+
+                <CampoDelivery titulo="Bairro">
+                  <input
+                    value={bairroEntrega}
+                    onChange={(e) => setBairroEntrega(e.target.value)}
+                    placeholder="Bairro"
+                    className="input-delivery"
+                  />
+                </CampoDelivery>
+
+                <CampoDelivery titulo="Referência" className="md:col-span-2">
+                  <input
+                    value={referenciaEntrega}
+                    onChange={(e) => setReferenciaEntrega(e.target.value)}
+                    placeholder="Ponto de referência"
+                    className="input-delivery"
+                  />
+                </CampoDelivery>
+
+                <CampoDelivery titulo="Entregador" className="md:col-span-2">
+                  <input
+                    value={entregador}
+                    onChange={(e) => setEntregador(e.target.value)}
+                    placeholder="Nome do entregador"
+                    className="input-delivery"
+                  />
+                </CampoDelivery>
+
+                <CampoDelivery titulo="Observação da Entrega" className="md:col-span-2">
+                  <textarea
+                    value={observacaoEntrega}
+                    onChange={(e) => setObservacaoEntrega(e.target.value)}
+                    placeholder="Ex.: entregar pelo portão lateral, cuidado com troco, observações do pedido..."
+                    className="input-delivery min-h-24"
+                  />
+                </CampoDelivery>
+              </div>
+
+              <div className="bg-slate-900 text-white rounded-2xl p-5">
+                <div className="flex justify-between text-sm text-slate-300">
+                  <span>Subtotal</span>
+                  <strong>{formatarMoeda(totalBruto())}</strong>
+                </div>
+
+                <div className="flex justify-between text-sm text-slate-300 mt-1">
+                  <span>Desconto</span>
+                  <strong>{formatarMoeda(valorDescontoTotal())}</strong>
+                </div>
+
+                <div className="flex justify-between text-sm text-orange-300 mt-1">
+                  <span>Taxa de Entrega</span>
+                  <strong>{formatarMoeda(converterNumero(taxaEntrega))}</strong>
+                </div>
+
+                <div className="flex justify-between text-2xl font-black mt-3 border-t border-slate-700 pt-3">
+                  <span>Total</span>
+                  <span>{formatarMoeda(totalFinal())}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-200 flex flex-col md:flex-row justify-end gap-3">
+              <button
+                onClick={() => setModalDelivery(false)}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-6 py-3 rounded-xl font-black"
+              >
+                Voltar
+              </button>
+
+              <button
+                onClick={() => {
+                  if (!telefoneEntrega.trim()) {
+                    alert("Informe o telefone/WhatsApp da entrega.");
+                    return;
+                  }
+
+                  if (!enderecoEntrega.trim()) {
+                    alert("Informe o endereço da entrega.");
+                    return;
+                  }
+
+                  if (!bairroEntrega.trim()) {
+                    alert("Informe o bairro da entrega.");
+                    return;
+                  }
+
+                  setModalDelivery(false);
+                  setModalPagamento(true);
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-black"
+              >
+                Continuar para Pagamento
+              </button>
+            </div>
+
+            <style jsx global>{`
+              .input-delivery {
+                width: 100%;
+                border: 1px solid rgb(254 215 170);
+                border-radius: 0.75rem;
+                padding: 0.75rem;
+                color: rgb(15 23 42);
+                outline: none;
+              }
+
+              .input-delivery:focus {
+                border-color: rgb(249 115 22);
+                box-shadow: 0 0 0 3px rgb(249 115 22 / 0.12);
+              }
+            `}</style>
+          </div>
+        </div>
+      )}
+
+      {modalPagamento && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3">
+          <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl max-h-[94vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-black text-slate-900">
+                  Pagamento da Venda
+                </h2>
+                <p className="text-slate-500 text-sm">
+                  Informe os pagamentos em tabela, aplique arredondamento e finalize.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setModalPagamento(false)}
+                className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 grid grid-cols-1 xl:grid-cols-12 gap-5">
+              <div className="xl:col-span-8 space-y-4">
+                {ehDelivery && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+                    <p className="font-black text-orange-900">Venda Delivery</p>
+                    <p className="text-sm text-orange-800 mt-1">
+                      Cupom e romaneio de entrega serão impressos.
+                    </p>
+                    <p className="text-sm text-orange-800">
+                      Entrega: {enderecoEntrega || "-"}, {numeroEntrega || "S/N"} - {bairroEntrega || "-"}
+                    </p>
+                    <p className="text-sm text-orange-800 font-bold mt-1">
+                      Taxa de Entrega: {formatarMoeda(converterNumero(taxaEntrega))}
+                    </p>
+                  </div>
+                )}
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <div className="bg-slate-900 text-white px-4 py-3">
+                    <h3 className="font-black">Formas de Pagamento</h3>
+                    <p className="text-xs text-slate-300">Preencha uma ou mais formas. O sistema calcula falta e troco automaticamente.</p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px]">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 text-sm">
+                          <th className="p-3 text-left">Forma</th>
+                          <th className="p-3 text-right">Valor</th>
+                          <th className="p-3 text-left">Observação</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {[
+                          ["Dinheiro", pagDinheiro, setPagDinheiro, "Recebimento em espécie"],
+                          ["PIX", pagPix, setPagPix, "Gera QR Code / Copia e Cola"],
+                          ["Débito", pagDebito, setPagDebito, "Cartão de débito"],
+                          ["Crédito", pagCredito, setPagCredito, "Cartão de crédito"],
+                          ["Crediário", pagCrediario, setPagCrediario, "Venda fiado / parcelada"],
+                        ].map(([label, value, setter, obs]: any) => (
+                          <tr key={label} className="border-t border-slate-200">
+                            <td className="p-3 font-black text-slate-800">{label}</td>
+                            <td className="p-3">
+                              <input
+                                value={value}
+                                onChange={(e) => setter(e.target.value)}
+                                className="w-full border border-slate-300 p-3 rounded-xl text-slate-900 text-right font-black"
+                                placeholder="0,00"
+                              />
+                            </td>
+                            <td className="p-3 text-sm text-slate-500">{obs}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="border border-blue-200 rounded-2xl p-4 bg-blue-50">
+                  <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+                    <div className="flex-1">
+                      <p className="font-black text-blue-900">Arredondamento</p>
+                      <p className="text-sm text-blue-700">
+                        Use para ajustar centavos para mais ou para menos. Ex.: R$ 5,50 pode virar R$ 5,00 ou R$ 6,00.
+                      </p>
+                    </div>
+
+                    <div className="w-full lg:w-52">
+                      <label className="text-sm font-bold text-blue-900">Valor +/-</label>
+                      <input
+                        value={arredondamentoVenda}
+                        onChange={(e) => setArredondamentoVenda(e.target.value)}
+                        className="w-full border border-blue-300 p-3 rounded-xl text-slate-900 text-right font-black"
+                        placeholder="0,00"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => aplicarArredondamento("baixo")}
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl font-black"
+                    >
+                      Arred. para Menos
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => aplicarArredondamento("cima")}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-black"
+                    >
+                      Arred. para Mais
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={limparArredondamento}
+                      className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-4 py-3 rounded-xl font-black"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                {converterNumero(pagPix) > 0 && (
+                  <div className="space-y-3 border border-emerald-200 rounded-2xl p-4 bg-emerald-50">
+                    <p className="font-black text-emerald-800">PIX QR Code</p>
+
+                    <input
+                      value={chavePix}
+                      onChange={(e) => setChavePix(e.target.value)}
+                      placeholder="Chave PIX da empresa"
+                      className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        value={nomeRecebedorPix}
+                        onChange={(e) => setNomeRecebedorPix(e.target.value)}
+                        placeholder="Nome recebedor"
+                        className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
+                      />
+
+                      <input
+                        value={cidadePix}
+                        onChange={(e) => setCidadePix(e.target.value)}
+                        placeholder="Cidade"
+                        className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
+                      />
+                    </div>
+
+                    {gerarPixCopiaCola() && (
+                      <div className="bg-white rounded-2xl border p-4 text-center">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(gerarPixCopiaCola())}`}
+                          alt="QR Code PIX"
+                          className="mx-auto w-48 h-48"
+                        />
+
+                        <p className="text-sm text-slate-600 mt-2">
+                          Valor PIX: <strong>{formatarMoeda(converterNumero(pagPix))}</strong>
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={copiarPix}
+                          className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold"
+                        >
+                          Copiar PIX Copia e Cola
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPixConfirmado(true)}
+                          className={`mt-3 ml-2 px-4 py-2 rounded-xl font-bold text-white ${
+                            pixConfirmado ? "bg-green-700" : "bg-slate-700 hover:bg-slate-800"
+                          }`}
+                        >
+                          {pixConfirmado ? "PIX Confirmado" : "Confirmar PIX"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {converterNumero(pagCrediario) > 0 && (
+                  <div className="space-y-3 border border-blue-200 rounded-2xl p-4 bg-blue-50">
+                    <p className="font-black text-blue-800">Crediário da Loja</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        value={parcelas}
+                        onChange={(e) => setParcelas(e.target.value)}
+                        placeholder="Quantidade de parcelas"
+                        className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
+                      />
+
+                      <input
+                        type="date"
+                        value={primeiroVencimento}
+                        onChange={(e) => setPrimeiroVencimento(e.target.value)}
+                        className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="xl:col-span-4 space-y-4">
+                <div className="bg-slate-900 text-white rounded-2xl p-5">
+                  <p className="text-sm text-slate-300 font-bold">TOTAL DA VENDA</p>
+                  <p className="text-4xl font-black">{formatarMoeda(totalFinal())}</p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2">
+                  <div className="flex justify-between text-slate-700">
+                    <span>Subtotal:</span>
+                    <strong>{formatarMoeda(totalBruto())}</strong>
+                  </div>
+
+                  <div className="flex justify-between text-slate-700">
+                    <span>Desconto:</span>
+                    <strong>{formatarMoeda(valorDescontoTotal())}</strong>
+                  </div>
+
+                  {ehDelivery && (
+                    <div className="flex justify-between text-orange-700">
+                      <span>Taxa entrega:</span>
+                      <strong>{formatarMoeda(converterNumero(taxaEntrega))}</strong>
+                    </div>
+                  )}
+
+                  <div className={`flex justify-between ${valorArredondamento() < 0 ? "text-orange-700" : valorArredondamento() > 0 ? "text-green-700" : "text-slate-700"}`}>
+                    <span>Arredondamento:</span>
+                    <strong>{formatarMoeda(valorArredondamento())}</strong>
+                  </div>
+
+                  <div className="border-t pt-2 flex justify-between text-slate-900">
+                    <span>Total final:</span>
+                    <strong>{formatarMoeda(totalFinal())}</strong>
+                  </div>
+
+                  <div className="flex justify-between text-slate-700">
+                    <span>Total Pago:</span>
+                    <strong>{formatarMoeda(totalPago())}</strong>
+                  </div>
+
+                  <div className="flex justify-between text-red-700">
+                    <span>Falta:</span>
+                    <strong>{formatarMoeda(faltaPagar())}</strong>
+                  </div>
+                </div>
+
+                <div className="bg-green-600 text-white rounded-2xl p-5">
+                  <p className="text-sm text-green-100 font-bold">TROCO</p>
+                  <p className="text-4xl font-black">{formatarMoeda(troco())}</p>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    await finalizarVenda();
+                    setModalPagamento(false);
+                  }}
+                  disabled={finalizandoVenda}
+                  className={`w-full px-6 py-4 rounded-2xl font-black text-lg text-white ${
+                    finalizandoVenda
+                      ? "bg-slate-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700"
+                  }`}
+                >
+                  {finalizandoVenda ? "Finalizando..." : "Confirmar e Finalizar"}
+                </button>
+
+                <button
+                  onClick={() => setModalPagamento(false)}
+                  className="w-full bg-slate-200 hover:bg-slate-300 text-slate-900 px-6 py-3 rounded-2xl font-black"
+                >
+                  Voltar para Venda
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalProdutos && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-5xl p-6 rounded-xl shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold text-slate-900 mb-4">Pesquisar Produto</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Consulta Rápida de Produto - F2</h2>
 
             <input value={pesquisaProduto} onChange={(e) => setPesquisaProduto(e.target.value)} placeholder="Digite nome, código interno ou código de barras" className="w-full border border-slate-300 p-3 rounded-lg text-slate-900 mb-4" autoFocus />
 
@@ -1952,7 +4179,7 @@ export default function PdvPage() {
                   <th className="p-3 text-left">Cliente</th>
                   <th className="p-3 text-left">CPF/CNPJ</th>
                   <th className="p-3 text-left">WhatsApp</th>
-                  <th className="p-3 text-center">Ação</th>
+                  <th className="p-2 text-center">Ação</th>
                 </tr>
               </thead>
 
@@ -1960,9 +4187,9 @@ export default function PdvPage() {
                 {clientesFiltrados.map((cliente) => (
                   <tr key={cliente.id} className="border-b">
                     <td className="p-3 text-slate-900">{cliente.nome}</td>
-                    <td className="p-3 text-slate-800">{cliente.cpf_cnpj || "-"}</td>
-                    <td className="p-3 text-slate-800">{cliente.whatsapp || "-"}</td>
-                    <td className="p-3 text-center">
+                    <td className="p-2 text-slate-800">{cliente.cpf_cnpj || "-"}</td>
+                    <td className="p-2 text-slate-800">{cliente.whatsapp || "-"}</td>
+                    <td className="p-2 text-center">
                       <button onClick={() => selecionarCliente(cliente)} className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded">
                         Selecionar
                       </button>
@@ -2031,12 +4258,29 @@ export default function PdvPage() {
 
             <input value={operadorCaixa} onChange={(e) => setOperadorCaixa(e.target.value)} placeholder="Operador" className="w-full border border-slate-300 p-3 rounded-lg text-slate-900 mb-3" />
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <input
+                value={loginOperacao}
+                onChange={(e) => setLoginOperacao(e.target.value)}
+                placeholder="Usuário ou e-mail"
+                className="w-full border border-slate-300 p-3 rounded-lg text-slate-900"
+              />
+
+              <input
+                type="password"
+                value={senhaOperacao}
+                onChange={(e) => setSenhaOperacao(e.target.value)}
+                placeholder="Senha"
+                className="w-full border border-slate-300 p-3 rounded-lg text-slate-900"
+              />
+            </div>
+
             <input value={valorAbertura} onChange={(e) => setValorAbertura(e.target.value)} placeholder="Valor de abertura" className="w-full border border-slate-300 p-3 rounded-lg text-slate-900 mb-3" />
 
             <input value={observacaoCaixa} onChange={(e) => setObservacaoCaixa(e.target.value)} placeholder="Observação" className="w-full border border-slate-300 p-3 rounded-lg text-slate-900" />
 
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setModalAbrirCaixa(false)} className="bg-slate-500 hover:bg-slate-600 text-white px-5 py-2 rounded-lg">
+              <button onClick={() => { setModalAbrirCaixa(false); limparAutorizacaoOperacao(); }} className="bg-slate-500 hover:bg-slate-600 text-white px-5 py-2 rounded-lg">
                 Cancelar
               </button>
 
@@ -2055,12 +4299,29 @@ export default function PdvPage() {
               {tipoMovimentoCaixa === "sangria" ? "Registrar Sangria" : "Registrar Suprimento"}
             </h2>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <input
+                value={loginOperacao}
+                onChange={(e) => setLoginOperacao(e.target.value)}
+                placeholder="Usuário ou e-mail"
+                className="w-full border border-slate-300 p-3 rounded-lg text-slate-900"
+              />
+
+              <input
+                type="password"
+                value={senhaOperacao}
+                onChange={(e) => setSenhaOperacao(e.target.value)}
+                placeholder="Senha"
+                className="w-full border border-slate-300 p-3 rounded-lg text-slate-900"
+              />
+            </div>
+
             <input value={valorMovimentoCaixa} onChange={(e) => setValorMovimentoCaixa(e.target.value)} placeholder="Valor" className="w-full border border-slate-300 p-3 rounded-lg text-slate-900 mb-3" />
 
             <input value={descricaoMovimentoCaixa} onChange={(e) => setDescricaoMovimentoCaixa(e.target.value)} placeholder="Descrição" className="w-full border border-slate-300 p-3 rounded-lg text-slate-900" />
 
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setModalMovimentoCaixa(false)} className="bg-slate-500 hover:bg-slate-600 text-white px-5 py-2 rounded-lg">
+              <button onClick={() => { setModalMovimentoCaixa(false); limparAutorizacaoOperacao(); }} className="bg-slate-500 hover:bg-slate-600 text-white px-5 py-2 rounded-lg">
                 Cancelar
               </button>
 
@@ -2130,6 +4391,44 @@ export default function PdvPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CampoDelivery({
+  titulo,
+  children,
+  className = "",
+}: {
+  titulo: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label className="block text-sm font-black text-slate-700 mb-2">
+        {titulo}
+      </label>
+
+      {children}
+    </div>
+  );
+}
+
+function Atalho({
+  tecla,
+  descricao,
+}: {
+  tecla: string;
+  descricao: string;
+}) {
+  return (
+    <div className="flex items-center gap-4 border border-slate-200 rounded-2xl p-4 bg-slate-50">
+      <div className="min-w-24 text-center bg-slate-900 text-white rounded-xl px-3 py-2 font-black">
+        {tecla}
+      </div>
+
+      <p className="text-slate-800 font-bold">{descricao}</p>
     </div>
   );
 }

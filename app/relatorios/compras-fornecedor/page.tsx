@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Fornecedor = {
   id: string;
@@ -337,8 +338,21 @@ export default function ComprasFornecedorPage() {
     setMargemMedia(vendaTotal > 0 ? (lucroTotal / vendaTotal) * 100 : 0);
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "COMPRAS POR FORNECEDOR",
+      ["Fornecedor", "CNPJ", "Produtos", "Qtd", "Custo", "Venda", "Lucro", "Margem"],
+      fornecedoresRanking.map((item) => [
+        item.fornecedor,
+        item.cnpj,
+        numero(item.produtos),
+        numero(item.quantidade_total),
+        moeda(item.valor_custo),
+        moeda(item.valor_venda),
+        moeda(item.lucro_potencial),
+        `${item.margem_potencial.toFixed(2)}%`,
+      ])
+    );
   }
 
   useEffect(() => {

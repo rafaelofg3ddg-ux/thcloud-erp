@@ -1,7 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
+import {
+  CheckCircle,
+  Download,
+  Mail,
+  Phone,
+  Search,
+  User,
+  Users,
+  XCircle,
+} from "lucide-react";
 
 type Cliente = {
   id: string;
@@ -9,26 +20,79 @@ type Cliente = {
   nome: string;
   cpf_cnpj: string | null;
   telefone: string | null;
+  whatsapp: string | null;
   email: string | null;
   endereco: string | null;
+  cep: string | null;
+  rua: string | null;
+  numero: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
   limite_credito: number | null;
+  observacoes: string | null;
+  ativo: boolean | null;
   created_at: string | null;
 };
 
 export default function RelatorioClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [busca, setBusca] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState("todos");
+  const [carregando, setCarregando] = useState(false);
 
-  const [empresaNome, setEmpresaNome] = useState("Empresa");
-  const [usuarioNome, setUsuarioNome] = useState("Administrador");
+  function empresaAtualId() {
+    try {
+      const usuario = localStorage.getItem("th_usuario");
+      if (!usuario) return null;
 
-  const [totalClientes, setTotalClientes] = useState(0);
-  const [clientesComTelefone, setClientesComTelefone] = useState(0);
-  const [clientesComEmail, setClientesComEmail] = useState(0);
-  const [clientesComDocumento, setClientesComDocumento] = useState(0);
-  const [limiteCreditoTotal, setLimiteCreditoTotal] = useState(0);
+      const dados = JSON.parse(usuario);
+      return dados.empresa_id || null;
+    } catch {
+      return null;
+    }
+  }
 
-  function moeda(valor: number) {
+  function somenteNumeros(valor: string | null) {
+    return String(valor || "").replace(/\D/g, "");
+  }
+
+  function formatarCpfCnpj(valor: string | null) {
+    if (!valor) return "-";
+
+    const numeros = somenteNumeros(valor);
+
+    if (numeros.length === 11) {
+      return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+    }
+
+    if (numeros.length === 14) {
+      return numeros.replace(
+        /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
+        "$1.$2.$3/$4-$5"
+      );
+    }
+
+    return valor;
+  }
+
+  function formatarTelefone(valor: string | null) {
+    if (!valor) return "-";
+
+    const numeros = somenteNumeros(valor);
+
+    if (numeros.length === 11) {
+      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    }
+
+    if (numeros.length === 10) {
+      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+    }
+
+    return valor;
+  }
+
+  function formatarMoeda(valor: number | null | undefined) {
     return Number(valor || 0).toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
@@ -40,462 +104,382 @@ export default function RelatorioClientesPage() {
     return new Date(data).toLocaleDateString("pt-BR");
   }
 
-  function formatarTexto(valor: string | null) {
-    if (!valor || String(valor).trim() === "") return "-";
-    return valor;
+  function enderecoCliente(cliente: Cliente) {
+    const partes = [
+      cliente.endereco || cliente.rua,
+      cliente.numero,
+      cliente.bairro,
+      cliente.cidade,
+      cliente.estado,
+    ].filter(Boolean);
+
+    if (partes.length === 0) return "-";
+
+    return partes.join(", ");
   }
 
-  function zerarResumo() {
-    setClientes([]);
-    setTotalClientes(0);
-    setClientesComTelefone(0);
-    setClientesComEmail(0);
-    setClientesComDocumento(0);
-    setLimiteCreditoTotal(0);
-  }
-
-  async function carregarRelatorio() {
-    const usuario = JSON.parse(localStorage.getItem("th_usuario") || "{}");
-    const empresaId = usuario.empresa_id;
-
-    setEmpresaNome(usuario.empresa_nome || "Empresa");
-    setUsuarioNome(usuario.nome || "Administrador");
+  async function carregarClientes() {
+    const empresaId = empresaAtualId();
 
     if (!empresaId) {
-      zerarResumo();
+      alert("Empresa não identificada. Faça login novamente.");
       return;
     }
 
-    let consulta = supabase
+    setCarregando(true);
+
+    const { data, error } = await supabase
       .from("clientes")
       .select(
-        "id,empresa_id,nome,cpf_cnpj,telefone,email,endereco,limite_credito,created_at"
+        "id,empresa_id,nome,cpf_cnpj,telefone,whatsapp,email,endereco,cep,rua,numero,bairro,cidade,estado,limite_credito,observacoes,ativo,created_at"
       )
       .eq("empresa_id", empresaId)
       .order("nome", { ascending: true });
 
-    if (busca.trim() !== "") {
-      consulta = consulta.ilike("nome", `%${busca.trim()}%`);
-    }
-
-    const { data, error } = await consulta;
+    setCarregando(false);
 
     if (error) {
       alert("Erro ao carregar clientes: " + error.message);
       return;
     }
 
-    const lista: Cliente[] = data || [];
-
-    setClientes(lista);
-    setTotalClientes(lista.length);
-
-    setClientesComTelefone(
-      lista.filter((cliente) => String(cliente.telefone || "").trim() !== "")
-        .length
-    );
-
-    setClientesComEmail(
-      lista.filter((cliente) => String(cliente.email || "").trim() !== "")
-        .length
-    );
-
-    setClientesComDocumento(
-      lista.filter((cliente) => String(cliente.cpf_cnpj || "").trim() !== "")
-        .length
-    );
-
-    setLimiteCreditoTotal(
-      lista.reduce(
-        (total, cliente) => total + Number(cliente.limite_credito || 0),
-        0
-      )
-    );
+    setClientes(data || []);
   }
 
-  function imprimirPdf() {
-    window.print();
+  const clientesFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    return clientes.filter((cliente) => {
+      const statusOk =
+        statusFiltro === "todos" ||
+        (statusFiltro === "ativos" && cliente.ativo !== false) ||
+        (statusFiltro === "inativos" && cliente.ativo === false) ||
+        (statusFiltro === "com_credito" && Number(cliente.limite_credito || 0) > 0);
+
+      const textoBusca = [
+        cliente.nome,
+        cliente.cpf_cnpj,
+        cliente.telefone,
+        cliente.whatsapp,
+        cliente.email,
+        cliente.cidade,
+        cliente.estado,
+        cliente.endereco,
+        cliente.rua,
+        cliente.bairro,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const buscaOk = !termo || textoBusca.includes(termo);
+
+      return statusOk && buscaOk;
+    });
+  }, [clientes, busca, statusFiltro]);
+
+  const totalClientes = clientesFiltrados.length;
+  const totalAtivos = clientesFiltrados.filter((cliente) => cliente.ativo !== false).length;
+  const totalInativos = clientesFiltrados.filter((cliente) => cliente.ativo === false).length;
+  const totalComCredito = clientesFiltrados.filter(
+    (cliente) => Number(cliente.limite_credito || 0) > 0
+  ).length;
+
+  const limiteTotal = clientesFiltrados.reduce(
+    (total, cliente) => total + Number(cliente.limite_credito || 0),
+    0
+  );
+
+  async function gerarPDFClientes() {
+    await gerarPDFPadrao(
+      "Relatório de Clientes",
+      [
+        "Nome",
+        "CPF/CNPJ",
+        "Telefone",
+        "WhatsApp",
+        "E-mail",
+        "Cidade",
+        "Limite",
+        "Status",
+      ],
+      clientesFiltrados.map((cliente) => [
+        cliente.nome || "-",
+        formatarCpfCnpj(cliente.cpf_cnpj),
+        formatarTelefone(cliente.telefone),
+        formatarTelefone(cliente.whatsapp),
+        cliente.email || "-",
+        cliente.cidade || "-",
+        formatarMoeda(cliente.limite_credito),
+        cliente.ativo === false ? "Inativo" : "Ativo",
+      ])
+    );
   }
 
   useEffect(() => {
-    carregarRelatorio();
+    carregarClientes();
   }, []);
 
   return (
-    <div className="bg-slate-50 min-h-screen p-8 print:bg-white print:p-0">
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: A4;
-            margin: 10mm;
-          }
+    <div className="min-h-screen bg-slate-50 p-8">
+      <div className="bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-8 shadow-lg mb-8 text-white">
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
+          <div>
+            <p className="text-blue-100 font-bold">
+              THCloud ERP
+            </p>
 
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
+            <h1 className="text-4xl font-black mt-2">
+              Relatório de Clientes
+            </h1>
 
-          body {
-            background: white !important;
-          }
+            <p className="text-blue-100 mt-2 max-w-3xl">
+              Relatório comercial de clientes cadastrados, contatos, endereço, limite de crédito e situação por empresa.
+            </p>
+          </div>
 
-          aside,
-          header,
-          .no-print {
-            display: none !important;
-          }
-
-          main {
-            min-height: auto !important;
-          }
-
-          .documento-relatorio {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            box-shadow: none !important;
-            border: none !important;
-            padding: 0 !important;
-          }
-
-          .quebra-pagina {
-            page-break-inside: avoid;
-          }
-        }
-      `}</style>
-
-      <div className="no-print max-w-5xl mx-auto mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900">
-            Relatório de Clientes
-          </h1>
-
-          <p className="text-slate-500">
-            Relatório profissional de clientes cadastrados no THCloud ERP.
-          </p>
+          <button
+            onClick={gerarPDFClientes}
+            className="bg-white text-blue-800 px-6 py-3 rounded-2xl font-black hover:bg-blue-50 flex items-center justify-center gap-2"
+          >
+            <Download size={20} />
+            Gerar PDF
+          </button>
         </div>
-
-        <button
-          onClick={imprimirPdf}
-          className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-2xl font-bold shadow-sm"
-        >
-          Imprimir / Salvar PDF
-        </button>
       </div>
 
-      <div className="no-print max-w-5xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-6">
-        <h2 className="text-xl font-black text-slate-900 mb-4">
-          Filtros
-        </h2>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-5 mb-8">
+        <ResumoCard
+          titulo="Clientes"
+          valor={`${totalClientes}`}
+          detalhe="Clientes encontrados"
+          cor="text-blue-700"
+          icone={<Users size={24} />}
+        />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-sm font-semibold text-slate-600 mb-2">
-              Buscar por nome
-            </label>
+        <ResumoCard
+          titulo="Ativos"
+          valor={`${totalAtivos}`}
+          detalhe="Clientes liberados"
+          cor="text-green-700"
+          icone={<CheckCircle size={24} />}
+        />
+
+        <ResumoCard
+          titulo="Inativos"
+          valor={`${totalInativos}`}
+          detalhe="Clientes bloqueados"
+          cor="text-red-700"
+          icone={<XCircle size={24} />}
+        />
+
+        <ResumoCard
+          titulo="Com Limite"
+          valor={`${totalComCredito}`}
+          detalhe="Clientes com crédito"
+          cor="text-purple-700"
+          icone={<User size={24} />}
+        />
+
+        <ResumoCard
+          titulo="Limite Total"
+          valor={formatarMoeda(limiteTotal)}
+          detalhe="Crédito liberado"
+          cor="text-orange-700"
+          icone={<User size={24} />}
+        />
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="md:col-span-3 relative">
+            <Search
+              size={18}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+            />
 
             <input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Digite o nome do cliente"
-              className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
+              placeholder="Buscar por nome, CPF/CNPJ, telefone, WhatsApp, cidade ou e-mail..."
+              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-300 text-slate-900"
             />
           </div>
 
-          <div className="flex items-end">
-            <button
-              onClick={carregarRelatorio}
-              className="w-full bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-bold"
-            >
-              Atualizar
-            </button>
-          </div>
+          <select
+            value={statusFiltro}
+            onChange={(e) => setStatusFiltro(e.target.value)}
+            className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-slate-900"
+          >
+            <option value="todos">Todos os status</option>
+            <option value="ativos">Somente ativos</option>
+            <option value="inativos">Somente inativos</option>
+            <option value="com_credito">Com limite de crédito</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mt-5">
+          <p className="text-sm text-slate-500">
+            {carregando
+              ? "Carregando clientes..."
+              : `${clientesFiltrados.length} cliente(s) encontrado(s).`}
+          </p>
+
+          <button
+            onClick={carregarClientes}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-5 py-2 rounded-xl font-bold"
+          >
+            Atualizar
+          </button>
         </div>
       </div>
 
-      <div className="documento-relatorio max-w-5xl mx-auto bg-white border border-slate-200 shadow-lg rounded-2xl overflow-hidden">
-        <div className="px-8 pt-8 pb-5">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5 border-b-4 border-blue-700 pb-5">
-            <div className="flex items-center gap-4">
-              <img
-                src="/logo-thcloud-transparente.png"
-                alt="THCloud"
-                className="h-14 w-14 object-contain"
-                onError={(e) => {
-                  e.currentTarget.src = "/logo-thcloud.jpeg";
-                }}
-              />
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900">
+              Lista de Clientes
+            </h2>
 
-              <div>
-                <h2 className="text-2xl font-black text-blue-800">
-                  THCloud
-                </h2>
-
-                <p className="text-sm text-slate-500 font-semibold">
-                  ERP Inteligente
-                </p>
-              </div>
-            </div>
-
-            <div className="text-center">
-              <h1 className="text-2xl md:text-3xl font-black text-slate-900">
-                RELATÓRIO DE CLIENTES
-              </h1>
-
-              <p className="text-sm text-slate-500 font-semibold mt-1">
-                Relatório Cadastral
-              </p>
-            </div>
-
-            <div className="text-right text-xs text-slate-600">
-              <p>
-                <strong>Filtro:</strong>{" "}
-                {busca.trim() === "" ? "Todos" : busca}
-              </p>
-
-              <p className="mt-1">
-                <strong>Emissão:</strong>{" "}
-                {new Date().toLocaleString("pt-BR")}
-              </p>
-            </div>
+            <p className="text-slate-500">
+              Relação de clientes cadastrados na empresa logada.
+            </p>
           </div>
         </div>
 
-        <div className="px-8 pb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <div className="bg-slate-100 px-4 py-3 text-blue-800 font-black text-sm border-b border-slate-200">
-                DADOS DA EMPRESA
-              </div>
-
-              <table className="w-full text-sm">
-                <tbody>
-                  <LinhaInfo titulo="Empresa" valor={empresaNome} />
-                  <LinhaInfo titulo="Sistema" valor="THCloud ERP" />
-                  <LinhaInfo titulo="Site" valor="thcloud.com.br" />
-                  <LinhaInfo titulo="Responsável" valor={usuarioNome} />
-                </tbody>
-              </table>
-            </div>
-
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <div className="bg-slate-100 px-4 py-3 text-blue-800 font-black text-sm border-b border-slate-200">
-                DADOS DO RELATÓRIO
-              </div>
-
-              <table className="w-full text-sm">
-                <tbody>
-                  <LinhaInfo titulo="Relatório" valor="Clientes" />
-                  <LinhaInfo
-                    titulo="Filtro"
-                    valor={busca.trim() === "" ? "Todos" : busca}
-                  />
-                  <LinhaInfo titulo="Clientes" valor={`${totalClientes}`} />
-                  <LinhaInfo
-                    titulo="Limite Total"
-                    valor={moeda(limiteCreditoTotal)}
-                  />
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-8 pb-6 no-print">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <ResumoCard titulo="Clientes" valor={`${totalClientes}`} cor="text-blue-700" />
-            <ResumoCard titulo="Com Telefone" valor={`${clientesComTelefone}`} cor="text-green-700" />
-            <ResumoCard titulo="Com E-mail" valor={`${clientesComEmail}`} cor="text-purple-700" />
-            <ResumoCard titulo="Com CPF/CNPJ" valor={`${clientesComDocumento}`} cor="text-orange-700" />
-          </div>
-        </div>
-
-        <div className="px-8 pb-6 quebra-pagina">
-          <h2 className="text-xl font-black text-slate-900 mb-4">
-            Resumo do Cadastro
-          </h2>
-
-          <table className="w-full border border-slate-300 text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px]">
             <thead>
-              <tr className="bg-blue-950 text-white">
-                <th className="p-3 text-left">DESCRIÇÃO</th>
-                <th className="p-3 text-right w-52">TOTAL</th>
+              <tr className="bg-slate-100 text-slate-700">
+                <th className="p-4 text-left">Cliente</th>
+                <th className="p-4 text-left">CPF/CNPJ</th>
+                <th className="p-4 text-left">Contato</th>
+                <th className="p-4 text-left">Endereço</th>
+                <th className="p-4 text-right">Limite</th>
+                <th className="p-4 text-center">Status</th>
+                <th className="p-4 text-left">Cadastro</th>
               </tr>
             </thead>
 
             <tbody>
-              <LinhaResumo titulo="TOTAL DE CLIENTES" detalhe="Clientes encontrados no filtro" valor={`${totalClientes}`} cor="text-blue-950" />
-              <LinhaResumo titulo="CLIENTES COM TELEFONE" detalhe="Clientes que possuem telefone cadastrado" valor={`${clientesComTelefone}`} cor="text-green-700" />
-              <LinhaResumo titulo="CLIENTES COM E-MAIL" detalhe="Clientes que possuem e-mail cadastrado" valor={`${clientesComEmail}`} cor="text-purple-700" />
-              <LinhaResumo titulo="CLIENTES COM CPF/CNPJ" detalhe="Clientes que possuem documento cadastrado" valor={`${clientesComDocumento}`} cor="text-orange-700" />
-              <LinhaResumo titulo="LIMITE DE CRÉDITO TOTAL" detalhe="Soma dos limites de crédito cadastrados" valor={moeda(limiteCreditoTotal)} cor="text-blue-700" />
-            </tbody>
-          </table>
-        </div>
+              {clientesFiltrados.map((cliente) => (
+                <tr key={cliente.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-11 w-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center font-black">
+                        {cliente.nome?.charAt(0)?.toUpperCase() || "C"}
+                      </div>
 
-        <div className="px-8 pb-6 quebra-pagina">
-          <h2 className="text-xl font-black text-slate-900 mb-4">
-            Clientes Cadastrados
-          </h2>
+                      <div>
+                        <p className="font-black text-slate-900">
+                          {cliente.nome || "-"}
+                        </p>
 
-          <table className="w-full border border-slate-300 text-xs">
-            <thead>
-              <tr className="bg-blue-950 text-white">
-                <th className="p-3 text-left">NOME</th>
-                <th className="p-3 text-left">CPF/CNPJ</th>
-                <th className="p-3 text-left">TELEFONE</th>
-                <th className="p-3 text-left">E-MAIL</th>
-                <th className="p-3 text-right">LIMITE</th>
-                <th className="p-3 text-left">CADASTRO</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {clientes.map((cliente, index) => (
-                <tr
-                  key={cliente.id}
-                  className={`${index % 2 === 0 ? "bg-white" : "bg-slate-50"} border-b border-slate-200`}
-                >
-                  <td className="p-3 text-slate-900 font-semibold">
-                    {cliente.nome}
+                        <p className="text-sm text-slate-500">
+                          {cliente.email || "Sem e-mail"}
+                        </p>
+                      </div>
+                    </div>
                   </td>
 
-                  <td className="p-3 text-slate-700">
-                    {formatarTexto(cliente.cpf_cnpj)}
+                  <td className="p-4 text-slate-700">
+                    {formatarCpfCnpj(cliente.cpf_cnpj)}
                   </td>
 
-                  <td className="p-3 text-slate-700">
-                    {formatarTexto(cliente.telefone)}
+                  <td className="p-4">
+                    <div className="space-y-1 text-sm text-slate-700">
+                      <p className="flex items-center gap-2">
+                        <Phone size={14} />
+                        {formatarTelefone(cliente.telefone)}
+                      </p>
+
+                      <p className="flex items-center gap-2">
+                        <Phone size={14} />
+                        {formatarTelefone(cliente.whatsapp)}
+                      </p>
+
+                      <p className="flex items-center gap-2">
+                        <Mail size={14} />
+                        {cliente.email || "-"}
+                      </p>
+                    </div>
                   </td>
 
-                  <td className="p-3 text-slate-700">
-                    {formatarTexto(cliente.email)}
+                  <td className="p-4 text-slate-700 max-w-xs">
+                    {enderecoCliente(cliente)}
                   </td>
 
-                  <td className="p-3 text-right font-black text-blue-950">
-                    {moeda(Number(cliente.limite_credito || 0))}
+                  <td className="p-4 text-right font-black text-slate-900">
+                    {formatarMoeda(cliente.limite_credito)}
                   </td>
 
-                  <td className="p-3 text-slate-700">
+                  <td className="p-4 text-center">
+                    <span
+                      className={`inline-flex px-3 py-1 rounded-full text-xs font-black ${
+                        cliente.ativo === false
+                          ? "bg-red-100 text-red-700"
+                          : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {cliente.ativo === false ? "Inativo" : "Ativo"}
+                    </span>
+                  </td>
+
+                  <td className="p-4 text-slate-700">
                     {formatarData(cliente.created_at)}
                   </td>
                 </tr>
               ))}
 
-              {clientes.length === 0 && (
+              {clientesFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-6 text-center text-slate-500">
-                    Nenhum cliente encontrado para esta empresa.
+                  <td colSpan={7} className="p-10 text-center text-slate-500">
+                    Nenhum cliente encontrado.
                   </td>
                 </tr>
               )}
             </tbody>
-
-            {clientes.length > 0 && (
-              <tfoot>
-                <tr className="bg-slate-100 border-t border-slate-300">
-                  <td colSpan={4} className="p-3 text-right font-black text-slate-900">
-                    LIMITE TOTAL
-                  </td>
-
-                  <td className="p-3 text-right font-black text-blue-800">
-                    {moeda(limiteCreditoTotal)}
-                  </td>
-
-                  <td></td>
-                </tr>
-              </tfoot>
-            )}
           </table>
-        </div>
-
-        <div className="px-8 pb-6">
-          <div className="border border-blue-300 rounded-xl p-4 flex gap-3">
-            <div className="w-7 h-7 rounded-full bg-blue-700 text-white flex items-center justify-center font-black text-sm">
-              i
-            </div>
-
-            <div>
-              <p className="font-black text-blue-800">Observação</p>
-              <p className="text-sm text-slate-700 mt-1">
-                Relatório gerado automaticamente pelo sistema THCloud ERP com base
-                nos clientes cadastrados da empresa logada.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-8 py-5 border-t border-slate-300 bg-white">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center text-xs text-slate-700">
-            <div>
-              <p className="font-bold text-slate-900">
-                THCloud ERP - Sistema de Gestão Empresarial
-              </p>
-            </div>
-
-            <div className="text-center">
-              <p className="font-bold text-blue-700">www.thcloud.com.br</p>
-            </div>
-
-            <div className="text-right">
-              <p>Página 1 de 1</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function LinhaInfo({ titulo, valor }: { titulo: string; valor: string }) {
-  return (
-    <tr className="border-b last:border-b-0 border-slate-100">
-      <td className="bg-slate-50 p-3 font-bold text-slate-800 w-32">
-        {titulo}:
-      </td>
-      <td className="p-3 text-slate-800 font-medium">{valor}</td>
-    </tr>
-  );
-}
-
-function LinhaResumo({
-  titulo,
-  detalhe,
-  valor,
-  cor,
-}: {
-  titulo: string;
-  detalhe: string;
-  valor: string;
-  cor: string;
-}) {
-  return (
-    <tr className="border-b border-slate-200">
-      <td className="p-4">
-        <p className="font-black text-slate-900">{titulo}</p>
-        <p className="text-xs text-slate-500">{detalhe}</p>
-      </td>
-
-      <td className={`p-4 text-right font-black ${cor}`}>
-        {valor}
-      </td>
-    </tr>
-  );
-}
-
 function ResumoCard({
   titulo,
   valor,
+  detalhe,
   cor,
+  icone,
 }: {
   titulo: string;
   valor: string;
+  detalhe: string;
   cor: string;
+  icone: React.ReactNode;
 }) {
   return (
-    <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm">
-      <p className="text-sm font-semibold text-slate-600">{titulo}</p>
-      <p className={`text-2xl font-black mt-2 ${cor}`}>{valor}</p>
+    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-bold text-slate-500">
+            {titulo}
+          </p>
+
+          <h2 className={`text-3xl font-black mt-2 ${cor}`}>
+            {valor}
+          </h2>
+
+          <p className="text-sm text-slate-500 mt-2">
+            {detalhe}
+          </p>
+        </div>
+
+        <div className={`h-12 w-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center ${cor}`}>
+          {icone}
+        </div>
+      </div>
     </div>
   );
 }

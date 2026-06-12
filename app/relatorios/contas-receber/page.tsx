@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
 
 type Cliente = {
   id: string;
@@ -195,8 +196,18 @@ export default function RelatorioContasReceberPage() {
     );
   }
 
-  function imprimirPdf() {
-    window.print();
+  async function imprimirPdf() {
+    await gerarPDFPadrao(
+      "CONTAS A RECEBER",
+      ["Cliente", "Descrição", "Vencimento", "Status", "Valor"],
+      contas.map((item) => [
+        item.cliente,
+        item.descricao,
+        formatarDataBR(item.vencimento),
+        item.status,
+        moeda(item.valor),
+      ])
+    );
   }
 
   useEffect(() => {

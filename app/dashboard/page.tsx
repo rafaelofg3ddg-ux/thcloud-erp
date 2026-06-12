@@ -1,526 +1,349 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../../lib/supabase";
-import { getEmpresaId } from "../../lib/empresa";
 import {
   AlertTriangle,
   BarChart3,
-  CircleDollarSign,
   CreditCard,
   Package,
+  RefreshCw,
   ShoppingCart,
   TrendingUp,
   Users,
   Wallet,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { supabase } from "../../lib/supabase";
 
 type Venda = {
   id: string;
-  cliente_id: string | null;
+  empresa_id: string;
   valor_total: number | null;
-  desconto: number | null;
   forma_pagamento: string | null;
   status: string | null;
   created_at: string | null;
 };
 
-type Cliente = {
+type PagamentoVenda = {
   id: string;
-  nome: string;
-};
-
-type Produto = {
-  id: string;
-  nome: string;
-  codigo: string | null;
-  qtd_atual: number | null;
-  qtd_minima: number | null;
-  ativo: boolean | null;
+  venda_id: string;
+  forma_pagamento: string | null;
+  valor: number | null;
+  created_at: string | null;
+  empresa_id: string | null;
 };
 
 type ContaReceber = {
   id: string;
   valor: number | null;
-  vencimento: string | null;
   status: string | null;
+  vencimento: string | null;
+  empresa_id: string | null;
 };
 
 type ContaPagar = {
   id: string;
   valor: number | null;
-  vencimento: string | null;
   status: string | null;
+  vencimento: string | null;
+  empresa_id: string | null;
 };
 
-type ItemVenda = {
+type Produto = {
   id: string;
-  venda_id: string;
-  produto_id: string;
-  quantidade: number | null;
-  subtotal: number | null;
-};
-
-type PagamentoVenda = {
-  id: string;
-  venda_id: string | null;
-  forma_pagamento: string | null;
-  valor: number | null;
-};
-
-type DashboardVenda = {
-  data_venda: string;
-  total_vendas: number;
-  faturamento: number;
-};
-
-type AlertaEstoque = {
-  id: string;
-  codigo: string | null;
   nome: string;
   qtd_atual: number | null;
   qtd_minima: number | null;
-  falta: number | null;
-  fornecedor: string | null;
-  nivel_alerta: string | null;
+  empresa_id: string | null;
+  ativo: boolean | null;
 };
 
-type TopProduto = {
-  nome: string;
-  quantidade: number;
-  valor: number;
+type Cliente = {
+  id: string;
+  empresa_id: string | null;
+  ativo: boolean | null;
 };
 
-type TopCliente = {
-  nome: string;
-  compras: number;
-  valor: number;
+type DashboardDados = {
+  faturamentoHoje: number;
+  faturamentoMes: number;
+  ticketMedio: number;
+  saldoPrevisto: number;
+  totalClientes: number;
+  totalProdutos: number;
+  estoqueBaixo: number;
+  totalReceber: number;
+  totalPagar: number;
+  vendasHoje: number;
+  vendasMes: number;
+  atualizacao: string;
+  vendasPorDia: { data: string; total: number }[];
+  pagamentosPorForma: { forma: string; total: number }[];
+  produtosBaixo: Produto[];
 };
 
-type FormaPagamentoGrafico = {
-  forma: string;
-  valor: number;
-};
+export default function DashboardPage() {
+  const [dados, setDados] = useState<DashboardDados>({
+    faturamentoHoje: 0,
+    faturamentoMes: 0,
+    ticketMedio: 0,
+    saldoPrevisto: 0,
+    totalClientes: 0,
+    totalProdutos: 0,
+    estoqueBaixo: 0,
+    totalReceber: 0,
+    totalPagar: 0,
+    vendasHoje: 0,
+    vendasMes: 0,
+    atualizacao: "",
+    vendasPorDia: [],
+    pagamentosPorForma: [],
+    produtosBaixo: [],
+  });
 
-export default function DashboardExecutivoPage() {
-  const [carregando, setCarregando] = useState(true);
+  const [empresaNome, setEmpresaNome] = useState("THCloud ERP");
+  const [carregando, setCarregando] = useState(false);
 
-  const [vendasDiarias, setVendasDiarias] = useState<DashboardVenda[]>([]);
-  const [alertasEstoque, setAlertasEstoque] = useState<AlertaEstoque[]>([]);
-  const [ultimasVendas, setUltimasVendas] = useState<Venda[]>([]);
-  const [topProdutos, setTopProdutos] = useState<TopProduto[]>([]);
-  const [topClientes, setTopClientes] = useState<TopCliente[]>([]);
-  const [formasPagamento, setFormasPagamento] = useState<FormaPagamentoGrafico[]>([]);
+  function empresaAtualId() {
+    try {
+      const usuarioStorage = localStorage.getItem("th_usuario");
 
-  const [faturamentoHoje, setFaturamentoHoje] = useState(0);
-  const [faturamentoMes, setFaturamentoMes] = useState(0);
-  const [totalVendasMes, setTotalVendasMes] = useState(0);
-  const [ticketMedio, setTicketMedio] = useState(0);
+      if (usuarioStorage) {
+        const usuario = JSON.parse(usuarioStorage);
 
-  const [totalClientes, setTotalClientes] = useState(0);
-  const [totalProdutos, setTotalProdutos] = useState(0);
-  const [produtosEstoqueBaixo, setProdutosEstoqueBaixo] = useState(0);
+        if (usuario.empresa_id) return usuario.empresa_id;
+        if (usuario.empresa?.id) return usuario.empresa.id;
+        if (usuario.empresa_nome) setEmpresaNome(usuario.empresa_nome);
+      }
 
-  const [contasReceberAberto, setContasReceberAberto] = useState(0);
-  const [contasPagarAberto, setContasPagarAberto] = useState(0);
-  const [saldoPrevisto, setSaldoPrevisto] = useState(0);
+      const empresaStorage = localStorage.getItem("th_empresa");
 
-  function moeda(valor: number) {
+      if (empresaStorage) {
+        const empresa = JSON.parse(empresaStorage);
+
+        if (empresa.nome_fantasia || empresa.nome) {
+          setEmpresaNome(empresa.nome_fantasia || empresa.nome);
+        }
+
+        if (empresa.id) return empresa.id;
+        if (empresa.empresa_id) return empresa.empresa_id;
+      }
+
+      return localStorage.getItem("empresa_id") || localStorage.getItem("th_empresa_id");
+    } catch {
+      return null;
+    }
+  }
+
+  function formatarMoeda(valor: number) {
     return Number(valor || 0).toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
     });
   }
 
-  function numero(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR");
-  }
-
-  function formatarDataBR(data: string | null) {
-    if (!data) return "-";
-
-    if (data.includes("T")) {
-      return new Date(data).toLocaleDateString("pt-BR");
-    }
-
-    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
-  }
-
-  function formatarDataHoraBR(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
-  }
-
-  function hojeISO() {
-    return new Date().toISOString().split("T")[0];
-  }
-
-  function inicioMesISO() {
+  function dataHojeInicio() {
     const hoje = new Date();
-
-    return new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-      .toISOString()
-      .split("T")[0];
+    hoje.setHours(0, 0, 0, 0);
+    return hoje;
   }
 
-  function inicio30DiasISO() {
-    const data = new Date();
-    data.setDate(data.getDate() - 30);
+  function dataMesInicio() {
+    const hoje = new Date();
+    return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  }
 
+  function somenteData(data: Date) {
     return data.toISOString().split("T")[0];
   }
 
-  function dataFimISO() {
-    return new Date(new Date().setHours(23, 59, 59, 999)).toISOString();
-  }
-
-  function dataInicioMesISOCompleta() {
-    return new Date(inicioMesISO() + "T00:00:00").toISOString();
-  }
-
-  function dataInicio30DiasISOCompleta() {
-    return new Date(inicio30DiasISO() + "T00:00:00").toISOString();
-  }
-
-  function dataInicioHojeISOCompleta() {
-    return new Date(hojeISO() + "T00:00:00").toISOString();
-  }
-
-  function estaAberto(status: string | null) {
-    const texto = String(status || "").toLowerCase();
-
-    return texto !== "pago" && texto !== "recebido" && texto !== "cancelado";
-  }
-
-  function nomeCliente(clienteId: string | null, clientes: Cliente[]) {
-    if (!clienteId) return "Consumidor Final";
-
-    const cliente = clientes.find((item) => item.id === clienteId);
-
-    return cliente?.nome || "Cliente não encontrado";
-  }
-
-  function gerarVendasDiarias(vendas: Venda[]) {
-    const mapa = new Map<string, DashboardVenda>();
-
-    vendas.forEach((venda) => {
-      if (!venda.created_at) return;
-
-      const data = new Date(venda.created_at).toISOString().split("T")[0];
-
-      const atual = mapa.get(data) || {
-        data_venda: data,
-        total_vendas: 0,
-        faturamento: 0,
-      };
-
-      atual.total_vendas += 1;
-      atual.faturamento += Number(venda.valor_total || 0);
-
-      mapa.set(data, atual);
+  function nomeDataCurta(dataIso: string) {
+    const data = new Date(dataIso + "T00:00:00");
+    return data.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
     });
+  }
 
-    return Array.from(mapa.values()).sort((a, b) =>
-      a.data_venda.localeCompare(b.data_venda)
-    );
+  function ultimos30DiasBase() {
+    const dias: { data: string; total: number }[] = [];
+
+    for (let i = 29; i >= 0; i--) {
+      const data = new Date();
+      data.setDate(data.getDate() - i);
+      dias.push({
+        data: somenteData(data),
+        total: 0,
+      });
+    }
+
+    return dias;
   }
 
   async function carregarDashboard() {
-    setCarregando(true);
-
-    const empresaId = getEmpresaId();
+    const empresaId = empresaAtualId();
 
     if (!empresaId) {
       alert("Empresa não identificada. Faça login novamente.");
+      return;
+    }
+
+    setCarregando(true);
+
+    const inicioHoje = dataHojeInicio();
+    const inicioMes = dataMesInicio();
+    const hojeIso = inicioHoje.toISOString();
+    const mesIso = inicioMes.toISOString();
+
+    const inicio30 = new Date();
+    inicio30.setDate(inicio30.getDate() - 29);
+    inicio30.setHours(0, 0, 0, 0);
+
+    const vendasReq = await supabase
+      .from("vendas")
+      .select("id,empresa_id,valor_total,forma_pagamento,status,created_at")
+      .eq("empresa_id", empresaId)
+      .gte("created_at", inicio30.toISOString())
+      .order("created_at", { ascending: true });
+
+    if (vendasReq.error) {
+      alert("Erro ao carregar vendas: " + vendasReq.error.message);
       setCarregando(false);
       return;
     }
 
-    const inicioMes = dataInicioMesISOCompleta();
-    const inicioHoje = dataInicioHojeISOCompleta();
-    const inicio30Dias = dataInicio30DiasISOCompleta();
-    const fimHoje = dataFimISO();
+    const vendas = (vendasReq.data || []) as Venda[];
+    const vendasFinalizadas = vendas.filter((venda) => venda.status !== "cancelada" && venda.status !== "devolvida");
 
-    const [
-      vendasMesReq,
-      vendas30DiasReq,
-      clientesReq,
-      produtosReq,
-      contasReceberReq,
-      contasPagarReq,
-    ] = await Promise.all([
-      supabase
-        .from("vendas")
-        .select("id,cliente_id,valor_total,desconto,forma_pagamento,status,created_at")
-        .eq("empresa_id", empresaId)
-        .eq("status", "finalizada")
-        .gte("created_at", inicioMes)
-        .lte("created_at", fimHoje)
-        .order("created_at", { ascending: false }),
+    const vendasHoje = vendasFinalizadas.filter((venda) => {
+      if (!venda.created_at) return false;
+      return new Date(venda.created_at) >= inicioHoje;
+    });
 
-      supabase
-        .from("vendas")
-        .select("id,cliente_id,valor_total,desconto,forma_pagamento,status,created_at")
-        .eq("empresa_id", empresaId)
-        .eq("status", "finalizada")
-        .gte("created_at", inicio30Dias)
-        .lte("created_at", fimHoje)
-        .order("created_at", { ascending: true }),
+    const vendasMes = vendasFinalizadas.filter((venda) => {
+      if (!venda.created_at) return false;
+      return new Date(venda.created_at) >= inicioMes;
+    });
 
-      supabase
-        .from("clientes")
-        .select("id,nome")
-        .eq("empresa_id", empresaId)
-        .order("nome", { ascending: true }),
-
-      supabase
-        .from("produtos")
-        .select("id,nome,codigo,qtd_atual,qtd_minima,ativo")
-        .eq("empresa_id", empresaId)
-        .order("nome", { ascending: true }),
-
-      supabase
-        .from("contas_receber")
-        .select("id,valor,vencimento,status")
-        .eq("empresa_id", empresaId),
-
-      supabase
-        .from("contas_pagar")
-        .select("id,valor,vencimento,status")
-        .eq("empresa_id", empresaId),
-    ]);
-
-    if (vendasMesReq.error) {
-      alert("Erro ao carregar vendas: " + vendasMesReq.error.message);
-      setCarregando(false);
-      return;
-    }
-
-    if (vendas30DiasReq.error) {
-      alert("Erro ao carregar vendas dos últimos 30 dias: " + vendas30DiasReq.error.message);
-      setCarregando(false);
-      return;
-    }
-
-    if (clientesReq.error) {
-      alert("Erro ao carregar clientes: " + clientesReq.error.message);
-      setCarregando(false);
-      return;
-    }
-
-    if (produtosReq.error) {
-      alert("Erro ao carregar produtos: " + produtosReq.error.message);
-      setCarregando(false);
-      return;
-    }
-
-    if (contasReceberReq.error) {
-      alert("Erro ao carregar contas a receber: " + contasReceberReq.error.message);
-      setCarregando(false);
-      return;
-    }
-
-    if (contasPagarReq.error) {
-      alert("Erro ao carregar contas a pagar: " + contasPagarReq.error.message);
-      setCarregando(false);
-      return;
-    }
-
-    const vendasMes: Venda[] = vendasMesReq.data || [];
-    const vendas30Dias: Venda[] = vendas30DiasReq.data || [];
-    const clientes: Cliente[] = clientesReq.data || [];
-    const produtos: Produto[] = produtosReq.data || [];
-    const receber: ContaReceber[] = contasReceberReq.data || [];
-    const pagar: ContaPagar[] = contasPagarReq.data || [];
-
-    const vendaIds = vendasMes.map((venda) => venda.id);
-
-    let itensVenda: ItemVenda[] = [];
-    let pagamentos: PagamentoVenda[] = [];
-
-    if (vendaIds.length > 0) {
-      const [itensReq, pagamentosReq] = await Promise.all([
-        supabase
-          .from("itens_venda")
-          .select("id,venda_id,produto_id,quantidade,subtotal")
-          .eq("empresa_id", empresaId)
-          .in("venda_id", vendaIds),
-
-        supabase
-          .from("pagamentos_venda")
-          .select("id,venda_id,forma_pagamento,valor")
-          .eq("empresa_id", empresaId)
-          .in("venda_id", vendaIds),
-      ]);
-
-      if (itensReq.error) {
-        alert("Erro ao carregar itens de venda: " + itensReq.error.message);
-        setCarregando(false);
-        return;
-      }
-
-      if (pagamentosReq.error) {
-        alert("Erro ao carregar pagamentos: " + pagamentosReq.error.message);
-        setCarregando(false);
-        return;
-      }
-
-      itensVenda = itensReq.data || [];
-      pagamentos = pagamentosReq.data || [];
-    }
-
-    const faturamentoDoMes = vendasMes.reduce(
+    const faturamentoHoje = vendasHoje.reduce(
       (total, venda) => total + Number(venda.valor_total || 0),
       0
     );
 
-    const faturamentoDoDia = vendasMes
-      .filter((venda) => {
-        if (!venda.created_at) return false;
-        return new Date(venda.created_at).toISOString() >= inicioHoje;
-      })
-      .reduce((total, venda) => total + Number(venda.valor_total || 0), 0);
+    const faturamentoMes = vendasMes.reduce(
+      (total, venda) => total + Number(venda.valor_total || 0),
+      0
+    );
 
-    const receberAberto = receber
-      .filter((conta) => estaAberto(conta.status))
-      .reduce((total, conta) => total + Number(conta.valor || 0), 0);
+    const ticketMedio =
+      vendasMes.length > 0 ? faturamentoMes / vendasMes.length : 0;
 
-    const pagarAberto = pagar
-      .filter((conta) => estaAberto(conta.status))
-      .reduce((total, conta) => total + Number(conta.valor || 0), 0);
+    const vendasPorDia = ultimos30DiasBase();
 
-    const alertas: AlertaEstoque[] = produtos
-      .filter((produto) => {
-        const qtdAtual = Number(produto.qtd_atual || 0);
-        const qtdMinima = Number(produto.qtd_minima || 0);
+    vendasFinalizadas.forEach((venda) => {
+      if (!venda.created_at) return;
 
-        return produto.ativo !== false && qtdMinima > 0 && qtdAtual <= qtdMinima;
-      })
-      .map((produto) => {
-        const qtdAtual = Number(produto.qtd_atual || 0);
-        const qtdMinima = Number(produto.qtd_minima || 0);
-        const falta = Math.max(qtdMinima - qtdAtual, 0);
+      const dia = somenteData(new Date(venda.created_at));
+      const encontrado = vendasPorDia.find((item) => item.data === dia);
 
-        return {
-          id: produto.id,
-          codigo: produto.codigo,
-          nome: produto.nome,
-          qtd_atual: qtdAtual,
-          qtd_minima: qtdMinima,
-          falta,
-          fornecedor: "-",
-          nivel_alerta: qtdAtual <= 0 ? "critico" : "baixo",
-        };
-      })
-      .sort((a, b) => Number(b.falta || 0) - Number(a.falta || 0))
-      .slice(0, 10);
-
-    const mapaProdutos = new Map<
-      string,
-      {
-        nome: string;
-        quantidade: number;
-        valor: number;
+      if (encontrado) {
+        encontrado.total += Number(venda.valor_total || 0);
       }
-    >();
-
-    itensVenda.forEach((item) => {
-      const produto = produtos.find((prod) => prod.id === item.produto_id);
-
-      const atual = mapaProdutos.get(item.produto_id) || {
-        nome: produto?.nome || "Produto não encontrado",
-        quantidade: 0,
-        valor: 0,
-      };
-
-      atual.quantidade += Number(item.quantidade || 0);
-      atual.valor += Number(item.subtotal || 0);
-
-      mapaProdutos.set(item.produto_id, atual);
     });
 
-    const rankingProdutos = Array.from(mapaProdutos.values())
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10);
+    const pagamentosReq = await supabase
+      .from("pagamentos_venda")
+      .select("id,venda_id,forma_pagamento,valor,created_at,empresa_id")
+      .eq("empresa_id", empresaId)
+      .gte("created_at", mesIso);
 
-    const mapaClientes = new Map<
-      string,
-      {
-        nome: string;
-        compras: number;
-        valor: number;
-      }
-    >();
+    const pagamentos = pagamentosReq.error
+      ? []
+      : ((pagamentosReq.data || []) as PagamentoVenda[]);
 
-    vendasMes.forEach((venda) => {
-      const id = venda.cliente_id || "consumidor-final";
-
-      const atual = mapaClientes.get(id) || {
-        nome: nomeCliente(venda.cliente_id, clientes),
-        compras: 0,
-        valor: 0,
-      };
-
-      atual.compras += 1;
-      atual.valor += Number(venda.valor_total || 0);
-
-      mapaClientes.set(id, atual);
-    });
-
-    const rankingClientes = Array.from(mapaClientes.values())
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10);
-
-    const mapaPagamentos = new Map<string, number>();
+    const mapaPagamentos: Record<string, number> = {};
 
     pagamentos.forEach((pagamento) => {
-      const forma = pagamento.forma_pagamento || "Não informado";
-      const atual = mapaPagamentos.get(forma) || 0;
-
-      mapaPagamentos.set(forma, atual + Number(pagamento.valor || 0));
+      const forma = pagamento.forma_pagamento || "não informado";
+      mapaPagamentos[forma] =
+        (mapaPagamentos[forma] || 0) + Number(pagamento.valor || 0);
     });
 
-    const formas = Array.from(mapaPagamentos.entries())
-      .map(([forma, valor]) => ({
+    const pagamentosPorForma = Object.entries(mapaPagamentos).map(
+      ([forma, total]) => ({
         forma,
-        valor,
-      }))
-      .sort((a, b) => b.valor - a.valor);
+        total,
+      })
+    );
 
-    setVendasDiarias(gerarVendasDiarias(vendas30Dias));
-    setAlertasEstoque(alertas);
-    setUltimasVendas(vendasMes.slice(0, 10));
-    setTopProdutos(rankingProdutos);
-    setTopClientes(rankingClientes);
-    setFormasPagamento(formas);
+    const clientesReq = await supabase
+      .from("clientes")
+      .select("id,empresa_id,ativo")
+      .eq("empresa_id", empresaId);
 
-    setFaturamentoHoje(faturamentoDoDia);
-    setFaturamentoMes(faturamentoDoMes);
-    setTotalVendasMes(vendasMes.length);
-    setTicketMedio(vendasMes.length > 0 ? faturamentoDoMes / vendasMes.length : 0);
+    const clientes = clientesReq.error ? [] : ((clientesReq.data || []) as Cliente[]);
 
-    setTotalClientes(clientes.length);
-    setTotalProdutos(produtos.length);
-    setProdutosEstoqueBaixo(alertas.length);
+    const produtosReq = await supabase
+      .from("produtos")
+      .select("id,nome,qtd_atual,qtd_minima,empresa_id,ativo")
+      .eq("empresa_id", empresaId);
 
-    setContasReceberAberto(receberAberto);
-    setContasPagarAberto(pagarAberto);
-    setSaldoPrevisto(receberAberto - pagarAberto);
+    const produtos = produtosReq.error ? [] : ((produtosReq.data || []) as Produto[]);
+
+    const produtosAtivos = produtos.filter((produto) => produto.ativo !== false);
+
+    const produtosBaixo = produtosAtivos.filter((produto) => {
+      const atual = Number(produto.qtd_atual || 0);
+      const minima = Number(produto.qtd_minima || 0);
+      return minima > 0 && atual <= minima;
+    });
+
+    const receberReq = await supabase
+      .from("contas_receber")
+      .select("id,valor,status,vencimento,empresa_id")
+      .eq("empresa_id", empresaId);
+
+    const contasReceber = receberReq.error
+      ? []
+      : ((receberReq.data || []) as ContaReceber[]);
+
+    let contasPagar: ContaPagar[] = [];
+
+    try {
+      const pagarReq = await supabase
+        .from("contas_pagar")
+        .select("id,valor,status,vencimento,empresa_id")
+        .eq("empresa_id", empresaId);
+
+      contasPagar = pagarReq.error ? [] : ((pagarReq.data || []) as ContaPagar[]);
+    } catch {
+      contasPagar = [];
+    }
+
+    const totalReceber = contasReceber
+      .filter((conta) => conta.status !== "pago")
+      .reduce((total, conta) => total + Number(conta.valor || 0), 0);
+
+    const totalPagar = contasPagar
+      .filter((conta) => conta.status !== "pago")
+      .reduce((total, conta) => total + Number(conta.valor || 0), 0);
+
+    setDados({
+      faturamentoHoje,
+      faturamentoMes,
+      ticketMedio,
+      saldoPrevisto: totalReceber - totalPagar,
+      totalClientes: clientes.length,
+      totalProdutos: produtosAtivos.length,
+      estoqueBaixo: produtosBaixo.length,
+      totalReceber,
+      totalPagar,
+      vendasHoje: vendasHoje.length,
+      vendasMes: vendasMes.length,
+      atualizacao: new Date().toLocaleString("pt-BR"),
+      vendasPorDia,
+      pagamentosPorForma,
+      produtosBaixo: produtosBaixo.slice(0, 8),
+    });
 
     setCarregando(false);
   }
@@ -529,390 +352,271 @@ export default function DashboardExecutivoPage() {
     carregarDashboard();
   }, []);
 
-  const vendasGrafico = useMemo(() => {
-    return vendasDiarias.map((item) => ({
-      data: formatarDataBR(item.data_venda),
-      vendas: Number(item.total_vendas || 0),
-      faturamento: Number(item.faturamento || 0),
-    }));
-  }, [vendasDiarias]);
+  const maxGrafico = useMemo(() => {
+    const maximo = Math.max(...dados.vendasPorDia.map((item) => item.total), 0);
+    return maximo <= 0 ? 100 : maximo;
+  }, [dados.vendasPorDia]);
 
-  const coresGrafico = [
-    "#2563eb",
-    "#16a34a",
-    "#f97316",
-    "#7c3aed",
-    "#dc2626",
-    "#0891b2",
-    "#ca8a04",
-  ];
+  const totalPagamentos = dados.pagamentosPorForma.reduce(
+    (total, item) => total + item.total,
+    0
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
-      <div className="mb-8 bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-8 text-white shadow-lg">
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
+    <div className="p-8 bg-slate-50 min-h-screen">
+      <div className="bg-gradient-to-r from-blue-800 to-blue-600 rounded-3xl p-8 text-white shadow-lg mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
           <div>
-            <p className="text-blue-100 font-bold">THCloud ERP</p>
+            <p className="font-bold">{empresaNome || "THCloud ERP"}</p>
 
-            <h1 className="text-4xl font-black mt-2">
+            <h1 className="text-4xl font-black mt-3">
               Dashboard Executivo
             </h1>
 
-            <p className="text-blue-100 mt-2 max-w-3xl">
+            <p className="text-blue-100 mt-3 max-w-3xl">
               Visão gerencial isolada por empresa com faturamento, vendas,
               estoque, contas, clientes e indicadores estratégicos.
             </p>
           </div>
 
-          <div className="text-left xl:text-right">
-            <p className="text-blue-100 text-sm">Atualizado em</p>
+          <div className="text-left lg:text-right">
+            <p className="text-sm text-blue-100">Atualizado em</p>
             <p className="text-2xl font-black">
-              {new Date().toLocaleString("pt-BR")}
+              {dados.atualizacao || "-"}
             </p>
 
             <button
               onClick={carregarDashboard}
-              className="mt-4 bg-white text-blue-800 px-5 py-3 rounded-2xl font-bold hover:bg-blue-50"
+              disabled={carregando}
+              className="mt-4 bg-white text-blue-700 hover:bg-blue-50 px-6 py-3 rounded-2xl font-black inline-flex items-center gap-2 disabled:opacity-60"
             >
+              <RefreshCw size={18} className={carregando ? "animate-spin" : ""} />
               Atualizar Dashboard
             </button>
           </div>
         </div>
       </div>
 
-      {carregando && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-8 mb-8 shadow-sm">
-          <p className="text-slate-600 font-semibold">
-            Carregando indicadores da empresa...
-          </p>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-        <Card
+        <CardIndicador
           titulo="Faturamento Hoje"
-          valor={moeda(faturamentoHoje)}
-          detalhe="Vendas finalizadas hoje"
+          valor={formatarMoeda(dados.faturamentoHoje)}
+          subtitulo={`${dados.vendasHoje} venda(s) finalizadas hoje`}
           cor="text-green-700"
-          icone={<CircleDollarSign size={24} />}
+          icone={<CircleIcon><Wallet size={20} /></CircleIcon>}
         />
 
-        <Card
+        <CardIndicador
           titulo="Faturamento do Mês"
-          valor={moeda(faturamentoMes)}
-          detalhe={`${totalVendasMes} venda(s) no mês`}
+          valor={formatarMoeda(dados.faturamentoMes)}
+          subtitulo={`${dados.vendasMes} venda(s) no mês`}
           cor="text-blue-700"
-          icone={<TrendingUp size={24} />}
+          icone={<CircleIcon><TrendingUp size={20} /></CircleIcon>}
         />
 
-        <Card
+        <CardIndicador
           titulo="Ticket Médio"
-          valor={moeda(ticketMedio)}
-          detalhe="Média por venda"
+          valor={formatarMoeda(dados.ticketMedio)}
+          subtitulo="Média por venda"
           cor="text-purple-700"
-          icone={<ShoppingCart size={24} />}
+          icone={<CircleIcon><ShoppingCart size={20} /></CircleIcon>}
         />
 
-        <Card
+        <CardIndicador
           titulo="Saldo Previsto"
-          valor={moeda(saldoPrevisto)}
-          detalhe="Receber - pagar"
-          cor={saldoPrevisto >= 0 ? "text-green-700" : "text-red-700"}
-          icone={<Wallet size={24} />}
+          valor={formatarMoeda(dados.saldoPrevisto)}
+          subtitulo="Receber - pagar"
+          cor="text-green-700"
+          icone={<CircleIcon><CreditCard size={20} /></CircleIcon>}
         />
 
-        <Card
+        <CardIndicador
           titulo="Clientes"
-          valor={numero(totalClientes)}
-          detalhe="Clientes cadastrados"
+          valor={`${dados.totalClientes}`}
+          subtitulo="Clientes cadastrados"
           cor="text-indigo-700"
-          icone={<Users size={24} />}
+          icone={<CircleIcon><Users size={20} /></CircleIcon>}
         />
 
-        <Card
+        <CardIndicador
           titulo="Produtos"
-          valor={numero(totalProdutos)}
-          detalhe="Produtos cadastrados"
+          valor={`${dados.totalProdutos}`}
+          subtitulo="Produtos cadastrados"
           cor="text-orange-700"
-          icone={<Package size={24} />}
+          icone={<CircleIcon><Package size={20} /></CircleIcon>}
         />
 
-        <Card
+        <CardIndicador
           titulo="Estoque Baixo"
-          valor={numero(produtosEstoqueBaixo)}
-          detalhe="Produtos em alerta"
+          valor={`${dados.estoqueBaixo}`}
+          subtitulo="Produtos em alerta"
           cor="text-red-700"
-          icone={<AlertTriangle size={24} />}
+          icone={<CircleIcon><AlertTriangle size={20} /></CircleIcon>}
         />
 
-        <Card
+        <CardIndicador
           titulo="A Receber / A Pagar"
-          valor={moeda(contasReceberAberto)}
-          detalhe={`A pagar: ${moeda(contasPagarAberto)}`}
+          valor={formatarMoeda(dados.totalReceber)}
+          subtitulo={`A pagar: ${formatarMoeda(dados.totalPagar)}`}
           cor="text-cyan-700"
-          icone={<CreditCard size={24} />}
+          icone={<CircleIcon><CreditCard size={20} /></CircleIcon>}
         />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-        <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="xl:col-span-2 bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+          <div className="flex items-start justify-between mb-6">
             <div>
               <h2 className="text-2xl font-black text-slate-900">
                 Evolução das Vendas
               </h2>
-
               <p className="text-slate-500">
                 Faturamento diário dos últimos 30 dias.
               </p>
             </div>
 
-            <BarChart3 className="text-blue-700" size={28} />
+            <BarChart3 className="text-blue-700" />
           </div>
 
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={vendasGrafico}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="data" fontSize={11} />
-                <YAxis fontSize={11} />
-                <Tooltip
-                  formatter={(value) => moeda(Number(value || 0))}
-                  labelFormatter={(label) => `Data: ${label}`}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="faturamento"
-                  name="Faturamento"
-                  stroke="#2563eb"
-                  strokeWidth={3}
-                  dot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="h-72 flex items-end gap-1 border-l border-b border-slate-300 p-3">
+            {dados.vendasPorDia.map((dia) => {
+              const altura = Math.max((dia.total / maxGrafico) * 100, dia.total > 0 ? 4 : 0);
+
+              return (
+                <div key={dia.data} className="flex-1 h-full flex flex-col justify-end items-center group">
+                  <div className="relative w-full flex justify-center">
+                    <div
+                      className="w-full max-w-5 bg-blue-600 rounded-t hover:bg-blue-800 transition"
+                      style={{ height: `${altura}%` }}
+                    />
+
+                    <div className="hidden group-hover:block absolute bottom-full mb-2 bg-slate-900 text-white text-xs rounded-lg px-2 py-1 whitespace-nowrap z-10">
+                      {nomeDataCurta(dia.data)}: {formatarMoeda(dia.total)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-between text-xs text-slate-500 mt-3">
+            <span>{dados.vendasPorDia[0] ? nomeDataCurta(dados.vendasPorDia[0].data) : "-"}</span>
+            <span>Faturamento</span>
+            <span>{dados.vendasPorDia[dados.vendasPorDia.length - 1] ? nomeDataCurta(dados.vendasPorDia[dados.vendasPorDia.length - 1].data) : "-"}</span>
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
           <h2 className="text-2xl font-black text-slate-900">
             Formas de Pagamento
           </h2>
 
-          <p className="text-slate-500 mb-4">
+          <p className="text-slate-500 mb-6">
             Participação por forma no mês.
           </p>
 
-          <div className="h-80">
-            {formasPagamento.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={formasPagamento}
-                    dataKey="valor"
-                    nameKey="forma"
-                    outerRadius={105}
-                    label
-                  >
-                    {formasPagamento.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={coresGrafico[index % coresGrafico.length]}
+          {dados.pagamentosPorForma.length === 0 ? (
+            <div className="h-72 flex items-center justify-center text-slate-500 text-center">
+              Nenhum pagamento encontrado no mês.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {dados.pagamentosPorForma.map((item) => {
+                const percentual =
+                  totalPagamentos > 0 ? (item.total / totalPagamentos) * 100 : 0;
+
+                return (
+                  <div key={item.forma}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-bold text-slate-700 capitalize">
+                        {item.forma}
+                      </span>
+                      <span className="font-black text-slate-900">
+                        {formatarMoeda(item.total)}
+                      </span>
+                    </div>
+
+                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-700 rounded-full"
+                        style={{ width: `${percentual}%` }}
                       />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => moeda(Number(value || 0))} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-500">
-                Nenhum pagamento encontrado.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+                    </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-2xl font-black text-slate-900 mb-6">
-            Top 10 Produtos
-          </h2>
-
-          <div className="h-80">
-            {topProdutos.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProdutos}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="nome" fontSize={10} />
-                  <YAxis fontSize={11} />
-                  <Tooltip formatter={(value) => moeda(Number(value || 0))} />
-                  <Bar dataKey="valor" name="Faturamento" fill="#2563eb" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-500">
-                Nenhum produto vendido no mês.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-2xl font-black text-slate-900 mb-6">
-            Top Clientes
-          </h2>
-
-          <div className="space-y-3">
-            {topClientes.map((cliente, index) => (
-              <div
-                key={`${cliente.nome}-${index}`}
-                className="flex items-center justify-between border border-slate-100 rounded-2xl p-4"
-              >
-                <div>
-                  <p className="font-black text-slate-900">
-                    {index + 1}º {cliente.nome}
-                  </p>
-
-                  <p className="text-sm text-slate-500">
-                    {numero(cliente.compras)} compra(s)
-                  </p>
-                </div>
-
-                <p className="font-black text-blue-700">
-                  {moeda(cliente.valor)}
-                </p>
-              </div>
-            ))}
-
-            {topClientes.length === 0 && (
-              <p className="text-slate-500">
-                Nenhum cliente com compra no mês.
-              </p>
-            )}
-          </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {percentual.toFixed(1).replace(".", ",")}%
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-2xl font-black text-slate-900 mb-6">
-            Últimas Vendas
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+          <h2 className="text-2xl font-black text-slate-900 mb-4">
+            Produtos com Estoque Baixo
           </h2>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate-500 border-b">
-                  <th className="p-3">Data</th>
-                  <th className="p-3">Pagamento</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Valor</th>
-                </tr>
-              </thead>
+          {dados.produtosBaixo.length === 0 ? (
+            <p className="text-slate-500">
+              Nenhum produto com estoque baixo no momento.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {dados.produtosBaixo.map((produto) => (
+                <div
+                  key={produto.id}
+                  className="flex items-center justify-between border border-red-100 bg-red-50 rounded-2xl p-4"
+                >
+                  <div>
+                    <p className="font-black text-slate-900">{produto.nome}</p>
+                    <p className="text-sm text-slate-500">
+                      Mínimo: {produto.qtd_minima || 0}
+                    </p>
+                  </div>
 
-              <tbody>
-                {ultimasVendas.map((venda) => (
-                  <tr key={venda.id} className="border-b last:border-b-0">
-                    <td className="p-3 text-slate-700">
-                      {formatarDataHoraBR(venda.created_at)}
-                    </td>
-
-                    <td className="p-3 text-slate-700">
-                      {venda.forma_pagamento || "-"}
-                    </td>
-
-                    <td className="p-3">
-                      <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 font-bold text-xs">
-                        {venda.status || "-"}
-                      </span>
-                    </td>
-
-                    <td className="p-3 text-right font-black text-green-700">
-                      {moeda(Number(venda.valor_total || 0))}
-                    </td>
-                  </tr>
-                ))}
-
-                {ultimasVendas.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-6 text-center text-slate-500">
-                      Nenhuma venda encontrada no mês.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                  <p className="text-red-700 font-black text-xl">
+                    {produto.qtd_atual || 0}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-2xl font-black text-slate-900 mb-6">
-            Alertas de Estoque
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+          <h2 className="text-2xl font-black text-slate-900 mb-4">
+            Resumo Financeiro
           </h2>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate-500 border-b">
-                  <th className="p-3">Produto</th>
-                  <th className="p-3 text-right">Atual</th>
-                  <th className="p-3 text-right">Mínimo</th>
-                  <th className="p-3 text-right">Falta</th>
-                  <th className="p-3">Nível</th>
-                </tr>
-              </thead>
+          <div className="space-y-4">
+            <LinhaResumo
+              label="Total a Receber"
+              valor={formatarMoeda(dados.totalReceber)}
+              classe="text-green-700"
+            />
 
-              <tbody>
-                {alertasEstoque.map((produto) => (
-                  <tr key={produto.id} className="border-b last:border-b-0">
-                    <td className="p-3">
-                      <p className="font-bold text-slate-900">
-                        {produto.nome}
-                      </p>
+            <LinhaResumo
+              label="Total a Pagar"
+              valor={formatarMoeda(dados.totalPagar)}
+              classe="text-red-700"
+            />
 
-                      <p className="text-xs text-slate-500">
-                        Código: {produto.codigo || "-"} • Forn.:{" "}
-                        {produto.fornecedor || "-"}
-                      </p>
-                    </td>
+            <LinhaResumo
+              label="Saldo Previsto"
+              valor={formatarMoeda(dados.saldoPrevisto)}
+              classe={dados.saldoPrevisto >= 0 ? "text-blue-700" : "text-red-700"}
+            />
 
-                    <td className="p-3 text-right font-black text-red-700">
-                      {numero(Number(produto.qtd_atual || 0))}
-                    </td>
-
-                    <td className="p-3 text-right text-slate-700">
-                      {numero(Number(produto.qtd_minima || 0))}
-                    </td>
-
-                    <td className="p-3 text-right font-bold text-orange-700">
-                      {numero(Number(produto.falta || 0))}
-                    </td>
-
-                    <td className="p-3">
-                      <span
-                        className={`px-2 py-1 rounded-full font-bold text-xs ${
-                          produto.nivel_alerta === "critico"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-orange-100 text-orange-700"
-                        }`}
-                      >
-                        {produto.nivel_alerta || "-"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-
-                {alertasEstoque.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-6 text-center text-slate-500">
-                      Nenhum alerta de estoque.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-blue-800">
+              <p className="font-bold">
+                Este dashboard já busca vendas, pagamentos, clientes, produtos,
+                contas a receber e contas a pagar separados por empresa.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -920,34 +624,55 @@ export default function DashboardExecutivoPage() {
   );
 }
 
-function Card({
+function CardIndicador({
   titulo,
   valor,
-  detalhe,
+  subtitulo,
   cor,
   icone,
 }: {
   titulo: string;
   valor: string;
-  detalhe: string;
+  subtitulo: string;
   cor: string;
   icone: React.ReactNode;
 }) {
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-bold text-slate-500">{titulo}</p>
-
-          <h2 className={`text-3xl font-black mt-3 ${cor}`}>{valor}</h2>
-
-          <p className="text-sm text-slate-500 mt-2">{detalhe}</p>
+          <p className="text-sm text-slate-500 font-bold">{titulo}</p>
+          <p className={`text-3xl font-black mt-3 ${cor}`}>{valor}</p>
+          <p className="text-sm text-slate-500 mt-2">{subtitulo}</p>
         </div>
 
-        <div className={`h-12 w-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center ${cor}`}>
-          {icone}
-        </div>
+        {icone}
       </div>
+    </div>
+  );
+}
+
+function CircleIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="h-11 w-11 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-blue-700">
+      {children}
+    </div>
+  );
+}
+
+function LinhaResumo({
+  label,
+  valor,
+  classe,
+}: {
+  label: string;
+  valor: string;
+  classe: string;
+}) {
+  return (
+    <div className="flex items-center justify-between border border-slate-200 rounded-2xl p-5">
+      <span className="text-slate-600 font-bold">{label}</span>
+      <span className={`text-2xl font-black ${classe}`}>{valor}</span>
     </div>
   );
 }

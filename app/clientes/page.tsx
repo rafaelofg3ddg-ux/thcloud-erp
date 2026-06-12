@@ -1,114 +1,130 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { getEmpresaId } from "../../lib/empresa";
-import {
-  CheckCircle,
-  Edit,
-  Mail,
-  MapPin,
-  Phone,
-  Plus,
-  Search,
-  Trash2,
-  User,
-  Users,
-  X,
-  XCircle,
-} from "lucide-react";
 
 type Cliente = {
   id: string;
-  empresa_id: string | null;
+  empresa_id: string;
+  tipo_cliente: string | null;
   nome: string;
   cpf_cnpj: string | null;
-  telefone: string | null;
+  razao_social: string | null;
+  nome_fantasia: string | null;
+  inscricao_estadual: string | null;
+  rg_ie: string | null;
   email: string | null;
-  endereco: string | null;
-  limite_credito: number | null;
-  created_at: string | null;
+  telefone: string | null;
   whatsapp: string | null;
   cep: string | null;
-  rua: string | null;
+  endereco: string | null;
   numero: string | null;
+  complemento: string | null;
   bairro: string | null;
   cidade: string | null;
-  estado: string | null;
-  observacoes: string | null;
+  uf: string | null;
+  limite_credito: number | null;
+  data_nascimento: string | null;
+  observacao: string | null;
   ativo: boolean | null;
+  created_at: string | null;
 };
 
-type FormCliente = {
+type VendaCliente = {
   id: string;
-  nome: string;
-  cpf_cnpj: string;
-  telefone: string;
-  whatsapp: string;
-  email: string;
-  cep: string;
-  rua: string;
-  numero: string;
-  bairro: string;
-  cidade: string;
-  estado: string;
-  endereco: string;
-  limite_credito: string;
-  observacoes: string;
-  ativo: boolean;
+  valor_total: number;
+  created_at: string | null;
+  status: string | null;
 };
 
-const formInicial: FormCliente = {
+type ContaCliente = {
+  id: string;
+  valor: number;
+  status: string | null;
+  vencimento: string | null;
+  descricao: string | null;
+};
+
+const clienteVazio = {
   id: "",
+  tipo_cliente: "fisica",
   nome: "",
   cpf_cnpj: "",
+  razao_social: "",
+  nome_fantasia: "",
+  inscricao_estadual: "",
+  rg_ie: "",
+  email: "",
   telefone: "",
   whatsapp: "",
-  email: "",
   cep: "",
-  rua: "",
+  endereco: "",
   numero: "",
+  complemento: "",
   bairro: "",
   cidade: "",
-  estado: "",
-  endereco: "",
+  uf: "",
   limite_credito: "0",
-  observacoes: "",
+  data_nascimento: "",
+  observacao: "",
   ativo: true,
 };
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("Todos");
-
-  const [modalAberto, setModalAberto] = useState(false);
-  const [modoEdicao, setModoEdicao] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [buscandoCep, setBuscandoCep] = useState(false);
-
-  const [form, setForm] = useState<FormCliente>(formInicial);
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState("");
+  const [modalCliente, setModalCliente] = useState(false);
+  const [modalDetalhes, setModalDetalhes] = useState(false);
+  const [editandoId, setEditandoId] = useState("");
+  const [form, setForm] = useState(clienteVazio);
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
+  const [vendasCliente, setVendasCliente] = useState<VendaCliente[]>([]);
+  const [contasCliente, setContasCliente] = useState<ContaCliente[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [consultandoCep, setConsultandoCep] = useState(false);
+  const [consultandoCnpj, setConsultandoCnpj] = useState(false);
 
   function empresaAtualId() {
-    const empresaId = getEmpresaId();
+    try {
+      const empresaStorage = localStorage.getItem("th_empresa");
+      if (empresaStorage) {
+        const empresa = JSON.parse(empresaStorage);
+        if (empresa.id) return empresa.id;
+        if (empresa.empresa_id) return empresa.empresa_id;
+      }
 
-    if (!empresaId) {
+      const usuarioStorage = localStorage.getItem("th_usuario");
+      if (usuarioStorage) {
+        const usuario = JSON.parse(usuarioStorage);
+        if (usuario.empresa_id) return usuario.empresa_id;
+        if (usuario.empresa?.id) return usuario.empresa.id;
+      }
+
+      const empresaIdDireto =
+        localStorage.getItem("empresa_id") ||
+        localStorage.getItem("th_empresa_id");
+
+      if (empresaIdDireto) return empresaIdDireto;
+
+      alert("Empresa não identificada. Faça login novamente.");
+      return null;
+    } catch {
       alert("Empresa não identificada. Faça login novamente.");
       return null;
     }
-
-    return empresaId;
   }
 
   function converterNumero(valor: string) {
     return Number(String(valor || "0").replace(",", "."));
   }
 
-  function somenteNumeros(valor: string) {
-    return valor.replace(/\D/g, "");
+  function limparNumero(valor: string) {
+    return String(valor || "").replace(/\D/g, "");
   }
 
-  function formatarMoeda(valor: number | null) {
+  function formatarMoeda(valor: number) {
     return Number(valor || 0).toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
@@ -117,13 +133,11 @@ export default function ClientesPage() {
 
   function formatarData(data: string | null) {
     if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
+    return new Date(data).toLocaleDateString("pt-BR");
   }
 
-  function formatarCpfCnpj(valor: string | null) {
-    if (!valor) return "-";
-
-    const numeros = somenteNumeros(valor);
+  function formatarDocumento(valor: string | null) {
+    const numeros = limparNumero(valor || "");
 
     if (numeros.length === 11) {
       return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
@@ -136,183 +150,123 @@ export default function ClientesPage() {
       );
     }
 
-    return valor;
-  }
-
-  function formatarTelefone(valor: string | null) {
-    if (!valor) return "-";
-
-    const numeros = somenteNumeros(valor);
-
-    if (numeros.length === 11) {
-      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-    }
-
-    if (numeros.length === 10) {
-      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-    }
-
-    return valor;
-  }
-
-  function validarEmail(email: string) {
-    if (!email.trim()) return true;
-    return /\S+@\S+\.\S+/.test(email);
-  }
-
-  function abrirNovoCliente() {
-    setForm(formInicial);
-    setModoEdicao(false);
-    setModalAberto(true);
-  }
-
-  function abrirEditarCliente(cliente: Cliente) {
-    setForm({
-      id: cliente.id,
-      nome: cliente.nome || "",
-      cpf_cnpj: cliente.cpf_cnpj || "",
-      telefone: cliente.telefone || "",
-      whatsapp: cliente.whatsapp || "",
-      email: cliente.email || "",
-      cep: cliente.cep || "",
-      rua: cliente.rua || "",
-      numero: cliente.numero || "",
-      bairro: cliente.bairro || "",
-      cidade: cliente.cidade || "",
-      estado: cliente.estado || "",
-      endereco: cliente.endereco || "",
-      limite_credito: String(cliente.limite_credito || 0),
-      observacoes: cliente.observacoes || "",
-      ativo: cliente.ativo !== false,
-    });
-
-    setModoEdicao(true);
-    setModalAberto(true);
+    return valor || "-";
   }
 
   async function carregarClientes() {
     const empresaId = empresaAtualId();
     if (!empresaId) return;
 
+    setCarregando(true);
+
     const { data, error } = await supabase
       .from("clientes")
-      .select(
-        "id,empresa_id,nome,cpf_cnpj,telefone,email,endereco,limite_credito,created_at,whatsapp,cep,rua,numero,bairro,cidade,estado,observacoes,ativo"
-      )
+      .select("*")
       .eq("empresa_id", empresaId)
-      .order("created_at", { ascending: false });
+      .order("nome");
 
     if (error) {
       alert("Erro ao carregar clientes: " + error.message);
+      setCarregando(false);
       return;
     }
 
     setClientes(data || []);
+    setCarregando(false);
   }
 
-  async function buscarCep() {
-    const cepLimpo = somenteNumeros(form.cep);
-
-    if (cepLimpo.length !== 8) {
-      alert("Informe um CEP válido com 8 números.");
-      return;
-    }
-
-    setBuscandoCep(true);
-
-    try {
-      const resposta = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
-      const dados = await resposta.json();
-
-      if (dados.erro) {
-        alert("CEP não encontrado.");
-        setBuscandoCep(false);
-        return;
-      }
-
-      setForm((atual) => ({
-        ...atual,
-        rua: dados.logradouro || atual.rua,
-        bairro: dados.bairro || atual.bairro,
-        cidade: dados.localidade || atual.cidade,
-        estado: dados.uf || atual.estado,
-        endereco: dados.logradouro || atual.endereco,
-      }));
-    } catch {
-      alert("Erro ao consultar CEP.");
-    }
-
-    setBuscandoCep(false);
+  function abrirNovoCliente() {
+    setEditandoId("");
+    setForm(clienteVazio);
+    setModalCliente(true);
   }
 
-  function validarFormulario() {
-    if (!form.nome.trim()) {
-      alert("Informe o nome do cliente.");
-      return false;
-    }
+  function abrirEditarCliente(cliente: Cliente) {
+    setEditandoId(cliente.id);
 
-    if (!validarEmail(form.email)) {
-      alert("Informe um e-mail válido.");
-      return false;
-    }
+    setForm({
+      id: cliente.id,
+      tipo_cliente: cliente.tipo_cliente || "fisica",
+      nome: cliente.nome || "",
+      cpf_cnpj: cliente.cpf_cnpj || "",
+      razao_social: cliente.razao_social || "",
+      nome_fantasia: cliente.nome_fantasia || "",
+      inscricao_estadual: cliente.inscricao_estadual || cliente.rg_ie || "",
+      rg_ie: cliente.rg_ie || "",
+      email: cliente.email || "",
+      telefone: cliente.telefone || "",
+      whatsapp: cliente.whatsapp || "",
+      cep: cliente.cep || "",
+      endereco: cliente.endereco || "",
+      numero: cliente.numero || "",
+      complemento: cliente.complemento || "",
+      bairro: cliente.bairro || "",
+      cidade: cliente.cidade || "",
+      uf: cliente.uf || "",
+      limite_credito: String(cliente.limite_credito || 0).replace(".", ","),
+      data_nascimento: cliente.data_nascimento || "",
+      observacao: cliente.observacao || "",
+      ativo: cliente.ativo !== false,
+    });
 
-    return true;
+    setModalCliente(true);
   }
 
   async function salvarCliente() {
     const empresaId = empresaAtualId();
     if (!empresaId) return;
 
-    if (!validarFormulario()) return;
+    if (!form.nome.trim() && !form.razao_social.trim() && !form.nome_fantasia.trim()) {
+      alert("Informe o nome do cliente ou razão social.");
+      return;
+    }
 
-    setSalvando(true);
-
-    const enderecoCompleto =
-      form.endereco.trim() ||
-      `${form.rua}${form.numero ? ", " + form.numero : ""}${
-        form.bairro ? " - " + form.bairro : ""
-      }${form.cidade ? " - " + form.cidade : ""}${
-        form.estado ? "/" + form.estado : ""
-      }`;
+    const nomePrincipal =
+      form.tipo_cliente === "juridica"
+        ? form.nome_fantasia.trim() || form.razao_social.trim() || form.nome.trim()
+        : form.nome.trim();
 
     const dados = {
       empresa_id: empresaId,
-      nome: form.nome.trim(),
-      cpf_cnpj: somenteNumeros(form.cpf_cnpj.trim()) || null,
+      tipo_cliente: form.tipo_cliente,
+      nome: nomePrincipal,
+      cpf_cnpj: form.cpf_cnpj.trim() || null,
+      razao_social: form.razao_social.trim() || null,
+      nome_fantasia: form.nome_fantasia.trim() || null,
+      inscricao_estadual: form.inscricao_estadual.trim() || null,
+      rg_ie: form.rg_ie.trim() || form.inscricao_estadual.trim() || null,
+      email: form.email.trim() || null,
       telefone: form.telefone.trim() || null,
       whatsapp: form.whatsapp.trim() || null,
-      email: form.email.trim().toLowerCase() || null,
       cep: form.cep.trim() || null,
-      rua: form.rua.trim() || null,
+      endereco: form.endereco.trim() || null,
       numero: form.numero.trim() || null,
+      complemento: form.complemento.trim() || null,
       bairro: form.bairro.trim() || null,
       cidade: form.cidade.trim() || null,
-      estado: form.estado.trim().toUpperCase() || null,
-      endereco: enderecoCompleto.trim() || null,
+      uf: form.uf.trim().toUpperCase() || null,
       limite_credito: converterNumero(form.limite_credito),
-      observacoes: form.observacoes.trim() || null,
+      data_nascimento: form.data_nascimento || null,
+      observacao: form.observacao.trim() || null,
       ativo: form.ativo,
+      updated_at: new Date().toISOString(),
     };
 
-    if (modoEdicao) {
+    if (editandoId) {
       const { error } = await supabase
         .from("clientes")
         .update(dados)
-        .eq("id", form.id)
-        .eq("empresa_id", empresaId);
-
-      setSalvando(false);
+        .eq("empresa_id", empresaId)
+        .eq("id", editandoId);
 
       if (error) {
-        alert("Erro ao atualizar cliente: " + error.message);
+        alert("Erro ao alterar cliente: " + error.message);
         return;
       }
 
-      alert("Cliente atualizado com sucesso!");
+      alert("Cliente alterado com sucesso!");
     } else {
-      const { error } = await supabase.from("clientes").insert(dados);
-
-      setSalvando(false);
+      const { error } = await supabase.from("clientes").insert([dados]);
 
       if (error) {
         alert("Erro ao cadastrar cliente: " + error.message);
@@ -322,19 +276,22 @@ export default function ClientesPage() {
       alert("Cliente cadastrado com sucesso!");
     }
 
-    setModalAberto(false);
-    setForm(formInicial);
-    carregarClientes();
+    setModalCliente(false);
+    setForm(clienteVazio);
+    setEditandoId("");
+    await carregarClientes();
   }
 
-  async function alterarStatus(cliente: Cliente) {
+  async function alterarStatusCliente(cliente: Cliente) {
     const empresaId = empresaAtualId();
     if (!empresaId) return;
 
-    const acao = cliente.ativo !== false ? "inativar" : "ativar";
+    const novoStatus = cliente.ativo === false;
 
     const confirmar = confirm(
-      `Deseja realmente ${acao} o cliente ${cliente.nome}?`
+      novoStatus
+        ? `Deseja ativar o cliente ${cliente.nome}?`
+        : `Deseja inativar o cliente ${cliente.nome}?`
     );
 
     if (!confirmar) return;
@@ -342,299 +299,339 @@ export default function ClientesPage() {
     const { error } = await supabase
       .from("clientes")
       .update({
-        ativo: cliente.ativo === false,
+        ativo: novoStatus,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", cliente.id)
-      .eq("empresa_id", empresaId);
+      .eq("empresa_id", empresaId)
+      .eq("id", cliente.id);
 
     if (error) {
       alert("Erro ao alterar status: " + error.message);
       return;
     }
 
-    carregarClientes();
+    await carregarClientes();
   }
 
-  async function excluirCliente(cliente: Cliente) {
-    const empresaId = empresaAtualId();
-    if (!empresaId) return;
+  async function consultarCep() {
+    const cep = limparNumero(form.cep);
 
-    const confirmar = confirm(
-      `Deseja realmente excluir o cliente ${cliente.nome}? Esta ação não poderá ser desfeita.`
-    );
-
-    if (!confirmar) return;
-
-    const { error } = await supabase
-      .from("clientes")
-      .delete()
-      .eq("id", cliente.id)
-      .eq("empresa_id", empresaId);
-
-    if (error) {
-      alert(
-        "Erro ao excluir cliente. Ele pode estar vinculado a vendas ou financeiro: " +
-          error.message
-      );
+    if (cep.length !== 8) {
+      alert("Informe um CEP válido com 8 números.");
       return;
     }
 
-    alert("Cliente excluído com sucesso!");
-    carregarClientes();
+    setConsultandoCep(true);
+
+    try {
+      const resposta = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const dados = await resposta.json();
+
+      if (dados.erro) {
+        alert("CEP não encontrado.");
+        setConsultandoCep(false);
+        return;
+      }
+
+      setForm((atual) => ({
+        ...atual,
+        endereco: dados.logradouro || atual.endereco,
+        bairro: dados.bairro || atual.bairro,
+        cidade: dados.localidade || atual.cidade,
+        uf: dados.uf || atual.uf,
+        complemento: atual.complemento || dados.complemento || "",
+      }));
+    } catch {
+      alert("Não foi possível consultar o CEP agora.");
+    }
+
+    setConsultandoCep(false);
   }
+
+  async function consultarCnpj() {
+    const cnpj = limparNumero(form.cpf_cnpj);
+
+    if (cnpj.length !== 14) {
+      alert("Informe um CNPJ válido com 14 números.");
+      return;
+    }
+
+    setConsultandoCnpj(true);
+
+    try {
+      const resposta = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+      const dados = await resposta.json();
+
+      if (dados.message || dados.type) {
+        alert("CNPJ não encontrado ou consulta indisponível.");
+        setConsultandoCnpj(false);
+        return;
+      }
+
+      setForm((atual) => ({
+        ...atual,
+        tipo_cliente: "juridica",
+        razao_social: dados.razao_social || atual.razao_social,
+        nome_fantasia: dados.nome_fantasia || atual.nome_fantasia,
+        nome: dados.nome_fantasia || dados.razao_social || atual.nome,
+        email: dados.email || atual.email,
+        telefone: dados.ddd_telefone_1 || atual.telefone,
+        cep: dados.cep || atual.cep,
+        endereco: dados.logradouro || atual.endereco,
+        numero: dados.numero || atual.numero,
+        complemento: dados.complemento || atual.complemento,
+        bairro: dados.bairro || atual.bairro,
+        cidade: dados.municipio || atual.cidade,
+        uf: dados.uf || atual.uf,
+      }));
+    } catch {
+      alert("Não foi possível consultar o CNPJ agora.");
+    }
+
+    setConsultandoCnpj(false);
+  }
+
+  async function abrirDetalhesCliente(cliente: Cliente) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    setClienteSelecionado(cliente);
+    setModalDetalhes(true);
+
+    const vendasReq = await supabase
+      .from("vendas")
+      .select("id,valor_total,created_at,status")
+      .eq("empresa_id", empresaId)
+      .eq("cliente_id", cliente.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    setVendasCliente(vendasReq.data || []);
+
+    const contasReq = await supabase
+      .from("contas_receber")
+      .select("id,valor,status,vencimento,descricao")
+      .eq("empresa_id", empresaId)
+      .eq("cliente_id", cliente.id)
+      .order("vencimento", { ascending: false })
+      .limit(20);
+
+    setContasCliente(contasReq.data || []);
+  }
+
+  const clientesFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    return clientes.filter((cliente) => {
+      const texto = [
+        cliente.nome,
+        cliente.razao_social,
+        cliente.nome_fantasia,
+        cliente.cpf_cnpj,
+        cliente.email,
+        cliente.telefone,
+        cliente.whatsapp,
+        cliente.cidade,
+        cliente.bairro,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const passaBusca = termo ? texto.includes(termo) : true;
+      const passaTipo = filtroTipo ? cliente.tipo_cliente === filtroTipo : true;
+      const passaStatus =
+        filtroStatus === "ativo"
+          ? cliente.ativo !== false
+          : filtroStatus === "inativo"
+          ? cliente.ativo === false
+          : true;
+
+      return passaBusca && passaTipo && passaStatus;
+    });
+  }, [clientes, busca, filtroTipo, filtroStatus]);
+
+  const totalClientes = clientes.length;
+  const clientesAtivos = clientes.filter((cliente) => cliente.ativo !== false).length;
+  const clientesInativos = clientes.filter((cliente) => cliente.ativo === false).length;
+  const limiteTotal = clientes.reduce(
+    (total, cliente) => total + Number(cliente.limite_credito || 0),
+    0
+  );
+
+  const totalCompradoDetalhes = vendasCliente.reduce(
+    (total, venda) => total + Number(venda.valor_total || 0),
+    0
+  );
+
+  const totalAbertoDetalhes = contasCliente
+    .filter((conta) => conta.status !== "pago")
+    .reduce((total, conta) => total + Number(conta.valor || 0), 0);
 
   useEffect(() => {
     carregarClientes();
   }, []);
 
-  const clientesFiltrados = clientes.filter((cliente) => {
-    const termo = busca.trim().toLowerCase();
-
-    const bateBusca =
-      termo === "" ||
-      String(cliente.nome || "").toLowerCase().includes(termo) ||
-      String(cliente.cpf_cnpj || "").toLowerCase().includes(termo) ||
-      String(cliente.telefone || "").toLowerCase().includes(termo) ||
-      String(cliente.whatsapp || "").toLowerCase().includes(termo) ||
-      String(cliente.email || "").toLowerCase().includes(termo) ||
-      String(cliente.cidade || "").toLowerCase().includes(termo);
-
-    const bateStatus =
-      filtroStatus === "Todos" ||
-      (filtroStatus === "Ativos" && cliente.ativo !== false) ||
-      (filtroStatus === "Inativos" && cliente.ativo === false);
-
-    return bateBusca && bateStatus;
-  });
-
-  const totalAtivos = clientes.filter((cliente) => cliente.ativo !== false).length;
-  const totalInativos = clientes.filter((cliente) => cliente.ativo === false).length;
-  const totalComCredito = clientes.filter(
-    (cliente) => Number(cliente.limite_credito || 0) > 0
-  ).length;
-
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
-      <div className="bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-8 shadow-lg mb-8 text-white">
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
-          <div>
-            <p className="text-blue-100 font-bold">THCloud ERP</p>
+    <div className="p-8 bg-slate-100 min-h-screen">
+      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm mb-8">
+        <p className="text-blue-600 font-bold">Cadastros</p>
 
-            <h1 className="text-4xl font-black mt-2">
-              Clientes
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div>
+            <h1 className="text-4xl font-black text-slate-900 mt-2">
+              Clientes Premium
             </h1>
 
-            <p className="text-blue-100 mt-2 max-w-3xl">
-              Cadastro comercial de clientes, contatos, endereço, limite de crédito e observações por empresa.
+            <p className="text-slate-500 mt-2">
+              Cadastro completo com endereço, crédito, histórico, vendas, financeiro e consultas automáticas.
             </p>
           </div>
 
           <button
             onClick={abrirNovoCliente}
-            className="bg-white text-blue-800 px-6 py-3 rounded-2xl font-black hover:bg-blue-50 flex items-center justify-center gap-2"
+            className="bg-blue-700 hover:bg-blue-800 text-white px-7 py-4 rounded-2xl font-black shadow"
           >
-            <Plus size={20} />
-            Novo Cliente
+            + Novo Cliente
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
-        <ResumoCard
-          titulo="Total de Clientes"
-          valor={`${clientes.length}`}
-          detalhe="Clientes cadastrados"
-          cor="text-blue-700"
-          icone={<Users size={24} />}
-        />
-
-        <ResumoCard
-          titulo="Ativos"
-          valor={`${totalAtivos}`}
-          detalhe="Clientes liberados"
-          cor="text-green-700"
-          icone={<CheckCircle size={24} />}
-        />
-
-        <ResumoCard
-          titulo="Inativos"
-          valor={`${totalInativos}`}
-          detalhe="Clientes bloqueados"
-          cor="text-red-700"
-          icone={<XCircle size={24} />}
-        />
-
-        <ResumoCard
-          titulo="Com Limite"
-          valor={`${totalComCredito}`}
-          detalhe="Clientes com crédito"
-          cor="text-purple-700"
-          icone={<User size={24} />}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <Resumo titulo="Total de Clientes" valor={`${totalClientes}`} cor="text-blue-700" />
+        <Resumo titulo="Clientes Ativos" valor={`${clientesAtivos}`} cor="text-green-700" />
+        <Resumo titulo="Clientes Inativos" valor={`${clientesInativos}`} cor="text-red-700" />
+        <Resumo titulo="Limite Concedido" valor={formatarMoeda(limiteTotal)} cor="text-purple-700" />
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 relative">
-            <Search
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-            />
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 mb-8">
+        <h2 className="text-2xl font-black text-slate-900 mb-5">Filtros</h2>
 
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por nome, CPF/CNPJ, telefone, WhatsApp, cidade ou e-mail..."
-              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-300 text-slate-900"
-            />
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Pesquisar nome, CPF/CNPJ, telefone, cidade..."
+            className="md:col-span-3 border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+          />
+
+          <select
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value)}
+            className="border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium bg-white"
+          >
+            <option value="">Todos os tipos</option>
+            <option value="fisica">Pessoa Física</option>
+            <option value="juridica">Pessoa Jurídica</option>
+          </select>
 
           <select
             value={filtroStatus}
             onChange={(e) => setFiltroStatus(e.target.value)}
-            className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-slate-900 bg-white"
+            className="border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium bg-white"
           >
-            <option value="Todos">Todos os status</option>
-            <option value="Ativos">Ativos</option>
-            <option value="Inativos">Inativos</option>
+            <option value="">Todos os status</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
           </select>
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-black text-slate-900">
-              Lista de Clientes
-            </h2>
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-2xl font-black text-slate-900">
+            Lista de Clientes
+          </h2>
 
-            <p className="text-slate-500">
-              {clientesFiltrados.length} cliente(s) encontrado(s).
-            </p>
-          </div>
-
-          <button
-            onClick={carregarClientes}
-            className="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
-          >
-            Atualizar
-          </button>
+          <p className="text-slate-500 font-bold">
+            {carregando ? "Carregando..." : `${clientesFiltrados.length} encontrado(s)`}
+          </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
-              <tr className="bg-slate-50 text-left text-slate-500 border-b border-slate-100">
-                <th className="p-4">Cliente</th>
-                <th className="p-4">CPF/CNPJ</th>
-                <th className="p-4">Contato</th>
-                <th className="p-4">Endereço</th>
-                <th className="p-4">Limite</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Criado em</th>
-                <th className="p-4 text-right">Ações</th>
+              <tr className="bg-slate-900 text-white">
+                <th className="p-3 text-left">Cliente</th>
+                <th className="p-3 text-left">Documento</th>
+                <th className="p-3 text-left">Contato</th>
+                <th className="p-3 text-left">Cidade/UF</th>
+                <th className="p-3 text-right">Limite</th>
+                <th className="p-3 text-center">Status</th>
+                <th className="p-3 text-center">Ações</th>
               </tr>
             </thead>
 
             <tbody>
               {clientesFiltrados.map((cliente) => (
-                <tr
-                  key={cliente.id}
-                  className="border-b last:border-b-0 border-slate-100 hover:bg-slate-50"
-                >
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-11 w-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center font-black">
-                        {cliente.nome.substring(0, 1).toUpperCase()}
-                      </div>
-
-                      <div>
-                        <p className="font-black text-slate-900">
-                          {cliente.nome}
-                        </p>
-
-                        <p className="text-slate-500">
-                          {cliente.email || "-"}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="p-4 text-slate-700">
-                    {formatarCpfCnpj(cliente.cpf_cnpj)}
-                  </td>
-
-                  <td className="p-4 text-slate-700">
-                    <p className="flex items-center gap-2">
-                      <Phone size={14} />
-                      {formatarTelefone(cliente.telefone)}
+                <tr key={cliente.id} className="border-b hover:bg-slate-50 align-top">
+                  <td className="p-3">
+                    <p className="font-black text-slate-900">{cliente.nome}</p>
+                    <p className="text-xs text-slate-500">
+                      {cliente.tipo_cliente === "juridica" ? "Pessoa Jurídica" : "Pessoa Física"}
                     </p>
-
-                    <p className="flex items-center gap-2 mt-1">
-                      <Mail size={14} />
-                      {formatarTelefone(cliente.whatsapp)}
-                    </p>
-                  </td>
-
-                  <td className="p-4 text-slate-700">
-                    <p className="flex items-center gap-2">
-                      <MapPin size={14} />
-                      {cliente.cidade || "-"} {cliente.estado ? `/${cliente.estado}` : ""}
-                    </p>
-
-                    <p className="text-xs text-slate-500 mt-1">
-                      {cliente.rua || cliente.endereco || "-"} {cliente.numero || ""}
-                    </p>
-                  </td>
-
-                  <td className="p-4 font-bold text-blue-700">
-                    {formatarMoeda(cliente.limite_credito)}
-                  </td>
-
-                  <td className="p-4">
-                    {cliente.ativo !== false ? (
-                      <span className="px-3 py-1 rounded-full text-xs font-black bg-green-100 text-green-700">
-                        Ativo
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 rounded-full text-xs font-black bg-red-100 text-red-700">
-                        Inativo
-                      </span>
+                    {cliente.razao_social && (
+                      <p className="text-xs text-slate-500">
+                        Razão: {cliente.razao_social}
+                      </p>
                     )}
                   </td>
 
-                  <td className="p-4 text-slate-700">
-                    {formatarData(cliente.created_at)}
+                  <td className="p-3 text-slate-700">
+                    {formatarDocumento(cliente.cpf_cnpj)}
                   </td>
 
-                  <td className="p-4">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="p-3 text-slate-700">
+                    <p>{cliente.whatsapp || cliente.telefone || "-"}</p>
+                    <p className="text-xs text-slate-500">{cliente.email || ""}</p>
+                  </td>
+
+                  <td className="p-3 text-slate-700">
+                    {cliente.cidade || "-"} {cliente.uf ? `/${cliente.uf}` : ""}
+                    <p className="text-xs text-slate-500">{cliente.bairro || ""}</p>
+                  </td>
+
+                  <td className="p-3 text-right text-purple-700 font-black">
+                    {formatarMoeda(Number(cliente.limite_credito || 0))}
+                  </td>
+
+                  <td className="p-3 text-center">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-black ${
+                        cliente.ativo === false
+                          ? "bg-red-100 text-red-700"
+                          : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {cliente.ativo === false ? "Inativo" : "Ativo"}
+                    </span>
+                  </td>
+
+                  <td className="p-3">
+                    <div className="flex justify-center gap-2">
+                      <button
+                        onClick={() => abrirDetalhesCliente(cliente)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-3 py-2 rounded-xl font-bold"
+                      >
+                        Ver
+                      </button>
+
                       <button
                         onClick={() => abrirEditarCliente(cliente)}
-                        className="h-10 w-10 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 flex items-center justify-center"
-                        title="Editar"
+                        className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-xl font-bold"
                       >
-                        <Edit size={17} />
+                        Editar
                       </button>
 
                       <button
-                        onClick={() => alterarStatus(cliente)}
-                        className={`h-10 w-10 rounded-xl flex items-center justify-center ${
-                          cliente.ativo !== false
-                            ? "bg-orange-50 hover:bg-orange-100 text-orange-700"
-                            : "bg-green-50 hover:bg-green-100 text-green-700"
+                        onClick={() => alterarStatusCliente(cliente)}
+                        className={`px-3 py-2 rounded-xl font-bold ${
+                          cliente.ativo === false
+                            ? "bg-green-100 hover:bg-green-200 text-green-800"
+                            : "bg-red-100 hover:bg-red-200 text-red-800"
                         }`}
-                        title={cliente.ativo !== false ? "Inativar" : "Ativar"}
                       >
-                        <CheckCircle size={17} />
-                      </button>
-
-                      <button
-                        onClick={() => excluirCliente(cliente)}
-                        className="h-10 w-10 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 flex items-center justify-center"
-                        title="Excluir"
-                      >
-                        <Trash2 size={17} />
+                        {cliente.ativo === false ? "Ativar" : "Inativar"}
                       </button>
                     </div>
                   </td>
@@ -643,8 +640,8 @@ export default function ClientesPage() {
 
               {clientesFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
-                    Nenhum cliente encontrado para esta empresa.
+                  <td colSpan={7} className="p-8 text-center text-slate-500">
+                    Nenhum cliente encontrado.
                   </td>
                 </tr>
               )}
@@ -653,282 +650,474 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      {modalAberto && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-5xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+      {modalCliente && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-black text-slate-900">
-                  {modoEdicao ? "Editar Cliente" : "Novo Cliente"}
+                <h2 className="text-3xl font-black text-slate-900">
+                  {editandoId ? "Alterar Cliente" : "Novo Cliente"}
                 </h2>
-
                 <p className="text-slate-500">
-                  Preencha os dados comerciais, contato, endereço e limite de crédito.
+                  Preencha as informações principais, endereço e dados comerciais.
                 </p>
               </div>
 
               <button
-                onClick={() => setModalAberto(false)}
-                className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center"
+                onClick={() => setModalCliente(false)}
+                className="h-11 w-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black"
               >
-                <X size={20} />
+                ✕
               </button>
             </div>
 
-            <div className="p-6 space-y-8 max-h-[75vh] overflow-y-auto">
-              <section>
-                <h3 className="text-lg font-black text-slate-900 mb-4">
-                  Dados do Cliente
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Campo label="Nome / Razão Social" className="md:col-span-2">
-                    <input
-                      value={form.nome}
-                      onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                      placeholder="Nome do cliente"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo label="CPF/CNPJ">
-                    <input
-                      value={form.cpf_cnpj}
-                      onChange={(e) =>
-                        setForm({ ...form, cpf_cnpj: e.target.value })
-                      }
-                      placeholder="CPF ou CNPJ"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo label="Telefone">
-                    <input
-                      value={form.telefone}
-                      onChange={(e) =>
-                        setForm({ ...form, telefone: e.target.value })
-                      }
-                      placeholder="(99) 9999-9999"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo label="WhatsApp">
-                    <input
-                      value={form.whatsapp}
-                      onChange={(e) =>
-                        setForm({ ...form, whatsapp: e.target.value })
-                      }
-                      placeholder="(99) 99999-9999"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo label="E-mail">
-                    <input
-                      value={form.email}
-                      onChange={(e) =>
-                        setForm({ ...form, email: e.target.value })
-                      }
-                      placeholder="email@cliente.com"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo label="Limite de Crédito">
-                    <input
-                      value={form.limite_credito}
-                      onChange={(e) =>
-                        setForm({ ...form, limite_credito: e.target.value })
-                      }
-                      placeholder="0,00"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo label="Status">
-                    <select
-                      value={form.ativo ? "ativo" : "inativo"}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          ativo: e.target.value === "ativo",
-                        })
-                      }
-                      className="input bg-white"
-                    >
-                      <option value="ativo">Ativo</option>
-                      <option value="inativo">Inativo</option>
-                    </select>
-                  </Campo>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-black text-slate-900 mb-4">
-                  Endereço
+            <div className="p-6 space-y-6">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+                <h3 className="text-xl font-black text-slate-900 mb-4">
+                  Identificação
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <Campo label="CEP">
+                  <Campo titulo="Tipo">
+                    <select
+                      value={form.tipo_cliente}
+                      onChange={(e) => setForm({ ...form, tipo_cliente: e.target.value })}
+                      className="input"
+                    >
+                      <option value="fisica">Pessoa Física</option>
+                      <option value="juridica">Pessoa Jurídica</option>
+                    </select>
+                  </Campo>
+
+                  <Campo titulo={form.tipo_cliente === "juridica" ? "CNPJ" : "CPF"}>
+                    <div className="flex gap-2">
+                      <input
+                        value={form.cpf_cnpj}
+                        onChange={(e) => setForm({ ...form, cpf_cnpj: e.target.value })}
+                        placeholder={form.tipo_cliente === "juridica" ? "CNPJ" : "CPF"}
+                        className="input"
+                      />
+
+                      {form.tipo_cliente === "juridica" && (
+                        <button
+                          type="button"
+                          onClick={consultarCnpj}
+                          className="bg-blue-700 hover:bg-blue-800 text-white px-4 rounded-xl font-black"
+                        >
+                          {consultandoCnpj ? "..." : "Buscar"}
+                        </button>
+                      )}
+                    </div>
+                  </Campo>
+
+                  {form.tipo_cliente === "fisica" && (
+                    <>
+                      <Campo titulo="Nome completo" className="md:col-span-2">
+                        <input
+                          value={form.nome}
+                          onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                          placeholder="Nome completo"
+                          className="input"
+                        />
+                      </Campo>
+
+                      <Campo titulo="RG">
+                        <input
+                          value={form.rg_ie}
+                          onChange={(e) => setForm({ ...form, rg_ie: e.target.value })}
+                          placeholder="RG"
+                          className="input"
+                        />
+                      </Campo>
+
+                      <Campo titulo="Nascimento">
+                        <input
+                          type="date"
+                          value={form.data_nascimento}
+                          onChange={(e) => setForm({ ...form, data_nascimento: e.target.value })}
+                          className="input"
+                        />
+                      </Campo>
+                    </>
+                  )}
+
+                  {form.tipo_cliente === "juridica" && (
+                    <>
+                      <Campo titulo="Razão Social" className="md:col-span-2">
+                        <input
+                          value={form.razao_social}
+                          onChange={(e) => setForm({ ...form, razao_social: e.target.value })}
+                          placeholder="Razão social"
+                          className="input"
+                        />
+                      </Campo>
+
+                      <Campo titulo="Nome Fantasia">
+                        <input
+                          value={form.nome_fantasia}
+                          onChange={(e) => setForm({ ...form, nome_fantasia: e.target.value })}
+                          placeholder="Nome fantasia"
+                          className="input"
+                        />
+                      </Campo>
+
+                      <Campo titulo="Inscrição Estadual">
+                        <input
+                          value={form.inscricao_estadual}
+                          onChange={(e) => setForm({ ...form, inscricao_estadual: e.target.value })}
+                          placeholder="Inscrição estadual"
+                          className="input"
+                        />
+                      </Campo>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
+                <h3 className="text-xl font-black text-slate-900 mb-4">
+                  Contato
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Campo titulo="WhatsApp">
+                    <input
+                      value={form.whatsapp}
+                      onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
+                      placeholder="WhatsApp"
+                      className="input"
+                    />
+                  </Campo>
+
+                  <Campo titulo="Telefone">
+                    <input
+                      value={form.telefone}
+                      onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                      placeholder="Telefone"
+                      className="input"
+                    />
+                  </Campo>
+
+                  <Campo titulo="E-mail">
+                    <input
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      placeholder="E-mail"
+                      className="input"
+                    />
+                  </Campo>
+                </div>
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+                <h3 className="text-xl font-black text-slate-900 mb-4">
+                  Endereço
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                  <Campo titulo="CEP">
                     <div className="flex gap-2">
                       <input
                         value={form.cep}
                         onChange={(e) => setForm({ ...form, cep: e.target.value })}
-                        placeholder="00000-000"
+                        placeholder="CEP"
                         className="input"
                       />
 
                       <button
                         type="button"
-                        onClick={buscarCep}
-                        disabled={buscandoCep}
-                        className="px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white font-bold disabled:opacity-60"
+                        onClick={consultarCep}
+                        className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 rounded-xl font-black"
                       >
-                        {buscandoCep ? "..." : "CEP"}
+                        {consultandoCep ? "..." : "Buscar"}
                       </button>
                     </div>
                   </Campo>
 
-                  <Campo label="Rua" className="md:col-span-2">
+                  <Campo titulo="Endereço" className="md:col-span-3">
                     <input
-                      value={form.rua}
-                      onChange={(e) => setForm({ ...form, rua: e.target.value })}
-                      placeholder="Rua / Avenida"
+                      value={form.endereco}
+                      onChange={(e) => setForm({ ...form, endereco: e.target.value })}
+                      placeholder="Rua, avenida..."
                       className="input"
                     />
                   </Campo>
 
-                  <Campo label="Número">
+                  <Campo titulo="Número">
                     <input
                       value={form.numero}
-                      onChange={(e) =>
-                        setForm({ ...form, numero: e.target.value })
-                      }
+                      onChange={(e) => setForm({ ...form, numero: e.target.value })}
                       placeholder="Nº"
                       className="input"
                     />
                   </Campo>
 
-                  <Campo label="Bairro">
+                  <Campo titulo="Complemento">
+                    <input
+                      value={form.complemento}
+                      onChange={(e) => setForm({ ...form, complemento: e.target.value })}
+                      placeholder="Complemento"
+                      className="input"
+                    />
+                  </Campo>
+
+                  <Campo titulo="Bairro" className="md:col-span-2">
                     <input
                       value={form.bairro}
-                      onChange={(e) =>
-                        setForm({ ...form, bairro: e.target.value })
-                      }
+                      onChange={(e) => setForm({ ...form, bairro: e.target.value })}
                       placeholder="Bairro"
                       className="input"
                     />
                   </Campo>
 
-                  <Campo label="Cidade">
+                  <Campo titulo="Cidade" className="md:col-span-3">
                     <input
                       value={form.cidade}
-                      onChange={(e) =>
-                        setForm({ ...form, cidade: e.target.value })
-                      }
+                      onChange={(e) => setForm({ ...form, cidade: e.target.value })}
                       placeholder="Cidade"
                       className="input"
                     />
                   </Campo>
 
-                  <Campo label="Estado">
+                  <Campo titulo="UF">
                     <input
-                      value={form.estado}
-                      onChange={(e) =>
-                        setForm({ ...form, estado: e.target.value })
-                      }
+                      value={form.uf}
+                      onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase().slice(0, 2) })}
                       placeholder="UF"
-                      maxLength={2}
-                      className="input uppercase"
-                    />
-                  </Campo>
-
-                  <Campo label="Endereço Completo">
-                    <input
-                      value={form.endereco}
-                      onChange={(e) =>
-                        setForm({ ...form, endereco: e.target.value })
-                      }
-                      placeholder="Opcional"
                       className="input"
                     />
                   </Campo>
                 </div>
-              </section>
+              </div>
 
-              <section>
-                <h3 className="text-lg font-black text-slate-900 mb-4">
-                  Observações
+              <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5">
+                <h3 className="text-xl font-black text-slate-900 mb-4">
+                  Comercial / Crédito
                 </h3>
 
-                <textarea
-                  value={form.observacoes}
-                  onChange={(e) =>
-                    setForm({ ...form, observacoes: e.target.value })
-                  }
-                  placeholder="Observações internas sobre o cliente..."
-                  className="input min-h-28"
-                />
-              </section>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Campo titulo="Limite de Crédito">
+                    <input
+                      value={form.limite_credito}
+                      onChange={(e) => setForm({ ...form, limite_credito: e.target.value })}
+                      placeholder="0,00"
+                      className="input"
+                    />
+                  </Campo>
+
+                  <Campo titulo="Status">
+                    <select
+                      value={form.ativo ? "ativo" : "inativo"}
+                      onChange={(e) => setForm({ ...form, ativo: e.target.value === "ativo" })}
+                      className="input"
+                    >
+                      <option value="ativo">Ativo</option>
+                      <option value="inativo">Inativo</option>
+                    </select>
+                  </Campo>
+
+                  <Campo titulo="Observação" className="md:col-span-2">
+                    <input
+                      value={form.observacao}
+                      onChange={(e) => setForm({ ...form, observacao: e.target.value })}
+                      placeholder="Observações comerciais"
+                      className="input"
+                    />
+                  </Campo>
+                </div>
+              </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3">
+            <div className="p-6 border-t border-slate-200 flex flex-col md:flex-row justify-end gap-3">
               <button
-                onClick={() => setModalAberto(false)}
-                className="px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                onClick={() => setModalCliente(false)}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-7 py-3 rounded-2xl font-black"
               >
                 Cancelar
               </button>
 
               <button
                 onClick={salvarCliente}
-                disabled={salvando}
-                className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-bold disabled:opacity-60"
+                className="bg-blue-700 hover:bg-blue-800 text-white px-7 py-3 rounded-2xl font-black"
               >
-                {salvando
-                  ? "Salvando..."
-                  : modoEdicao
-                  ? "Salvar Alterações"
-                  : "Cadastrar Cliente"}
+                {editandoId ? "Salvar Alterações" : "Cadastrar Cliente"}
               </button>
             </div>
+
+            <style jsx global>{`
+              .input {
+                width: 100%;
+                border: 1px solid rgb(203 213 225);
+                border-radius: 0.75rem;
+                padding: 0.75rem;
+                color: rgb(15 23 42);
+                background: white;
+                font-weight: 600;
+                outline: none;
+              }
+
+              .input:focus {
+                border-color: rgb(37 99 235);
+                box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
+              }
+            `}</style>
           </div>
         </div>
       )}
 
-      <style jsx global>{`
-        .input {
-          width: 100%;
-          border: 1px solid rgb(203 213 225);
-          border-radius: 1rem;
-          padding: 0.75rem;
-          color: rgb(15 23 42);
-          outline: none;
-        }
+      {modalDetalhes && clienteSelecionado && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900">
+                  {clienteSelecionado.nome}
+                </h2>
+                <p className="text-slate-500">
+                  {formatarDocumento(clienteSelecionado.cpf_cnpj)} • {clienteSelecionado.cidade || "-"} {clienteSelecionado.uf ? `/${clienteSelecionado.uf}` : ""}
+                </p>
+              </div>
 
-        .input:focus {
-          border-color: rgb(37 99 235);
-          box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
-        }
-      `}</style>
+              <button
+                onClick={() => setModalDetalhes(false)}
+                className="h-11 w-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <div className="lg:col-span-1 space-y-4">
+                <Resumo titulo="Total Comprado" valor={formatarMoeda(totalCompradoDetalhes)} cor="text-green-700" />
+                <Resumo titulo="Em Aberto" valor={formatarMoeda(totalAbertoDetalhes)} cor="text-red-700" />
+                <Resumo titulo="Limite Crédito" valor={formatarMoeda(Number(clienteSelecionado.limite_credito || 0))} cor="text-purple-700" />
+
+                <div className="bg-slate-900 text-white rounded-3xl p-5">
+                  <p className="text-slate-300 font-bold">Contato</p>
+                  <p className="mt-2"><strong>WhatsApp:</strong> {clienteSelecionado.whatsapp || "-"}</p>
+                  <p><strong>Telefone:</strong> {clienteSelecionado.telefone || "-"}</p>
+                  <p><strong>E-mail:</strong> {clienteSelecionado.email || "-"}</p>
+
+                  <hr className="border-slate-700 my-4" />
+
+                  <p className="text-slate-300 font-bold">Endereço</p>
+                  <p className="mt-2">
+                    {clienteSelecionado.endereco || "-"}, {clienteSelecionado.numero || "S/N"}
+                  </p>
+                  <p>{clienteSelecionado.bairro || "-"} - {clienteSelecionado.cidade || "-"} / {clienteSelecionado.uf || "-"}</p>
+                </div>
+              </div>
+
+              <div className="lg:col-span-2 space-y-5">
+                <div className="border border-slate-200 rounded-3xl p-5">
+                  <h3 className="text-xl font-black text-slate-900 mb-4">
+                    Últimas Vendas
+                  </h3>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-900 text-white">
+                          <th className="p-3 text-left">Venda</th>
+                          <th className="p-3 text-left">Data</th>
+                          <th className="p-3 text-left">Status</th>
+                          <th className="p-3 text-right">Valor</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {vendasCliente.map((venda) => (
+                          <tr key={venda.id} className="border-b">
+                            <td className="p-3 text-slate-800">{venda.id}</td>
+                            <td className="p-3 text-slate-800">{formatarData(venda.created_at)}</td>
+                            <td className="p-3 text-slate-800">{venda.status || "-"}</td>
+                            <td className="p-3 text-right text-green-700 font-black">{formatarMoeda(Number(venda.valor_total || 0))}</td>
+                          </tr>
+                        ))}
+
+                        {vendasCliente.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="p-6 text-center text-slate-500">
+                              Nenhuma venda encontrada.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="border border-slate-200 rounded-3xl p-5">
+                  <h3 className="text-xl font-black text-slate-900 mb-4">
+                    Financeiro do Cliente
+                  </h3>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-900 text-white">
+                          <th className="p-3 text-left">Descrição</th>
+                          <th className="p-3 text-left">Vencimento</th>
+                          <th className="p-3 text-left">Status</th>
+                          <th className="p-3 text-right">Valor</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {contasCliente.map((conta) => (
+                          <tr key={conta.id} className="border-b">
+                            <td className="p-3 text-slate-800">{conta.descricao || "-"}</td>
+                            <td className="p-3 text-slate-800">{formatarData(conta.vencimento)}</td>
+                            <td className="p-3 text-slate-800">{conta.status || "-"}</td>
+                            <td className="p-3 text-right text-red-700 font-black">{formatarMoeda(Number(conta.valor || 0))}</td>
+                          </tr>
+                        ))}
+
+                        {contasCliente.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="p-6 text-center text-slate-500">
+                              Nenhuma conta encontrada.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => {
+                      setModalDetalhes(false);
+                      abrirEditarCliente(clienteSelecionado);
+                    }}
+                    className="bg-blue-700 hover:bg-blue-800 text-white px-7 py-3 rounded-2xl font-black"
+                  >
+                    Editar Cliente
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function Campo({
-  label,
+  titulo,
   children,
   className = "",
 }: {
-  label: string;
+  titulo: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div className={className}>
-      <label className="block text-sm font-bold text-slate-700 mb-2">
-        {label}
+      <label className="block text-sm font-black text-slate-700 mb-2">
+        {titulo}
       </label>
 
       {children}
@@ -936,36 +1125,19 @@ function Campo({
   );
 }
 
-function ResumoCard({
+function Resumo({
   titulo,
   valor,
-  detalhe,
   cor,
-  icone,
 }: {
   titulo: string;
   valor: string;
-  detalhe: string;
   cor: string;
-  icone: React.ReactNode;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-slate-500">{titulo}</p>
-
-          <h2 className={`text-3xl font-black mt-3 ${cor}`}>{valor}</h2>
-
-          <p className="text-sm text-slate-500 mt-2">{detalhe}</p>
-        </div>
-
-        <div
-          className={`h-12 w-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center ${cor}`}
-        >
-          {icone}
-        </div>
-      </div>
+    <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+      <p className="text-sm text-slate-500 font-bold">{titulo}</p>
+      <p className={`text-3xl font-black mt-2 ${cor}`}>{valor}</p>
     </div>
   );
 }
