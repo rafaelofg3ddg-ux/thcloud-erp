@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabase";
-import { gerarPDFPadrao } from "../../../lib/relatoriopdf";
+import { supabase } from "../../lib/supabase";
+import { gerarPDFPadrao } from "../../lib/relatoriopdf";
 
 type Cliente = {
   id: string;
