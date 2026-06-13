@@ -9,11 +9,20 @@ export type BackupTabela = {
 export type BackupCompleto = {
   sistema: "THCloud ERP";
   tipo: "backup_empresa";
-  versao: "1.0";
+  versao: "1.1";
   empresa_id: string;
   empresa_nome?: string;
+  usuario_id?: string | null;
+  usuario_nome?: string | null;
   gerado_em: string;
   tabelas: BackupTabela[];
+};
+
+export type BackupResumo = {
+  tabelas: number;
+  tabelasComDados: number;
+  totalRegistros: number;
+  tabelasComErro: number;
 };
 
 export const TABELAS_BACKUP = [
@@ -33,6 +42,7 @@ export const TABELAS_BACKUP = [
   "modelos_etiquetas",
   "orcamentos",
   "itens_orcamento",
+  "backup_historico",
 ];
 
 export const ORDEM_RESTAURACAO = [
@@ -61,7 +71,7 @@ export function nomeArquivoBackup(empresaNome: string) {
 
   const nomeLimpo = String(empresaNome || "empresa")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\\u0300-\\u036f]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .toLowerCase();
@@ -69,8 +79,16 @@ export function nomeArquivoBackup(empresaNome: string) {
   return `backup-thcloud-${nomeLimpo}-${dataTexto}.json`;
 }
 
+export function gerarConteudoBackup(backup: BackupCompleto) {
+  return JSON.stringify(backup, null, 2);
+}
+
+export function calcularTamanhoBytes(conteudo: string) {
+  return new Blob([conteudo]).size;
+}
+
 export function baixarBackupJson(backup: BackupCompleto, empresaNome: string) {
-  const conteudo = JSON.stringify(backup, null, 2);
+  const conteudo = gerarConteudoBackup(backup);
   const blob = new Blob([conteudo], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
 
@@ -113,10 +131,14 @@ export async function gerarBackupEmpresa({
   supabase,
   empresaId,
   empresaNome,
+  usuarioId,
+  usuarioNome,
 }: {
   supabase: any;
   empresaId: string;
   empresaNome?: string;
+  usuarioId?: string | null;
+  usuarioNome?: string | null;
 }): Promise<BackupCompleto> {
   const tabelas: BackupTabela[] = [];
 
@@ -157,15 +179,17 @@ export async function gerarBackupEmpresa({
   return {
     sistema: "THCloud ERP",
     tipo: "backup_empresa",
-    versao: "1.0",
+    versao: "1.1",
     empresa_id: empresaId,
     empresa_nome: empresaNome || "Empresa",
+    usuario_id: usuarioId || null,
+    usuario_nome: usuarioNome || null,
     gerado_em: new Date().toISOString(),
     tabelas,
   };
 }
 
-export function resumoBackup(backup: BackupCompleto) {
+export function resumoBackup(backup: BackupCompleto): BackupResumo {
   const tabelasComDados = backup.tabelas.filter((t) => t.registros.length > 0);
   const totalRegistros = backup.tabelas.reduce(
     (total, tabela) => total + tabela.registros.length,
@@ -179,6 +203,110 @@ export function resumoBackup(backup: BackupCompleto) {
     totalRegistros,
     tabelasComErro: tabelasComErro.length,
   };
+}
+
+export async function salvarBackupNoStorage({
+  supabase,
+  backup,
+  empresaNome,
+}: {
+  supabase: any;
+  backup: BackupCompleto;
+  empresaNome: string;
+}) {
+  const arquivoNome = nomeArquivoBackup(empresaNome);
+  const conteudo = gerarConteudoBackup(backup);
+  const blob = new Blob([conteudo], { type: "application/json;charset=utf-8" });
+  const storagePath = `${backup.empresa_id}/${arquivoNome}`;
+  const resumo = resumoBackup(backup);
+
+  const upload = await supabase.storage
+    .from("backups")
+    .upload(storagePath, blob, {
+      contentType: "application/json",
+      upsert: true,
+    });
+
+  if (upload.error) {
+    throw new Error("Erro ao salvar backup na nuvem: " + upload.error.message);
+  }
+
+  const insert = await supabase.from("backup_historico").insert({
+    empresa_id: backup.empresa_id,
+    usuario_id: backup.usuario_id || null,
+    usuario_nome: backup.usuario_nome || null,
+    empresa_nome: backup.empresa_nome || empresaNome,
+    arquivo_nome: arquivoNome,
+    storage_bucket: "backups",
+    storage_path: storagePath,
+    tamanho_bytes: calcularTamanhoBytes(conteudo),
+    total_tabelas: resumo.tabelas,
+    tabelas_com_dados: resumo.tabelasComDados,
+    total_registros: resumo.totalRegistros,
+    tabelas_com_erro: resumo.tabelasComErro,
+    status: "gerado",
+    observacao:
+      resumo.tabelasComErro > 0
+        ? "Backup gerado com algumas tabelas ignoradas."
+        : "Backup gerado com sucesso.",
+  });
+
+  if (insert.error) {
+    throw new Error("Backup salvo, mas erro ao registrar histórico: " + insert.error.message);
+  }
+
+  return {
+    arquivoNome,
+    storagePath,
+    tamanhoBytes: calcularTamanhoBytes(conteudo),
+    resumo,
+  };
+}
+
+export async function listarHistoricoBackups({
+  supabase,
+  empresaId,
+}: {
+  supabase: any;
+  empresaId: string;
+}) {
+  const { data, error } = await supabase
+    .from("backup_historico")
+    .select("*")
+    .eq("empresa_id", empresaId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    throw new Error("Erro ao carregar histórico: " + error.message);
+  }
+
+  return data || [];
+}
+
+export async function baixarBackupDaNuvem({
+  supabase,
+  storagePath,
+}: {
+  supabase: any;
+  storagePath: string;
+}) {
+  const { data, error } = await supabase.storage
+    .from("backups")
+    .download(storagePath);
+
+  if (error) {
+    throw new Error("Erro ao baixar backup da nuvem: " + error.message);
+  }
+
+  const texto = await data.text();
+  const backup = JSON.parse(texto) as BackupCompleto;
+
+  if (backup?.sistema !== "THCloud ERP" || backup?.tipo !== "backup_empresa") {
+    throw new Error("Arquivo da nuvem inválido.");
+  }
+
+  return backup;
 }
 
 function prepararRegistrosParaRestaurar(
