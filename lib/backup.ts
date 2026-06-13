@@ -9,7 +9,7 @@ export type BackupTabela = {
 export type BackupCompleto = {
   sistema: "THCloud ERP";
   tipo: "backup_empresa";
-  versao: "1.1";
+  versao: "1.2";
   empresa_id: string;
   empresa_nome?: string;
   usuario_id?: string | null;
@@ -23,6 +23,19 @@ export type BackupResumo = {
   tabelasComDados: number;
   totalRegistros: number;
   tabelasComErro: number;
+};
+
+export type BackupConfiguracao = {
+  id?: string;
+  empresa_id: string;
+  empresa_nome?: string | null;
+  backup_automatico: boolean;
+  frequencia: "diario" | "semanal" | "mensal";
+  horario: string;
+  manter_ultimos: number;
+  ultimo_backup_em?: string | null;
+  proximo_backup_em?: string | null;
+  ativo?: boolean;
 };
 
 export const TABELAS_BACKUP = [
@@ -42,6 +55,7 @@ export const TABELAS_BACKUP = [
   "modelos_etiquetas",
   "orcamentos",
   "itens_orcamento",
+  "backup_configuracoes",
   "backup_historico",
 ];
 
@@ -62,6 +76,7 @@ export const ORDEM_RESTAURACAO = [
   "modelos_etiquetas",
   "orcamentos",
   "itens_orcamento",
+  "backup_configuracoes",
 ];
 
 export const ORDEM_LIMPEZA = [...ORDEM_RESTAURACAO].reverse();
@@ -179,7 +194,7 @@ export async function gerarBackupEmpresa({
   return {
     sistema: "THCloud ERP",
     tipo: "backup_empresa",
-    versao: "1.1",
+    versao: "1.2",
     empresa_id: empresaId,
     empresa_nome: empresaNome || "Empresa",
     usuario_id: usuarioId || null,
@@ -209,10 +224,14 @@ export async function salvarBackupNoStorage({
   supabase,
   backup,
   empresaNome,
+  automatico = false,
+  tipoBackup = "manual",
 }: {
   supabase: any;
   backup: BackupCompleto;
   empresaNome: string;
+  automatico?: boolean;
+  tipoBackup?: "manual" | "automatico";
 }) {
   const arquivoNome = nomeArquivoBackup(empresaNome);
   const conteudo = gerarConteudoBackup(backup);
@@ -245,9 +264,13 @@ export async function salvarBackupNoStorage({
     total_registros: resumo.totalRegistros,
     tabelas_com_erro: resumo.tabelasComErro,
     status: "gerado",
+    tipo_backup: tipoBackup,
+    automatico,
     observacao:
       resumo.tabelasComErro > 0
         ? "Backup gerado com algumas tabelas ignoradas."
+        : automatico
+        ? "Backup automático gerado com sucesso."
         : "Backup gerado com sucesso.",
   });
 
@@ -307,6 +330,117 @@ export async function baixarBackupDaNuvem({
   }
 
   return backup;
+}
+
+
+export async function carregarConfiguracaoBackup({
+  supabase,
+  empresaId,
+  empresaNome,
+}: {
+  supabase: any;
+  empresaId: string;
+  empresaNome: string;
+}): Promise<BackupConfiguracao> {
+  const { data, error } = await supabase
+    .from("backup_configuracoes")
+    .select("*")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("Erro ao carregar configuração de backup: " + error.message);
+  }
+
+  if (data) return data as BackupConfiguracao;
+
+  const padrao: BackupConfiguracao = {
+    empresa_id: empresaId,
+    empresa_nome: empresaNome,
+    backup_automatico: false,
+    frequencia: "diario",
+    horario: "02:00",
+    manter_ultimos: 30,
+    ativo: true,
+  };
+
+  const insert = await supabase
+    .from("backup_configuracoes")
+    .insert(padrao)
+    .select("*")
+    .single();
+
+  if (insert.error) {
+    throw new Error("Erro ao criar configuração de backup: " + insert.error.message);
+  }
+
+  return insert.data as BackupConfiguracao;
+}
+
+export function calcularProximoBackup({
+  frequencia,
+  horario,
+}: {
+  frequencia: "diario" | "semanal" | "mensal";
+  horario: string;
+}) {
+  const agora = new Date();
+  const [horaTexto, minutoTexto] = String(horario || "02:00").split(":");
+  const hora = Number(horaTexto || 2);
+  const minuto = Number(minutoTexto || 0);
+
+  const proximo = new Date(agora);
+  proximo.setHours(hora, minuto, 0, 0);
+
+  if (proximo <= agora) {
+    if (frequencia === "diario") {
+      proximo.setDate(proximo.getDate() + 1);
+    } else if (frequencia === "semanal") {
+      proximo.setDate(proximo.getDate() + 7);
+    } else {
+      proximo.setMonth(proximo.getMonth() + 1);
+    }
+  }
+
+  return proximo.toISOString();
+}
+
+export async function salvarConfiguracaoBackup({
+  supabase,
+  configuracao,
+}: {
+  supabase: any;
+  configuracao: BackupConfiguracao;
+}) {
+  const proximo_backup_em = configuracao.backup_automatico
+    ? calcularProximoBackup({
+        frequencia: configuracao.frequencia,
+        horario: configuracao.horario,
+      })
+    : null;
+
+  const payload = {
+    empresa_id: configuracao.empresa_id,
+    empresa_nome: configuracao.empresa_nome,
+    backup_automatico: configuracao.backup_automatico,
+    frequencia: configuracao.frequencia,
+    horario: configuracao.horario,
+    manter_ultimos: Number(configuracao.manter_ultimos || 30),
+    proximo_backup_em,
+    ativo: true,
+  };
+
+  const { data, error } = await supabase
+    .from("backup_configuracoes")
+    .upsert(payload, { onConflict: "empresa_id" })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error("Erro ao salvar configuração de backup: " + error.message);
+  }
+
+  return data as BackupConfiguracao;
 }
 
 function prepararRegistrosParaRestaurar(

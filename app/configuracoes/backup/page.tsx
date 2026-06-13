@@ -5,12 +5,14 @@ import { supabase } from "../../../lib/supabase";
 import { getEmpresaId } from "../../../lib/empresa";
 import {
   AlertTriangle,
+  CalendarClock,
   CheckCircle,
   Cloud,
   DatabaseBackup,
   Download,
   FileJson,
   History,
+  Save,
   RefreshCcw,
   ShieldCheck,
   Upload,
@@ -18,13 +20,16 @@ import {
 import {
   baixarBackupDaNuvem,
   baixarBackupJson,
+  carregarConfiguracaoBackup,
   gerarBackupEmpresa,
   lerArquivoJson,
   listarHistoricoBackups,
   restaurarBackupEmpresa,
   resumoBackup,
   salvarBackupNoStorage,
+  salvarConfiguracaoBackup,
   type BackupCompleto,
+  type BackupConfiguracao,
 } from "../../../lib/backup";
 
 type EmpresaLocal = {
@@ -62,6 +67,8 @@ export default function BackupPage() {
   const [backupGerado, setBackupGerado] = useState<BackupCompleto | null>(null);
   const [backupSelecionado, setBackupSelecionado] = useState<BackupCompleto | null>(null);
   const [historico, setHistorico] = useState<BackupHistorico[]>([]);
+  const [configBackup, setConfigBackup] = useState<BackupConfiguracao | null>(null);
+  const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [substituirDadosAtuais, setSubstituirDadosAtuais] = useState(false);
 
   function empresaAtualId() {
@@ -124,6 +131,46 @@ export default function BackupPage() {
     if (!backupSelecionado) return null;
     return resumoBackup(backupSelecionado);
   }, [backupSelecionado]);
+
+  async function carregarConfigBackup() {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    try {
+      const config = await carregarConfiguracaoBackup({
+        supabase,
+        empresaId,
+        empresaNome: empresa.nome,
+      });
+
+      setConfigBackup(config);
+    } catch (error: any) {
+      alert(error.message || "Erro ao carregar configuração de backup automático.");
+    }
+  }
+
+  async function salvarConfigBackup() {
+    if (!configBackup) return;
+
+    setSalvandoConfig(true);
+    setStatus("Salvando configuração de backup automático...");
+
+    try {
+      const salvo = await salvarConfiguracaoBackup({
+        supabase,
+        configuracao: configBackup,
+      });
+
+      setConfigBackup(salvo);
+      setStatus("Configuração de backup automático salva.");
+      alert("Configuração salva com sucesso!");
+    } catch (error: any) {
+      alert(error.message || "Erro ao salvar configuração.");
+      setStatus("");
+    }
+
+    setSalvandoConfig(false);
+  }
 
   async function carregarHistorico() {
     const empresaId = empresaAtualId();
@@ -308,6 +355,7 @@ export default function BackupPage() {
 
   useEffect(() => {
     carregarHistorico();
+    carregarConfigBackup();
   }, []);
 
   return (
@@ -440,6 +488,115 @@ export default function BackupPage() {
           </div>
         </section>
       </div>
+
+      <section className="mt-8 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-start gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-green-50 text-green-700 flex items-center justify-center">
+            <CalendarClock size={24} />
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-slate-900">Backup Automático</h2>
+            <p className="text-slate-500 mt-1">Configure o sistema para salvar backups sozinho na nuvem.</p>
+          </div>
+        </div>
+
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-5">
+          <label className="bg-slate-50 border border-slate-200 rounded-3xl p-5 flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={configBackup?.backup_automatico || false}
+              onChange={(e) =>
+                setConfigBackup((atual) =>
+                  atual
+                    ? { ...atual, backup_automatico: e.target.checked }
+                    : atual
+                )
+              }
+              className="h-5 w-5 mt-1"
+            />
+            <div>
+              <p className="font-black text-slate-900">Ativar automático</p>
+              <p className="text-sm text-slate-500 mt-1">Quando ativo, o Vercel Cron chama a rotina de backup.</p>
+            </div>
+          </label>
+
+          <div>
+            <label className="block text-sm font-black text-slate-700 mb-2">Frequência</label>
+            <select
+              value={configBackup?.frequencia || "diario"}
+              onChange={(e) =>
+                setConfigBackup((atual) =>
+                  atual
+                    ? { ...atual, frequencia: e.target.value as any }
+                    : atual
+                )
+              }
+              className="w-full border border-slate-300 rounded-2xl p-4 font-bold text-slate-900 bg-white"
+            >
+              <option value="diario">Diário</option>
+              <option value="semanal">Semanal</option>
+              <option value="mensal">Mensal</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-black text-slate-700 mb-2">Horário</label>
+            <input
+              type="time"
+              value={configBackup?.horario || "02:00"}
+              onChange={(e) =>
+                setConfigBackup((atual) =>
+                  atual ? { ...atual, horario: e.target.value } : atual
+                )
+              }
+              className="w-full border border-slate-300 rounded-2xl p-4 font-bold text-slate-900 bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-black text-slate-700 mb-2">Manter últimos</label>
+            <input
+              type="number"
+              min={5}
+              max={365}
+              value={configBackup?.manter_ultimos || 30}
+              onChange={(e) =>
+                setConfigBackup((atual) =>
+                  atual
+                    ? { ...atual, manter_ultimos: Number(e.target.value) }
+                    : atual
+                )
+              }
+              className="w-full border border-slate-300 rounded-2xl p-4 font-bold text-slate-900 bg-white"
+            />
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-3xl p-4 text-blue-800 flex-1">
+            <p className="font-black">Próximo backup:</p>
+            <p className="text-sm mt-1">
+              {configBackup?.backup_automatico && configBackup?.proximo_backup_em
+                ? new Date(configBackup.proximo_backup_em).toLocaleString("pt-BR")
+                : "Backup automático desativado."}
+            </p>
+          </div>
+
+          <button
+            onClick={salvarConfigBackup}
+            disabled={salvandoConfig || !configBackup}
+            className={`px-6 py-4 rounded-2xl font-black text-white flex items-center justify-center gap-2 ${
+              salvandoConfig || !configBackup
+                ? "bg-slate-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+            }`}
+          >
+            {salvandoConfig ? <RefreshCcw className="animate-spin" size={20} /> : <Save size={20} />}
+            {salvandoConfig ? "Salvando..." : "Salvar Automático"}
+          </button>
+        </div>
+      </section>
 
       <section className="mt-8 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
