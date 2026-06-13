@@ -1,50 +1,58 @@
+import { getEmpresaSessao, getUsuarioSessao, salvarEmpresaSessao } from "./sessao";
+
 export function getEmpresaId() {
   if (typeof window === "undefined") return null;
 
-  try {
-    const usuario = localStorage.getItem("th_usuario");
-    if (!usuario) return null;
+  const usuarioSessao = getUsuarioSessao();
 
-    const dados = JSON.parse(usuario);
-
-    return dados.empresa_id || null;
-  } catch {
-    return null;
+  if (usuarioSessao?.empresa_id) {
+    return usuarioSessao.empresa_id;
   }
-}
 
-export function getEmpresaStorage() {
-  if (typeof window === "undefined") return null;
+  const usuarioLocal = localStorage.getItem("th_usuario");
 
-  try {
-    const empresa = localStorage.getItem("th_empresa");
-    if (!empresa) return null;
-
-    return JSON.parse(empresa);
-  } catch {
-    return null;
+  if (usuarioLocal) {
+    try {
+      const usuario = JSON.parse(usuarioLocal);
+      return usuario?.empresa_id || null;
+    } catch {
+      return null;
+    }
   }
+
+  return null;
 }
 
 export function salvarEmpresaStorage(empresa: any) {
   if (typeof window === "undefined") return;
 
+  salvarEmpresaSessao(empresa);
   localStorage.setItem("th_empresa", JSON.stringify(empresa));
 }
 
-export function getLogoEmpresa() {
-  const empresa = getEmpresaStorage();
+export function getEmpresaStorage() {
+  if (typeof window === "undefined") return null;
 
-  return empresa?.logo_url || "/logo-thcloud-transparente.png";
+  const empresaSessao = getEmpresaSessao();
+
+  if (empresaSessao) return empresaSessao;
+
+  const empresaLocal = localStorage.getItem("th_empresa");
+
+  if (empresaLocal) {
+    try {
+      return JSON.parse(empresaLocal);
+    } catch {
+      localStorage.removeItem("th_empresa");
+    }
+  }
+
+  return null;
 }
 
-export function getNomeEmpresa() {
-  const empresa = getEmpresaStorage();
+export function limparEmpresaStorage() {
+  if (typeof window === "undefined") return;
 
-  return (
-    empresa?.nome_fantasia ||
-    empresa?.nome ||
-    empresa?.razao_social ||
-    "THCloud ERP"
-  );
+  sessionStorage.removeItem("th_empresa");
+  localStorage.removeItem("th_empresa");
 }

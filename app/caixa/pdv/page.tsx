@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { getEmpresaId } from "../../../lib/empresa";
+import { CONFIGURACOES_PADRAO, normalizarConfiguracoesSistema, type ConfiguracoesSistema } from "../../../lib/configuracoesSistema";
 
 type Produto = {
   id: string;
@@ -31,6 +32,7 @@ type Caixa = {
   data_abertura: string | null;
   data_fechamento: string | null;
   observacao: string | null;
+  numero_caixa?: number | null;
 };
 
 type MovimentoCaixa = {
@@ -192,6 +194,7 @@ export default function PdvPage() {
 
   const [parcelas, setParcelas] = useState("1");
   const [primeiroVencimento, setPrimeiroVencimento] = useState("");
+  const [diasEntreParcelas, setDiasEntreParcelas] = useState("30");
 
   const [totalCompradoCliente, setTotalCompradoCliente] = useState(0);
   const [totalAbertoCliente, setTotalAbertoCliente] = useState(0);
@@ -222,6 +225,7 @@ export default function PdvPage() {
   const [usarDadosClienteEntrega, setUsarDadosClienteEntrega] = useState(true);
   const [finalizandoVenda, setFinalizandoVenda] = useState(false);
   const [orcamentoPdv, setOrcamentoPdv] = useState<OrcamentoPdv | null>(null);
+  const [configuracoesSistema, setConfiguracoesSistema] = useState<ConfiguracoesSistema>(CONFIGURACOES_PADRAO);
 
   function empresaAtualId() {
     const empresaId = getEmpresaId();
@@ -243,6 +247,25 @@ export default function PdvPage() {
     } catch {
       return operadorCaixa || "Admin";
     }
+  }
+
+  async function carregarConfiguracoesSistema() {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    const { data } = await supabase
+      .from("configuracoes_gerais")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    const config = normalizarConfiguracoesSistema(data || {});
+    setConfiguracoesSistema(config);
+    setDiasEntreParcelas(String(config.intervalo_parcelas_padrao_dias || 30));
+
+    if (config.chave_pix) setChavePix(config.chave_pix);
+    if (config.nome_recebedor_pix) setNomeRecebedorPix(config.nome_recebedor_pix);
+    if (config.cidade_pix) setCidadePix(config.cidade_pix);
   }
 
   function formatarCnpj(cnpj: string) {
@@ -498,21 +521,15 @@ function cabecalhoEmpresaCupom() {
     const empresaId = empresaAtualId();
     if (!empresaId) throw new Error("Empresa não identificada.");
 
-    const { data, error } = await supabase
-      .from("vendas")
-      .select("numero_venda")
-      .eq("empresa_id", empresaId)
-      .not("numero_venda", "is", null)
-      .order("numero_venda", { ascending: false })
-      .limit(1);
+    const { data, error } = await supabase.rpc("proximo_numero_venda", {
+      p_empresa_id: empresaId,
+    });
 
     if (error) {
       throw new Error("Erro ao gerar número da venda: " + error.message);
     }
 
-    const ultimoNumero = Number(data?.[0]?.numero_venda || 0);
-
-    return ultimoNumero + 1;
+    return Number(data || 1);
   }
 
   function totalBruto() {
@@ -1012,6 +1029,25 @@ function cabecalhoEmpresaCupom() {
     );
   }
 
+  async function proximoNumeroCaixa() {
+    const empresaId = empresaAtualId();
+    if (!empresaId) throw new Error("Empresa não identificada.");
+
+    const { data, error } = await supabase
+      .from("caixas")
+      .select("numero_caixa")
+      .eq("empresa_id", empresaId)
+      .not("numero_caixa", "is", null)
+      .order("numero_caixa", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      throw new Error("Erro ao gerar número do caixa: " + error.message);
+    }
+
+    return Number(data?.[0]?.numero_caixa || 0) + 1;
+  }
+
   async function abrirCaixa() {
     const empresaId = empresaAtualId();
     if (!empresaId) return;
@@ -1041,9 +1077,19 @@ function cabecalhoEmpresaCupom() {
       return;
     }
 
+    let numeroCaixaGerado = 1;
+
+    try {
+      numeroCaixaGerado = await proximoNumeroCaixa();
+    } catch (error: any) {
+      alert(error.message);
+      return;
+    }
+
     const { error } = await supabase.from("caixas").insert([
       {
         empresa_id: empresaId,
+        numero_caixa: numeroCaixaGerado,
         usuario: operadorValidado,
         valor_abertura: valor,
         valor_fechamento: null,
@@ -1059,7 +1105,7 @@ function cabecalhoEmpresaCupom() {
       return;
     }
 
-    alert("Caixa aberto com sucesso!");
+    alert(`Caixa Nº ${formatarNumeroVenda(numeroCaixaGerado)} aberto com sucesso!`);
 
     setValorAbertura("0,00");
     setObservacaoCaixa("");
@@ -1324,7 +1370,8 @@ function cabecalhoEmpresaCupom() {
 
           <hr />
 
-          <p><strong>Caixa:</strong> ${dados.caixa.id}</p>
+          <p><strong>Caixa Nº:</strong> ${formatarNumeroVenda(dados.caixa.numero_caixa)}</p>
+          <p><strong>ID do Caixa:</strong> ${dados.caixa.id}</p>
           <p><strong>Operador:</strong> ${dados.caixa.usuario || operadorAtual()}</p>
           <p><strong>Abertura:</strong> ${formatarData(dados.caixa.data_abertura)}</p>
           <p><strong>Fechamento:</strong> ${formatarData(dados.dataFechamento)}</p>
@@ -1605,7 +1652,7 @@ function cabecalhoEmpresaCupom() {
       return;
     }
 
-    if (Number(produto.qtd_atual || 0) <= 0) {
+    if (!configuracoesSistema.permitir_estoque_negativo && Number(produto.qtd_atual || 0) <= 0) {
       alert("Produto sem estoque.");
       return;
     }
@@ -1615,7 +1662,7 @@ function cabecalhoEmpresaCupom() {
     if (existente) {
       const novaQuantidade = existente.quantidade + 1;
 
-      if (novaQuantidade > Number(produto.qtd_atual || 0)) {
+      if (!configuracoesSistema.permitir_estoque_negativo && novaQuantidade > Number(produto.qtd_atual || 0)) {
         alert("Estoque insuficiente.");
         return;
       }
@@ -1689,7 +1736,7 @@ function cabecalhoEmpresaCupom() {
 
     if (!produto) return;
 
-    if (qtd > Number(produto.qtd_atual || 0)) {
+    if (!configuracoesSistema.permitir_estoque_negativo && qtd > Number(produto.qtd_atual || 0)) {
       alert("Estoque insuficiente.");
       return;
     }
@@ -1772,6 +1819,7 @@ function cabecalhoEmpresaCupom() {
     setArredondamentoVenda("0");
     setParcelas("1");
     setPrimeiroVencimento("");
+    setDiasEntreParcelas(String(configuracoesSistema.intervalo_parcelas_padrao_dias || 30));
     setEhDelivery(false);
     setTelefoneEntrega("");
     setEnderecoEntrega("");
@@ -1842,6 +1890,13 @@ function cabecalhoEmpresaCupom() {
     return data.toISOString().split("T")[0];
   }
 
+  function gerarVencimentoPorDias(base: string, parcelaIndex: number) {
+    const intervalo = Math.max(Number(diasEntreParcelas || configuracoesSistema.intervalo_parcelas_padrao_dias || 30), 1);
+    const data = new Date(base + "T00:00:00");
+    data.setDate(data.getDate() + intervalo * parcelaIndex);
+    return data.toISOString().split("T")[0];
+  }
+
   async function baixarEstoque(item: ItemCarrinho) {
     const empresaId = empresaAtualId();
     if (!empresaId) throw new Error("Empresa não identificada.");
@@ -1860,7 +1915,7 @@ function cabecalhoEmpresaCupom() {
 
     const quantidadeAtual = Number(produto.qtd_atual || 0);
 
-    if (quantidadeVendida > quantidadeAtual) {
+    if (!configuracoesSistema.permitir_estoque_negativo && quantidadeVendida > quantidadeAtual) {
       throw new Error(`Estoque insuficiente para ${produto.nome}.`);
     }
 
@@ -1896,7 +1951,7 @@ function cabecalhoEmpresaCupom() {
     }
   }
 
-  async function gerarContasReceber(vendaId: string) {
+  async function gerarContasReceber(vendaId: string, numeroVenda?: number | null) {
     const empresaId = empresaAtualId();
     if (!empresaId) throw new Error("Empresa não identificada.");
 
@@ -1934,9 +1989,12 @@ function cabecalhoEmpresaCupom() {
       contas.push({
         empresa_id: empresaId,
         cliente_id: clienteId,
-        descricao: `Venda PDV ${vendaId} - Parcela ${i}/${qtdParcelas}`,
+        descricao: `Venda Nº ${formatarNumeroVenda(numeroVenda)} - Parcela ${i}/${qtdParcelas}`,
+        venda_id: vendaId,
+        numero_parcela: i,
+        total_parcelas: qtdParcelas,
         valor: valorParcela,
-        vencimento: gerarVencimento(primeiroVencimento, i - 1),
+        vencimento: gerarVencimentoPorDias(primeiroVencimento, i - 1),
         status: "aberto",
       });
     }
@@ -2199,7 +2257,7 @@ function cabecalhoEmpresaCupom() {
           <hr />
 
           <div class="center">
-            <p>Obrigado pela preferência!</p>
+            ${configuracoesSistema.mensagem_cupom ? `<p>${configuracoesSistema.mensagem_cupom}</p>` : `<p>Obrigado pela preferência!</p>`}
             <p class="small">Sistema THCloud ERP</p>
           </div>
 
@@ -2426,7 +2484,7 @@ function cabecalhoEmpresaCupom() {
           <hr />
 
           <div class="center">
-            <p>Obrigado pela preferência!</p>
+            ${configuracoesSistema.mensagem_cupom ? `<p>${configuracoesSistema.mensagem_cupom}</p>` : `<p>Obrigado pela preferência!</p>`}
             <p class="small">Sistema THCloud ERP</p>
           </div>
 
@@ -2440,6 +2498,18 @@ function cabecalhoEmpresaCupom() {
     `;
   }
 
+  async function manterTelaCheiaAposImpressao() {
+    if (!modoTelaCheia) return;
+
+    setTimeout(async () => {
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch {}
+    }, 800);
+  }
+
   function imprimirCupom(vendaId: string, numeroVenda?: number) {
     const janela = window.open("", "_blank", "width=420,height=700");
 
@@ -2451,6 +2521,7 @@ function cabecalhoEmpresaCupom() {
     janela.document.open();
     janela.document.write(montarCupom(vendaId, numeroVenda));
     janela.document.close();
+    manterTelaCheiaAposImpressao();
   }
 
   function montarRomaneioEntrega(vendaId: string) {
@@ -2647,6 +2718,76 @@ function cabecalhoEmpresaCupom() {
     janela.document.open();
     janela.document.write(montarRomaneioEntrega(vendaId));
     janela.document.close();
+    manterTelaCheiaAposImpressao();
+  }
+
+  function montarPromissoriasCrediario(vendaId: string, numeroVenda?: number) {
+    const valorCrediario = converterNumero(pagCrediario);
+    const qtdParcelas = Math.max(Number(parcelas || 1), 1);
+    const valorBase = Math.floor((valorCrediario / qtdParcelas) * 100) / 100;
+    let soma = 0;
+    const linhas = [];
+
+    for (let i = 1; i <= qtdParcelas; i++) {
+      let valorParcela = valorBase;
+      if (i === qtdParcelas) valorParcela = Number((valorCrediario - soma).toFixed(2));
+      soma += valorParcela;
+
+      linhas.push(`
+        <div class="promissoria">
+          <h2>PROMISSÓRIA / DUPLICATA</h2>
+          <p><strong>Venda Nº:</strong> ${formatarNumeroVenda(numeroVenda)} &nbsp; <strong>Parcela:</strong> ${i}/${qtdParcelas}</p>
+          <p><strong>Vencimento:</strong> ${formatarData(gerarVencimentoPorDias(primeiroVencimento, i - 1))}</p>
+          <p><strong>Valor:</strong> ${formatarMoeda(valorParcela)}</p>
+          <p>Eu, <strong>${clienteSelecionado()}</strong>, reconheço a dívida referente à compra realizada nesta data e comprometo-me a pagar o valor acima no vencimento informado.</p>
+          <div class="assinaturas">
+            <div>Assinatura do Cliente</div>
+            <div>Responsável pela Loja</div>
+          </div>
+        </div>
+      `);
+    }
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Promissórias Venda ${vendaId}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111827; margin: 20px; }
+            .promissoria { border: 2px solid #111827; border-radius: 12px; padding: 18px; margin-bottom: 18px; page-break-inside: avoid; }
+            h2 { text-align: center; margin: 0 0 12px; }
+            p { font-size: 14px; line-height: 1.5; }
+            .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 45px; }
+            .assinaturas div { border-top: 1px solid #111827; text-align: center; padding-top: 6px; }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <button onclick="window.print()" style="padding:10px 14px;background:#2563eb;color:white;border:0;border-radius:8px;font-weight:bold;">Imprimir Promissórias</button>
+          ${cabecalhoEmpresaCupom()}
+          ${linhas.join("")}
+          <script>window.onload = function(){ window.print(); }</script>
+        </body>
+      </html>
+    `;
+  }
+
+  function imprimirPromissoriasCrediario(vendaId: string, numeroVenda?: number) {
+    if (converterNumero(pagCrediario) <= 0 || !configuracoesSistema.gerar_promissoria_crediario) return;
+
+    const janela = window.open("", "_blank", "width=900,height=800");
+
+    if (!janela) {
+      alert("O navegador bloqueou a janela de promissórias. Libere pop-ups para imprimir.");
+      return;
+    }
+
+    janela.document.open();
+    janela.document.write(montarPromissoriasCrediario(vendaId, numeroVenda));
+    janela.document.close();
+    manterTelaCheiaAposImpressao();
   }
 
   async function finalizarVenda() {
@@ -2684,23 +2825,15 @@ function cabecalhoEmpresaCupom() {
       return;
     }
 
-    if (converterNumero(pagPix) > 0 && !chavePix) {
-      alert("Informe a chave PIX para gerar o QR Code.");
+
+    if (
+      configuracoesSistema.exigir_autorizacao_desconto &&
+      Number(configuracoesSistema.desconto_maximo_percentual || 0) > 0 &&
+      converterNumero(descontoPercentual) > Number(configuracoesSistema.desconto_maximo_percentual || 0)
+    ) {
+      alert(`Desconto acima do limite permitido (${configuracoesSistema.desconto_maximo_percentual}%).`);
       setFinalizandoVenda(false);
       return;
-    }
-
-    if (converterNumero(pagPix) > 0 && !pixConfirmado) {
-      const confirmarPix = confirm(
-        "O pagamento PIX já foi recebido? Confirme antes de finalizar a venda."
-      );
-
-      if (!confirmarPix) {
-        setFinalizandoVenda(false);
-      return;
-      }
-
-      setPixConfirmado(true);
     }
 
     if (converterNumero(pagCrediario) > 0 && !clienteId) {
@@ -2796,7 +2929,7 @@ function cabecalhoEmpresaCupom() {
         await baixarEstoque(item);
       }
 
-      await gerarContasReceber(vendaId);
+      await gerarContasReceber(vendaId, numeroVenda);
 
       if (orcamentoPdv?.id) {
         const statusOrcamento = await supabase
@@ -2821,11 +2954,15 @@ function cabecalhoEmpresaCupom() {
 
     alert(`Venda Nº ${formatarNumeroVenda(numeroVenda)} finalizada com sucesso!`);
 
-    imprimirCupom(vendaId, numeroVenda);
+    if (configuracoesSistema.imprimir_cupom_automatico) {
+      imprimirCupom(vendaId, numeroVenda);
+    }
 
-    if (ehDelivery) {
+    if (ehDelivery && configuracoesSistema.imprimir_romaneio_delivery) {
       imprimirRomaneioEntrega(vendaId);
     }
+
+    imprimirPromissoriasCrediario(vendaId, numeroVenda);
 
     limparVenda();
     await carregarDados();
@@ -2849,6 +2986,7 @@ function cabecalhoEmpresaCupom() {
     }
 
     carregarDados();
+    carregarConfiguracoesSistema();
     carregarOrcamentoPendenteParaPdv();
   }, []);
 
@@ -3901,7 +4039,7 @@ function cabecalhoEmpresaCupom() {
                       <tbody>
                         {[
                           ["Dinheiro", pagDinheiro, setPagDinheiro, "Recebimento em espécie"],
-                          ["PIX", pagPix, setPagPix, "Gera QR Code / Copia e Cola"],
+                          ["PIX", pagPix, setPagPix, "Informe apenas o valor recebido"],
                           ["Débito", pagDebito, setPagDebito, "Cartão de débito"],
                           ["Crédito", pagCredito, setPagCredito, "Cartão de crédito"],
                           ["Crediário", pagCrediario, setPagCrediario, "Venda fiado / parcelada"],
@@ -3945,7 +4083,7 @@ function cabecalhoEmpresaCupom() {
 
                     <button
                       type="button"
-                      onClick={() => aplicarArredondamento("baixo")}
+                      onClick={() => configuracoesSistema.permitir_arredondamento_operador ? aplicarArredondamento("baixo") : alert("Arredondamento bloqueado nas Configurações Gerais.")}
                       className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl font-black"
                     >
                       Arred. para Menos
@@ -3953,7 +4091,7 @@ function cabecalhoEmpresaCupom() {
 
                     <button
                       type="button"
-                      onClick={() => aplicarArredondamento("cima")}
+                      onClick={() => configuracoesSistema.permitir_arredondamento_operador ? aplicarArredondamento("cima") : alert("Arredondamento bloqueado nas Configurações Gerais.")}
                       className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-black"
                     >
                       Arred. para Mais
@@ -3961,7 +4099,7 @@ function cabecalhoEmpresaCupom() {
 
                     <button
                       type="button"
-                      onClick={limparArredondamento}
+                      onClick={() => configuracoesSistema.permitir_arredondamento_operador ? limparArredondamento() : alert("Arredondamento bloqueado nas Configurações Gerais.")}
                       className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-4 py-3 rounded-xl font-black"
                     >
                       Limpar
@@ -3971,62 +4109,10 @@ function cabecalhoEmpresaCupom() {
 
                 {converterNumero(pagPix) > 0 && (
                   <div className="space-y-3 border border-emerald-200 rounded-2xl p-4 bg-emerald-50">
-                    <p className="font-black text-emerald-800">PIX QR Code</p>
-
-                    <input
-                      value={chavePix}
-                      onChange={(e) => setChavePix(e.target.value)}
-                      placeholder="Chave PIX da empresa"
-                      className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
-                    />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <input
-                        value={nomeRecebedorPix}
-                        onChange={(e) => setNomeRecebedorPix(e.target.value)}
-                        placeholder="Nome recebedor"
-                        className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
-                      />
-
-                      <input
-                        value={cidadePix}
-                        onChange={(e) => setCidadePix(e.target.value)}
-                        placeholder="Cidade"
-                        className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
-                      />
-                    </div>
-
-                    {gerarPixCopiaCola() && (
-                      <div className="bg-white rounded-2xl border p-4 text-center">
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(gerarPixCopiaCola())}`}
-                          alt="QR Code PIX"
-                          className="mx-auto w-48 h-48"
-                        />
-
-                        <p className="text-sm text-slate-600 mt-2">
-                          Valor PIX: <strong>{formatarMoeda(converterNumero(pagPix))}</strong>
-                        </p>
-
-                        <button
-                          type="button"
-                          onClick={copiarPix}
-                          className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold"
-                        >
-                          Copiar PIX Copia e Cola
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setPixConfirmado(true)}
-                          className={`mt-3 ml-2 px-4 py-2 rounded-xl font-bold text-white ${
-                            pixConfirmado ? "bg-green-700" : "bg-slate-700 hover:bg-slate-800"
-                          }`}
-                        >
-                          {pixConfirmado ? "PIX Confirmado" : "Confirmar PIX"}
-                        </button>
-                      </div>
-                    )}
+                    <p className="font-black text-emerald-800">PIX</p>
+                    <p className="text-sm text-emerald-700">
+                      Informe apenas o valor recebido no PIX. O sistema não gera mais QR Code nesta tela.
+                    </p>
                   </div>
                 )}
 
@@ -4048,6 +4134,17 @@ function cabecalhoEmpresaCupom() {
                         onChange={(e) => setPrimeiroVencimento(e.target.value)}
                         className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
                       />
+
+                      <input
+                        value={diasEntreParcelas}
+                        onChange={(e) => setDiasEntreParcelas(e.target.value)}
+                        placeholder="Dias entre parcelas. Ex.: 30"
+                        className="w-full border border-slate-300 p-3 rounded-xl text-slate-900"
+                      />
+
+                      <div className="bg-white rounded-xl border border-blue-200 p-3 text-sm text-blue-800">
+                        As próximas parcelas serão calculadas automaticamente pelo intervalo de dias.
+                      </div>
                     </div>
                   </div>
                 )}

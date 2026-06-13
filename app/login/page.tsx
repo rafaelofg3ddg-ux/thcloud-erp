@@ -78,6 +78,13 @@ export default function LoginPage() {
     return vencimento < hojeISO();
   }
 
+  function salvarUsuarioLogado(dados: any) {
+    if (typeof window === "undefined") return;
+
+    sessionStorage.setItem("th_usuario", JSON.stringify(dados));
+    localStorage.setItem("th_usuario", JSON.stringify(dados));
+  }
+
   async function buscarSuperAdmin(loginLimpo: string) {
     const consultaEmail = await supabase
       .from("super_admins")
@@ -195,21 +202,18 @@ export default function LoginPage() {
           return;
         }
 
-        localStorage.setItem(
-          "th_usuario",
-          JSON.stringify({
-            id: superAdmin.id,
-            empresa_id: null,
-            nome: superAdmin.nome,
-            email: superAdmin.email,
-            perfil: "Super Admin",
-            empresa_nome: "THCloud",
-            plano: "Administração SaaS",
-            status_assinatura: "Liberado",
-            data_vencimento_assinatura: null,
-            tipo_acesso: "super_admin",
-          })
-        );
+        salvarUsuarioLogado({
+          id: superAdmin.id,
+          empresa_id: null,
+          nome: superAdmin.nome,
+          email: superAdmin.email,
+          perfil: "Super Admin",
+          empresa_nome: "THCloud",
+          plano: "Administração SaaS",
+          status_assinatura: "Liberado",
+          data_vencimento_assinatura: null,
+          tipo_acesso: "super_admin",
+        });
 
         await atualizarUltimoAcessoSuperAdmin(superAdmin.id);
 
@@ -287,31 +291,28 @@ export default function LoginPage() {
         return;
       }
 
-      localStorage.setItem(
-        "th_usuario",
-        JSON.stringify({
-          id: usuario.id,
-          empresa_id: usuario.empresa_id,
-          nome: usuario.nome,
-          email: usuario.email,
-          perfil: usuario.perfil,
-          empresa_nome: empresa.nome_fantasia || empresa.razao_social,
-          plano: empresa.plano,
-          valor_mensal: empresa.valor_mensal,
-          status_assinatura: empresa.status_assinatura,
-          data_inicio_assinatura: empresa.data_inicio_assinatura,
-          data_vencimento_assinatura: empresa.data_vencimento_assinatura,
-          limite_usuarios: empresa.limite_usuarios,
-          limite_produtos: empresa.limite_produtos,
-          modulo_fiscal: empresa.modulo_fiscal,
-          modulo_whatsapp: empresa.modulo_whatsapp,
-          modulo_crm: empresa.modulo_crm,
-          modulo_delivery: empresa.modulo_delivery,
-          modulo_multiloja: empresa.modulo_multiloja,
-          modulo_relatorios_premium: empresa.modulo_relatorios_premium,
-          tipo_acesso: "empresa",
-        })
-      );
+      salvarUsuarioLogado({
+        id: usuario.id,
+        empresa_id: usuario.empresa_id,
+        nome: usuario.nome,
+        email: usuario.email,
+        perfil: usuario.perfil,
+        empresa_nome: empresa.nome_fantasia || empresa.razao_social,
+        plano: empresa.plano,
+        valor_mensal: empresa.valor_mensal,
+        status_assinatura: empresa.status_assinatura,
+        data_inicio_assinatura: empresa.data_inicio_assinatura,
+        data_vencimento_assinatura: empresa.data_vencimento_assinatura,
+        limite_usuarios: empresa.limite_usuarios,
+        limite_produtos: empresa.limite_produtos,
+        modulo_fiscal: empresa.modulo_fiscal,
+        modulo_whatsapp: empresa.modulo_whatsapp,
+        modulo_crm: empresa.modulo_crm,
+        modulo_delivery: empresa.modulo_delivery,
+        modulo_multiloja: empresa.modulo_multiloja,
+        modulo_relatorios_premium: empresa.modulo_relatorios_premium,
+        tipo_acesso: "empresa",
+      });
 
       await atualizarUltimoAcessoUsuario(usuario.id);
 

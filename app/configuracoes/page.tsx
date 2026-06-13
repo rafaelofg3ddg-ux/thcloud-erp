@@ -48,6 +48,9 @@ type ConfiguracoesGerais = {
   mensagem_whatsapp_orcamento: string;
   horario_funcionamento: string;
   observacoes_internas: string;
+  permitir_arredondamento_operador: boolean;
+  intervalo_parcelas_padrao_dias: number;
+  gerar_promissoria_crediario: boolean;
 };
 
 type EmpresaLocal = {
@@ -83,6 +86,9 @@ const configuracaoPadrao = (empresaId: string): ConfiguracoesGerais => ({
     "Olá! Segue seu orçamento. Qualquer dúvida estamos à disposição.",
   horario_funcionamento: "",
   observacoes_internas: "",
+  permitir_arredondamento_operador: true,
+  intervalo_parcelas_padrao_dias: 30,
+  gerar_promissoria_crediario: true,
 });
 
 export default function ConfiguracoesGeraisPage() {
@@ -237,6 +243,9 @@ export default function ConfiguracoesGeraisPage() {
         "Olá! Segue seu orçamento. Qualquer dúvida estamos à disposição.",
       horario_funcionamento: data.horario_funcionamento || "",
       observacoes_internas: data.observacoes_internas || "",
+      permitir_arredondamento_operador: data.permitir_arredondamento_operador !== false,
+      intervalo_parcelas_padrao_dias: Number(data.intervalo_parcelas_padrao_dias || 30),
+      gerar_promissoria_crediario: data.gerar_promissoria_crediario !== false,
     };
   }
 
@@ -290,6 +299,9 @@ export default function ConfiguracoesGeraisPage() {
       mensagem_whatsapp_orcamento: config.mensagem_whatsapp_orcamento || null,
       horario_funcionamento: config.horario_funcionamento || null,
       observacoes_internas: config.observacoes_internas || null,
+      permitir_arredondamento_operador: config.permitir_arredondamento_operador,
+      intervalo_parcelas_padrao_dias: Number(config.intervalo_parcelas_padrao_dias || 30),
+      gerar_promissoria_crediario: config.gerar_promissoria_crediario,
     };
 
     const { data, error } = await supabase
@@ -592,6 +604,20 @@ export default function ConfiguracoesGeraisPage() {
                 />
 
                 <Switch
+                  titulo="Permitir arredondamento no PDV"
+                  descricao="Libera o operador para arredondar o total da venda para mais ou para menos."
+                  checked={config.permitir_arredondamento_operador}
+                  onChange={(v) => atualizar("permitir_arredondamento_operador", v)}
+                />
+
+                <Switch
+                  titulo="Gerar promissória no crediário"
+                  descricao="Imprime promissórias/duplicatas para assinatura quando a venda for no crediário."
+                  checked={config.gerar_promissoria_crediario}
+                  onChange={(v) => atualizar("gerar_promissoria_crediario", v)}
+                />
+
+                <Switch
                   titulo="Permitir estoque negativo"
                   descricao="Permite vender mesmo quando o estoque estiver zerado."
                   checked={config.permitir_estoque_negativo}
@@ -611,6 +637,16 @@ export default function ConfiguracoesGeraisPage() {
                     value={config.validade_orcamento_dias}
                     onChange={(e) => atualizar("validade_orcamento_dias", Number(e.target.value || 0))}
                     className="input-config"
+                  />
+                </Campo>
+
+                <Campo titulo="Intervalo padrão das parcelas do crediário em dias">
+                  <input
+                    type="number"
+                    value={config.intervalo_parcelas_padrao_dias}
+                    onChange={(e) => atualizar("intervalo_parcelas_padrao_dias", Number(e.target.value || 30))}
+                    className="input-config"
+                    placeholder="Ex.: 30"
                   />
                 </Campo>
 

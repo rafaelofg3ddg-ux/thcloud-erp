@@ -369,7 +369,23 @@ export default function EtiquetasPage() {
   const produtoSelecionado = produtos.find((produto) => produto.id === produtoSelecionadoId);
 
   function codigoProduto(produto: Produto) {
-    return produto.codigo_barras || produto.codigo || produto.id || "-";
+    return produto.codigo || produto.id || "-";
+  }
+
+  function codigoInternoProduto(produto: Produto) {
+    return produto.codigo || "-";
+  }
+
+  function codigoBarrasProduto(produto: Produto) {
+    return produto.codigo_barras || "-";
+  }
+
+  function temCodigoInterno(produto: Produto) {
+    return String(produto.codigo || "").trim() !== "";
+  }
+
+  function temCodigoBarrasNormal(produto: Produto) {
+    return String(produto.codigo_barras || "").trim() !== "";
   }
 
   function grupoProduto(produto: Produto) {
@@ -597,11 +613,12 @@ export default function EtiquetasPage() {
   }
 
   function montarCodigoBarrasFake(codigo: string) {
-    return String(codigo || "7890000000000")
+    return String(codigo || "000000")
+      .replace(/[^0-9A-Za-z]/g, "")
       .split("")
       .map((char, index) => {
-        const numero = Number(char) || index;
-        const altura = numero % 2 === 0 ? 19 : 15;
+        const numero = Number(char) || char.charCodeAt(0) || index;
+        const altura = numero % 2 === 0 ? 18 : 14;
         const largura = numero % 3 === 0 ? 2 : 1;
         return `<span style="height:${altura}px;width:${largura}px;"></span>`;
       })
@@ -620,7 +637,8 @@ export default function EtiquetasPage() {
     const etiquetasHtml = itensImpressao
       .map((item) => {
         const produto = item.produto;
-        const codigo = codigoProduto(produto);
+        const codigoInterno = codigoInternoProduto(produto);
+        const codigoBarras = codigoBarrasProduto(produto);
 
         return `
           <div class="etiqueta">
@@ -631,8 +649,34 @@ export default function EtiquetasPage() {
             ${modelo.mostrar_unidade ? `<div class="extra">Unidade: ${produto.unidade || "UN"}</div>` : ""}
             ${modelo.mostrar_estoque ? `<div class="extra">Estoque: ${produto.qtd_atual ?? 0}</div>` : ""}
             ${modelo.mostrar_preco ? `<div class="preco">${formatarMoeda(precoEtiqueta(item))}</div>` : ""}
-            ${modelo.mostrar_barras ? `<div class="barcode">${montarCodigoBarrasFake(codigo)}</div>` : ""}
-            ${modelo.mostrar_codigo ? `<div class="codigo">Cód: ${codigo}</div>` : ""}
+
+            ${
+              modelo.mostrar_barras && temCodigoInterno(produto)
+                ? `<div class="codigo-bloco">
+                    <div class="codigo-titulo">Código Interno</div>
+                    <div class="barcode">${montarCodigoBarrasFake(codigoInterno)}</div>
+                    ${modelo.mostrar_codigo ? `<div class="codigo">${codigoInterno}</div>` : ""}
+                  </div>`
+                : ""
+            }
+
+            ${
+              modelo.mostrar_barras && temCodigoBarrasNormal(produto)
+                ? `<div class="codigo-bloco">
+                    <div class="codigo-titulo">Código de Barras</div>
+                    <div class="barcode">${montarCodigoBarrasFake(codigoBarras)}</div>
+                    ${modelo.mostrar_codigo ? `<div class="codigo">${codigoBarras}</div>` : ""}
+                  </div>`
+                : ""
+            }
+
+            ${
+              !modelo.mostrar_barras && modelo.mostrar_codigo
+                ? `<div class="codigo">Cód. Interno: ${codigoInterno}</div>
+                   ${temCodigoBarrasNormal(produto) ? `<div class="codigo">Cód. Barras: ${codigoBarras}</div>` : ""}`
+                : ""
+            }
+
             ${modelo.mostrar_data ? `<div class="extra">Impresso em ${new Date().toLocaleDateString("pt-BR")}</div>` : ""}
           </div>
         `;
@@ -678,9 +722,11 @@ export default function EtiquetasPage() {
             .texto-livre { font-size: ${modelo.fonte_extra + 1}px; font-weight: 900; line-height: 1; text-transform: uppercase; margin-bottom: 1mm; }
             .nome { font-size: ${modelo.fonte_nome}px; font-weight: bold; line-height: 1.05; max-height: 22px; overflow: hidden; margin-bottom: 1mm; }
             .preco { font-size: ${modelo.fonte_preco}px; font-weight: 900; line-height: 1; margin-bottom: 1mm; }
-            .codigo { font-size: ${modelo.fonte_codigo}px; margin-top: 1mm; white-space: nowrap; }
+            .codigo { font-size: ${modelo.fonte_codigo}px; margin-top: .3mm; white-space: nowrap; line-height: 1; font-weight: bold; }
+            .codigo-bloco { width: 100%; margin-top: .6mm; display: flex; flex-direction: column; align-items: center; }
+            .codigo-titulo { font-size: ${Math.max(6, modelo.fonte_extra)}px; font-weight: 900; line-height: 1; margin-bottom: .2mm; white-space: nowrap; }
             .extra { font-size: ${modelo.fonte_extra}px; line-height: 1.05; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .barcode { height: 20px; display: flex; align-items: flex-end; justify-content: center; gap: 1px; margin-top: 1mm; overflow: hidden; width: 100%; }
+            .barcode { height: 18px; display: flex; align-items: flex-end; justify-content: center; gap: 1px; margin-top: .2mm; overflow: hidden; width: 100%; }
             .barcode span { display: inline-block; background: #111827; }
             @media print { .etiqueta { border: ${modelo.borda_impressao ? "1px solid #111827" : "none"}; } }
           </style>
@@ -845,15 +891,38 @@ export default function EtiquetasPage() {
                   {modelo.mostrar_unidade && <p className="text-xs text-slate-700">Unidade: {itemPreview.produto.unidade || "UN"}</p>}
                   {modelo.mostrar_estoque && <p className="text-xs text-slate-700">Estoque: {itemPreview.produto.qtd_atual ?? 0}</p>}
                   {modelo.mostrar_preco && <p className="font-black text-blue-800 my-1" style={{ fontSize: `${modelo.fonte_preco + 8}px` }}>{formatarMoeda(precoEtiqueta(itemPreview))}</p>}
-                  {modelo.mostrar_barras && (
-                    <div className="flex items-end justify-center gap-[2px] h-10 my-1 max-w-full overflow-hidden">
-                      {String(codigoProduto(itemPreview.produto)).split("").map((char, index) => {
-                        const numero = Number(char) || index;
-                        return <span key={index} className="bg-slate-900 inline-block" style={{ height: numero % 2 === 0 ? "34px" : "25px", width: numero % 3 === 0 ? "4px" : "2px" }} />;
-                      })}
+                  {modelo.mostrar_barras && temCodigoInterno(itemPreview.produto) && (
+                    <div className="w-full flex flex-col items-center my-1">
+                      <p className="text-[10px] font-black text-slate-700 leading-none">Código Interno</p>
+                      <div className="flex items-end justify-center gap-[2px] h-8 max-w-full overflow-hidden">
+                        {String(codigoInternoProduto(itemPreview.produto)).split("").map((char, index) => {
+                          const numero = Number(char) || index;
+                          return <span key={index} className="bg-slate-900 inline-block" style={{ height: numero % 2 === 0 ? "26px" : "20px", width: numero % 3 === 0 ? "4px" : "2px" }} />;
+                        })}
+                      </div>
+                      {modelo.mostrar_codigo && <p className="text-slate-800 font-bold leading-none" style={{ fontSize: `${modelo.fonte_codigo + 2}px` }}>{codigoInternoProduto(itemPreview.produto)}</p>}
                     </div>
                   )}
-                  {modelo.mostrar_codigo && <p className="text-slate-800 font-bold" style={{ fontSize: `${modelo.fonte_codigo + 3}px` }}>Cód: {codigoProduto(itemPreview.produto)}</p>}
+
+                  {modelo.mostrar_barras && temCodigoBarrasNormal(itemPreview.produto) && (
+                    <div className="w-full flex flex-col items-center my-1">
+                      <p className="text-[10px] font-black text-slate-700 leading-none">Código de Barras</p>
+                      <div className="flex items-end justify-center gap-[2px] h-8 max-w-full overflow-hidden">
+                        {String(codigoBarrasProduto(itemPreview.produto)).split("").map((char, index) => {
+                          const numero = Number(char) || index;
+                          return <span key={index} className="bg-slate-900 inline-block" style={{ height: numero % 2 === 0 ? "26px" : "20px", width: numero % 3 === 0 ? "4px" : "2px" }} />;
+                        })}
+                      </div>
+                      {modelo.mostrar_codigo && <p className="text-slate-800 font-bold leading-none" style={{ fontSize: `${modelo.fonte_codigo + 2}px` }}>{codigoBarrasProduto(itemPreview.produto)}</p>}
+                    </div>
+                  )}
+
+                  {!modelo.mostrar_barras && modelo.mostrar_codigo && (
+                    <div>
+                      <p className="text-slate-800 font-bold" style={{ fontSize: `${modelo.fonte_codigo + 3}px` }}>Cód. Interno: {codigoInternoProduto(itemPreview.produto)}</p>
+                      {temCodigoBarrasNormal(itemPreview.produto) && <p className="text-slate-800 font-bold" style={{ fontSize: `${modelo.fonte_codigo + 3}px` }}>Cód. Barras: {codigoBarrasProduto(itemPreview.produto)}</p>}
+                    </div>
+                  )}
                   {modelo.mostrar_data && <p className="text-[10px] text-slate-600">{new Date().toLocaleDateString("pt-BR")}</p>}
                 </div>
               </div>
@@ -880,7 +949,10 @@ export default function EtiquetasPage() {
                   {itens.map((item) => (
                     <tr key={item.produto.id} className="border-b border-slate-100">
                       <td className="p-4 font-black text-slate-900">{item.produto.nome}</td>
-                      <td className="p-4 text-slate-700 font-semibold">{codigoProduto(item.produto)}</td>
+                      <td className="p-4 text-slate-700 font-semibold">
+                        <p><strong>Interno:</strong> {codigoInternoProduto(item.produto)}</p>
+                        <p><strong>Barras:</strong> {codigoBarrasProduto(item.produto)}</p>
+                      </td>
                       <td className="p-4 text-right font-black text-blue-700">{formatarMoeda(item.produto.preco_venda)}</td>
                       <td className="p-4 text-right"><input value={item.preco_promocional} onChange={(e) => alterarPromocionalItem(item.produto.id, e.target.value)} className="w-28 border border-slate-300 rounded-xl p-2 text-right text-slate-950 font-black bg-white" placeholder="Opcional" /></td>
                       <td className="p-4 text-center"><input value={item.quantidade} onChange={(e) => alterarQuantidadeItem(item.produto.id, e.target.value)} className="w-24 border border-slate-300 rounded-xl p-2 text-center text-slate-950 font-black bg-white" /></td>
@@ -932,7 +1004,7 @@ export default function EtiquetasPage() {
                 <CheckModelo titulo="Nome do produto" checked={modeloEditando.mostrar_nome} onChange={(checked) => setModeloEditando({ ...modeloEditando, mostrar_nome: checked })} />
                 <CheckModelo titulo="Preço" checked={modeloEditando.mostrar_preco} onChange={(checked) => setModeloEditando({ ...modeloEditando, mostrar_preco: checked })} />
                 <CheckModelo titulo="Código" checked={modeloEditando.mostrar_codigo} onChange={(checked) => setModeloEditando({ ...modeloEditando, mostrar_codigo: checked })} />
-                <CheckModelo titulo="Código de barras" checked={modeloEditando.mostrar_barras} onChange={(checked) => setModeloEditando({ ...modeloEditando, mostrar_barras: checked })} />
+                <CheckModelo titulo="Barras interno + barras normal" checked={modeloEditando.mostrar_barras} onChange={(checked) => setModeloEditando({ ...modeloEditando, mostrar_barras: checked })} />
                 <CheckModelo titulo="Nome da empresa" checked={modeloEditando.mostrar_empresa} onChange={(checked) => setModeloEditando({ ...modeloEditando, mostrar_empresa: checked })} />
                 <CheckModelo titulo="Data de impressão" checked={modeloEditando.mostrar_data} onChange={(checked) => setModeloEditando({ ...modeloEditando, mostrar_data: checked })} />
                 <CheckModelo titulo="Unidade" checked={modeloEditando.mostrar_unidade} onChange={(checked) => setModeloEditando({ ...modeloEditando, mostrar_unidade: checked })} />
