@@ -8,6 +8,7 @@ import {
   Bell,
   CheckCircle,
   CreditCard,
+  DatabaseBackup,
   FileText,
   MessageCircle,
   MonitorCog,
@@ -102,7 +103,7 @@ export default function ConfiguracoesGeraisPage() {
   });
 
   const [aba, setAba] = useState<
-    "geral" | "vendas" | "financeiro" | "impressao" | "whatsapp" | "seguranca"
+    "geral" | "vendas" | "financeiro" | "impressao" | "whatsapp" | "seguranca" | "backup"
   >("geral");
 
   const [carregando, setCarregando] = useState(true);
@@ -400,6 +401,7 @@ export default function ConfiguracoesGeraisPage() {
     { id: "impressao", titulo: "Impressão", icone: <Printer size={18} /> },
     { id: "whatsapp", titulo: "WhatsApp", icone: <MessageCircle size={18} /> },
     { id: "seguranca", titulo: "Segurança", icone: <ShieldCheck size={18} /> },
+    { id: "backup", titulo: "Backup", icone: <DatabaseBackup size={18} /> },
   ] as const;
 
   return (
@@ -822,6 +824,50 @@ export default function ConfiguracoesGeraisPage() {
                     </h3>
                     <p className="text-yellow-800 mt-1">
                       Para lojas com operadores de caixa, mantenha autorização em sangria e descontos altos para evitar divergências no fechamento.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+
+          {aba === "backup" && (
+            <Card
+              titulo="Backup e Restauração"
+              descricao="Gere uma cópia dos dados da empresa e restaure quando necessário."
+              icone={<DatabaseBackup size={24} />}
+            >
+              <div className="bg-blue-50 border border-blue-200 rounded-3xl p-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+                  <div>
+                    <h3 className="text-xl font-black text-blue-900">
+                      Backup completo da empresa
+                    </h3>
+                    <p className="text-blue-700 mt-2">
+                      Esta opção abre a tela de backup, onde será possível baixar um arquivo com clientes, produtos, vendas, financeiro, caixas, configurações e demais dados da empresa.
+                    </p>
+                  </div>
+
+                  <a
+                    href="/configuracoes/backup"
+                    className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-4 rounded-2xl font-black flex items-center justify-center gap-2"
+                  >
+                    <DatabaseBackup size={20} />
+                    Abrir Backup
+                  </a>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-3xl p-5">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="text-yellow-700 mt-1" size={24} />
+                  <div>
+                    <h3 className="font-black text-yellow-900">
+                      Atenção importante
+                    </h3>
+                    <p className="text-yellow-800 mt-1">
+                      Guarde os arquivos de backup em local seguro. Ao restaurar um backup, os dados atuais da empresa podem ser substituídos pelos dados do arquivo escolhido.
                     </p>
                   </div>
                 </div>

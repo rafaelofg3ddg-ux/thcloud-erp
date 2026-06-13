@@ -1,0 +1,265 @@
+"use client";
+
+export type BackupTabela = {
+  tabela: string;
+  registros: any[];
+  erro?: string | null;
+};
+
+export type BackupCompleto = {
+  sistema: "THCloud ERP";
+  tipo: "backup_empresa";
+  versao: "1.0";
+  empresa_id: string;
+  empresa_nome?: string;
+  gerado_em: string;
+  tabelas: BackupTabela[];
+};
+
+export const TABELAS_BACKUP = [
+  "empresas",
+  "usuarios",
+  "categorias",
+  "produtos",
+  "fornecedores",
+  "clientes",
+  "caixas",
+  "vendas",
+  "itens_venda",
+  "movimentacoes_estoque",
+  "contas_receber",
+  "contas_pagar",
+  "configuracoes_gerais",
+  "modelos_etiquetas",
+  "orcamentos",
+  "itens_orcamento",
+];
+
+export const ORDEM_RESTAURACAO = [
+  "empresas",
+  "usuarios",
+  "categorias",
+  "fornecedores",
+  "clientes",
+  "produtos",
+  "caixas",
+  "vendas",
+  "itens_venda",
+  "movimentacoes_estoque",
+  "contas_receber",
+  "contas_pagar",
+  "configuracoes_gerais",
+  "modelos_etiquetas",
+  "orcamentos",
+  "itens_orcamento",
+];
+
+export const ORDEM_LIMPEZA = [...ORDEM_RESTAURACAO].reverse();
+
+export function nomeArquivoBackup(empresaNome: string) {
+  const dataTexto = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+
+  const nomeLimpo = String(empresaNome || "empresa")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+
+  return `backup-thcloud-${nomeLimpo}-${dataTexto}.json`;
+}
+
+export function baixarBackupJson(backup: BackupCompleto, empresaNome: string) {
+  const conteudo = JSON.stringify(backup, null, 2);
+  const blob = new Blob([conteudo], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nomeArquivoBackup(empresaNome);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+}
+
+export function lerArquivoJson(file: File): Promise<BackupCompleto> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      try {
+        const conteudo = String(reader.result || "");
+        const json = JSON.parse(conteudo);
+
+        if (json?.sistema !== "THCloud ERP" || json?.tipo !== "backup_empresa") {
+          reject(new Error("Arquivo inválido. Selecione um backup gerado pelo THCloud ERP."));
+          return;
+        }
+
+        resolve(json as BackupCompleto);
+      } catch {
+        reject(new Error("Não foi possível ler o arquivo. Verifique se é um JSON de backup válido."));
+      }
+    };
+
+    reader.onerror = () => reject(new Error("Erro ao ler arquivo."));
+    reader.readAsText(file, "utf-8");
+  });
+}
+
+export async function gerarBackupEmpresa({
+  supabase,
+  empresaId,
+  empresaNome,
+}: {
+  supabase: any;
+  empresaId: string;
+  empresaNome?: string;
+}): Promise<BackupCompleto> {
+  const tabelas: BackupTabela[] = [];
+
+  for (const tabela of TABELAS_BACKUP) {
+    try {
+      let query = supabase.from(tabela).select("*");
+
+      if (tabela === "empresas") {
+        query = query.eq("id", empresaId);
+      } else {
+        query = query.eq("empresa_id", empresaId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        tabelas.push({
+          tabela,
+          registros: [],
+          erro: error.message,
+        });
+      } else {
+        tabelas.push({
+          tabela,
+          registros: data || [],
+          erro: null,
+        });
+      }
+    } catch (error: any) {
+      tabelas.push({
+        tabela,
+        registros: [],
+        erro: error?.message || "Erro desconhecido",
+      });
+    }
+  }
+
+  return {
+    sistema: "THCloud ERP",
+    tipo: "backup_empresa",
+    versao: "1.0",
+    empresa_id: empresaId,
+    empresa_nome: empresaNome || "Empresa",
+    gerado_em: new Date().toISOString(),
+    tabelas,
+  };
+}
+
+export function resumoBackup(backup: BackupCompleto) {
+  const tabelasComDados = backup.tabelas.filter((t) => t.registros.length > 0);
+  const totalRegistros = backup.tabelas.reduce(
+    (total, tabela) => total + tabela.registros.length,
+    0
+  );
+  const tabelasComErro = backup.tabelas.filter((t) => t.erro);
+
+  return {
+    tabelas: backup.tabelas.length,
+    tabelasComDados: tabelasComDados.length,
+    totalRegistros,
+    tabelasComErro: tabelasComErro.length,
+  };
+}
+
+function prepararRegistrosParaRestaurar(
+  tabela: string,
+  registros: any[],
+  empresaIdAtual: string
+) {
+  return registros.map((registro) => {
+    const novo = { ...registro };
+
+    if (tabela === "empresas") {
+      novo.id = empresaIdAtual;
+    } else {
+      novo.empresa_id = empresaIdAtual;
+    }
+
+    return novo;
+  });
+}
+
+export async function restaurarBackupEmpresa({
+  supabase,
+  empresaId,
+  backup,
+  substituirDadosAtuais,
+  onStatus,
+}: {
+  supabase: any;
+  empresaId: string;
+  backup: BackupCompleto;
+  substituirDadosAtuais: boolean;
+  onStatus?: (mensagem: string) => void;
+}) {
+  if (!backup || backup.tipo !== "backup_empresa") {
+    throw new Error("Backup inválido.");
+  }
+
+  if (substituirDadosAtuais) {
+    for (const tabela of ORDEM_LIMPEZA) {
+      if (tabela === "empresas") continue;
+
+      onStatus?.(`Limpando ${tabela}...`);
+
+      try {
+        const { error } = await supabase
+          .from(tabela)
+          .delete()
+          .eq("empresa_id", empresaId);
+
+        if (error) {
+          console.warn(`Não foi possível limpar ${tabela}:`, error.message);
+        }
+      } catch (error) {
+        console.warn(`Tabela ${tabela} ignorada na limpeza.`, error);
+      }
+    }
+  }
+
+  for (const tabela of ORDEM_RESTAURACAO) {
+    const dadosTabela = backup.tabelas.find((item) => item.tabela === tabela);
+
+    if (!dadosTabela || dadosTabela.registros.length === 0) continue;
+
+    onStatus?.(`Restaurando ${tabela}...`);
+
+    const registros = prepararRegistrosParaRestaurar(
+      tabela,
+      dadosTabela.registros,
+      empresaId
+    );
+
+    try {
+      const { error } = await supabase
+        .from(tabela)
+        .upsert(registros, { onConflict: "id" });
+
+      if (error) {
+        console.warn(`Erro ao restaurar ${tabela}:`, error.message);
+      }
+    } catch (error) {
+      console.warn(`Tabela ${tabela} ignorada na restauração.`, error);
+    }
+  }
+}
