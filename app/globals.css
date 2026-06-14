@@ -1,26 +1,238 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+* {
+  box-sizing: border-box;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+.th-app-shell {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.th-main-area {
+  width: calc(100vw - 280px);
+  max-width: calc(100vw - 280px);
+}
+
+.th-page-content {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.th-page-content > * {
+  max-width: 100%;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th-page-content table {
+  font-size: 14px;
+}
+
+.th-page-content input,
+.th-page-content select,
+.th-page-content textarea {
+  max-width: 100%;
+}
+
+.th-compact .th-page-content {
+  font-size: 14px;
+}
+
+.th-compact .th-page-content h1 {
+  font-size: clamp(1.45rem, 2vw, 2.1rem) !important;
+}
+
+.th-compact .th-page-content h2 {
+  font-size: clamp(1.15rem, 1.5vw, 1.5rem) !important;
+}
+
+.th-compact .th-page-content .rounded-\[32px\],
+.th-compact .th-page-content .rounded-\[30px\],
+.th-compact .th-page-content .rounded-\[28px\],
+.th-compact .th-page-content .rounded-3xl {
+  border-radius: 1.25rem !important;
+}
+
+.th-compact .th-page-content .p-8,
+.th-compact .th-page-content .p-7,
+.th-compact .th-page-content .p-6 {
+  padding: 1rem !important;
+}
+
+.th-compact .th-page-content .gap-6,
+.th-compact .th-page-content .gap-5 {
+  gap: 0.75rem !important;
+}
+
+.th-compact .th-page-content .mb-8,
+.th-compact .th-page-content .mb-7,
+.th-compact .th-page-content .mb-6 {
+  margin-bottom: 1rem !important;
+}
+
+.th-compact .th-page-content .text-4xl {
+  font-size: 1.7rem !important;
+}
+
+.th-compact .th-page-content .text-3xl {
+  font-size: 1.45rem !important;
+}
+
+.th-compact .th-page-content .text-2xl {
+  font-size: 1.2rem !important;
+}
+
+.th-compact .th-page-content table {
+  font-size: 13px;
+}
+
+.th-compact .th-page-content th,
+.th-compact .th-page-content td {
+  padding: 0.65rem 0.75rem !important;
+}
+
+@media (max-width: 1536px) {
+  .th-main-area {
+    width: calc(100vw - 280px);
+    max-width: calc(100vw - 280px);
+  }
+
+  .th-page-content {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .th-page-content .grid {
+    min-width: 0;
+  }
+
+  .th-page-content table {
+    font-size: 13px;
+  }
+
+  .th-page-content th,
+  .th-page-content td {
+    padding: 0.7rem 0.85rem !important;
+  }
+}
+
+@media (max-width: 1366px) {
+  .th-main-area {
+    width: calc(100vw - 280px);
+    max-width: calc(100vw - 280px);
+  }
+
+  .th-page-content {
+    font-size: 14px;
+  }
+
+  .th-page-content h1 {
+    font-size: clamp(1.4rem, 2vw, 2rem) !important;
+  }
+
+  .th-page-content h2 {
+    font-size: clamp(1.15rem, 1.6vw, 1.45rem) !important;
+  }
+
+  .th-page-content .rounded-\[32px\],
+  .th-page-content .rounded-\[30px\],
+  .th-page-content .rounded-\[28px\],
+  .th-page-content .rounded-3xl {
+    border-radius: 1.25rem !important;
+  }
+
+  .th-page-content .p-8,
+  .th-page-content .p-7,
+  .th-page-content .p-6 {
+    padding: 1rem !important;
+  }
+
+  .th-page-content .gap-6,
+  .th-page-content .gap-5 {
+    gap: 0.75rem !important;
+  }
+
+  .th-page-content .mb-8,
+  .th-page-content .mb-7,
+  .th-page-content .mb-6 {
+    margin-bottom: 1rem !important;
+  }
+
+  .th-page-content table {
+    font-size: 12px;
+  }
+
+  .th-page-content th,
+  .th-page-content td {
+    padding: 0.6rem 0.7rem !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .th-main-area {
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .th-page-content {
+    padding-top: 4.2rem;
+  }
+
+  .th-page-content table {
+    min-width: 780px;
+  }
+
+  .th-page-content .overflow-x-auto,
+  .th-page-content .overflow-auto {
+    max-width: 100vw;
+  }
+}
+
+@media (max-width: 768px) {
+  .th-page-content {
+    font-size: 13px;
+  }
+
+  .th-page-content h1 {
+    font-size: 1.45rem !important;
+  }
+
+  .th-page-content h2 {
+    font-size: 1.2rem !important;
+  }
+
+  .th-page-content .grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .th-page-content table {
+    min-width: 720px;
+  }
 }
