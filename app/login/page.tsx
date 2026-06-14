@@ -19,7 +19,6 @@ type UsuarioBanco = {
   id: string;
   nome: string | null;
   email: string | null;
-  usuario: string | null;
   senha: string | null;
   perfil: string | null;
   empresa_id: string | null;
@@ -50,9 +49,7 @@ export default function LoginPage() {
   const [carregando, setCarregando] = useState(false);
 
   function salvarSessao(usuario: UsuarioBanco, empresa: EmpresaBanco | null) {
-    const plano =
-      empresa?.plano ||
-      "Básico";
+    const plano = empresa?.plano || "Básico";
 
     const empresaNome =
       empresa?.nome_fantasia ||
@@ -64,7 +61,7 @@ export default function LoginPage() {
       id: usuario.id,
       nome: usuario.nome || usuario.email || "Usuário",
       email: usuario.email || "",
-      usuario: usuario.usuario || "",
+      usuario: usuario.email || "",
       perfil: usuario.perfil || "Operador",
       empresa_id: usuario.empresa_id || empresa?.id || null,
       empresa_nome: empresaNome,
@@ -124,7 +121,7 @@ export default function LoginPage() {
     const loginLimpo = login.trim();
 
     if (!loginLimpo || !senha.trim()) {
-      alert("Informe o e-mail/usuário e a senha.");
+      alert("Informe o e-mail e a senha.");
       return;
     }
 
@@ -133,8 +130,8 @@ export default function LoginPage() {
     try {
       const { data, error } = await supabase
         .from("usuarios")
-        .select("id,nome,email,usuario,senha,perfil,empresa_id,ativo")
-        .or(`email.eq.${loginLimpo},usuario.eq.${loginLimpo}`)
+        .select("id,nome,email,senha,perfil,empresa_id,ativo")
+        .eq("email", loginLimpo)
         .maybeSingle();
 
       if (error) {
@@ -245,14 +242,12 @@ export default function LoginPage() {
                 <h1 className="text-2xl font-black tracking-[-0.04em]">
                   THCloud ERP
                 </h1>
-                <p className="text-sm text-blue-100">
-                  Gestão inteligente
-                </p>
+                <p className="text-sm text-blue-100">Gestão inteligente</p>
               </div>
             </div>
 
             <div className="rounded-[32px] bg-white/95 backdrop-blur-xl border border-white/80 shadow-2xl p-6 sm:p-8 lg:p-10">
-              <div className="hidden lg:flex justify-center mb-8">
+              <div className="hidden lg:flex justify-center mb-6">
                 <LogoMarca grande />
               </div>
 
@@ -262,7 +257,7 @@ export default function LoginPage() {
                 </h2>
 
                 <p className="mt-3 text-xl sm:text-2xl font-black text-slate-950">
-                  Bem-vindo de volta!
+                  Bem-vindo!
                 </p>
 
                 <p className="mt-3 text-slate-500">
@@ -273,7 +268,7 @@ export default function LoginPage() {
               <form onSubmit={entrar} className="mt-8 space-y-5">
                 <div>
                   <label className="block text-sm font-black text-slate-900 mb-2">
-                    E-mail ou usuário
+                    E-mail
                   </label>
 
                   <div className="relative">
@@ -285,9 +280,9 @@ export default function LoginPage() {
                     <input
                       value={login}
                       onChange={(e) => setLogin(e.target.value)}
-                      type="text"
+                      type="email"
                       autoComplete="username"
-                      placeholder="E-mail ou usuário"
+                      placeholder="Digite seu e-mail"
                       className="w-full rounded-2xl border border-slate-300 bg-white px-12 py-4 font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
                     />
                   </div>
@@ -345,9 +340,7 @@ export default function LoginPage() {
               </form>
 
               <div className="mt-6 rounded-2xl bg-blue-50 border border-blue-100 p-4 text-center">
-                <p className="font-black text-blue-900">
-                  Ambiente seguro
-                </p>
+                <p className="font-black text-blue-900">Ambiente seguro</p>
 
                 <p className="mt-1 text-sm text-blue-700">
                   Login isolado por empresa, plano e permissões.
@@ -368,14 +361,14 @@ export default function LoginPage() {
 function LogoMarca({ grande = false }: { grande?: boolean }) {
   return (
     <div
-      className={`rounded-full bg-white/10 border border-white/20 shadow-xl overflow-hidden flex items-center justify-center ${
-        grande ? "h-20 w-20" : "h-14 w-14"
+      className={`flex items-center justify-center ${
+        grande ? "h-24 w-24" : "h-16 w-16"
       }`}
     >
       <img
         src="/logo-thcloud-original.png"
         alt="THCloud"
-        className="h-full w-full object-cover"
+        className="h-full w-full object-contain drop-shadow-xl"
         onError={(e) => {
           e.currentTarget.src = "/logo-thcloud-transparente.png";
         }}
