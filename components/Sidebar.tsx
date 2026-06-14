@@ -21,7 +21,6 @@ import {
   Tags,
   Truck,
   Users,
-  Warehouse,
   X,
 } from "lucide-react";
 
@@ -78,9 +77,8 @@ export default function Sidebar() {
   const [configuracoes, setConfiguracoes] = useState(false);
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [permissoes, setPermissoes] = useState<PermissoesUsuario>({});
-  const [modulosEmpresa, setModulosEmpresa] = useState<ModulosEmpresa>(
-    MODULOS_EMPRESA_PADRAO
-  );
+  const [modulosEmpresa, setModulosEmpresa] =
+    useState<ModulosEmpresa>(MODULOS_EMPRESA_PADRAO);
 
   useEffect(() => {
     async function carregarUsuario() {
@@ -324,7 +322,7 @@ export default function Sidebar() {
   }
 
   function classeLink(href: string) {
-    return `group flex items-center gap-4 px-4 py-4 rounded-2xl font-black text-[15px] transition-all duration-200 ${
+    return `group flex items-center gap-3 px-3 py-3 rounded-2xl font-black text-[14px] transition-all duration-200 ${
       ativo(href)
         ? "bg-blue-500/95 text-white shadow-xl shadow-blue-950/30"
         : "text-blue-50 hover:bg-white/10 hover:text-white"
@@ -332,7 +330,7 @@ export default function Sidebar() {
   }
 
   function classeSubLink(href: string) {
-    return `block px-3 py-2.5 rounded-xl transition-all duration-200 text-[14px] ${
+    return `block px-3 py-2 rounded-xl transition-all duration-200 text-[13px] ${
       ativo(href)
         ? "bg-white text-blue-800 font-black shadow-lg"
         : "text-blue-100/85 hover:bg-white/10 hover:text-white"
@@ -340,7 +338,7 @@ export default function Sidebar() {
   }
 
   function classeBotaoGrupo(aberto: boolean) {
-    return `w-full flex items-center justify-between px-4 py-4 rounded-2xl font-black text-[15px] transition-all duration-200 ${
+    return `w-full flex items-center justify-between px-3 py-3 rounded-2xl font-black text-[14px] transition-all duration-200 ${
       aberto
         ? "bg-white/10 text-white"
         : "text-blue-50 hover:bg-white/10 hover:text-white"
@@ -349,7 +347,7 @@ export default function Sidebar() {
 
   function TituloSecao({ children }: { children: React.ReactNode }) {
     return (
-      <p className="px-4 mt-6 mb-3 text-[12px] font-black uppercase tracking-[0.12em] text-blue-200/90">
+      <p className="px-3 mt-4 mb-2 text-[11px] font-black uppercase tracking-[0.12em] text-blue-200/90">
         {children}
       </p>
     );
@@ -358,11 +356,11 @@ export default function Sidebar() {
   function LogoTopo() {
     return (
       <div className="flex items-center gap-3 min-w-0">
-        <div className="h-16 w-16 rounded-full bg-white/10 shadow-2xl shadow-blue-950/40 flex items-center justify-center border border-white/20 overflow-hidden">
+        <div className="h-12 w-12 rounded-full bg-white/10 shadow-xl shadow-blue-950/30 flex items-center justify-center border border-white/20 overflow-hidden">
           <img
             src="/logo-thcloud-original.png"
             alt="THCloud"
-            className="h-16 w-16 object-cover"
+            className="h-12 w-12 object-cover"
             onError={(e) => {
               e.currentTarget.src = "/logo-thcloud-transparente.png";
             }}
@@ -370,7 +368,7 @@ export default function Sidebar() {
         </div>
 
         <div className="min-w-0">
-          <h1 className="text-[36px] leading-none font-black tracking-[-0.07em] text-white drop-shadow-md">
+          <h1 className="text-[29px] leading-none font-black tracking-[-0.07em] text-white drop-shadow-md">
             cloud
           </h1>
         </div>
@@ -379,30 +377,30 @@ export default function Sidebar() {
   }
 
   const menu = (
-    <aside className="w-80 bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] text-white h-dvh min-h-dvh shadow-2xl flex flex-col relative overflow-hidden">
-      <div className="absolute inset-x-0 top-0 h-72 bg-sky-400/10 blur-3xl rounded-full -translate-y-36" />
+    <aside className="w-[280px] bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] text-white h-screen min-h-screen shadow-2xl flex flex-col relative overflow-hidden">
+      <div className="absolute inset-x-0 top-0 h-56 bg-sky-400/10 blur-3xl rounded-full -translate-y-36" />
       <div className="absolute -right-24 top-24 h-56 w-56 bg-blue-300/20 blur-3xl rounded-full" />
       <div className="absolute -left-24 bottom-24 h-60 w-60 bg-blue-500/20 blur-3xl rounded-full" />
 
-      <div className="relative px-8 pt-8 pb-7 flex items-center justify-between">
+      <div className="relative px-5 pt-5 pb-4 flex items-center justify-between">
         <LogoTopo />
 
         <button
           onClick={() => setMobileAberto(false)}
-          className="lg:hidden h-11 w-11 rounded-2xl bg-white/10 text-white hover:bg-white/20 flex items-center justify-center"
+          className="lg:hidden h-10 w-10 rounded-2xl bg-white/10 text-white hover:bg-white/20 flex items-center justify-center"
           aria-label="Fechar menu"
         >
-          <X size={21} />
+          <X size={20} />
         </button>
       </div>
 
-      <nav className="relative px-6 pb-4 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+      <nav className="relative px-4 pb-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
         {isSuperAdmin && (
           <>
             <TituloSecao>SaaS</TituloSecao>
 
             <Link href="/admin" className={classeLink("/admin")}>
-              <Home size={24} strokeWidth={2.4} />
+              <Home size={21} strokeWidth={2.4} />
               Dashboard SaaS
             </Link>
           </>
@@ -410,7 +408,7 @@ export default function Sidebar() {
 
         {pode("dashboard") && (
           <Link href="/dashboard" className={classeLink("/dashboard")}>
-            <Home size={25} strokeWidth={2.4} />
+            <Home size={21} strokeWidth={2.4} />
             Dashboard
           </Link>
         )}
@@ -433,19 +431,19 @@ export default function Sidebar() {
               onClick={() => setCadastros(!cadastros)}
               className={classeBotaoGrupo(cadastros)}
             >
-              <span className="flex items-center gap-4">
-                <Users size={25} strokeWidth={2.4} />
+              <span className="flex items-center gap-3">
+                <Users size={21} strokeWidth={2.4} />
                 Cadastros
               </span>
 
               <ChevronDown
-                size={19}
+                size={17}
                 className={`transition-transform ${cadastros ? "rotate-180" : ""}`}
               />
             </button>
 
             {cadastros && (
-              <div className="ml-6 mt-2 pl-5 border-l border-white/15 space-y-1">
+              <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
                 {pode("produtos") && (
                   <Link href="/produtos" className={classeSubLink("/produtos")}>
                     Produtos
@@ -461,17 +459,14 @@ export default function Sidebar() {
                 {pode("etiquetas") && (
                   <Link href="/etiquetas" className={classeSubLink("/etiquetas")}>
                     <span className="flex items-center gap-2">
-                      <Tags size={15} />
+                      <Tags size={14} />
                       Etiquetas
                     </span>
                   </Link>
                 )}
 
                 {pode("fornecedores") && (
-                  <Link
-                    href="/fornecedores"
-                    className={classeSubLink("/fornecedores")}
-                  >
+                  <Link href="/fornecedores" className={classeSubLink("/fornecedores")}>
                     Fornecedores
                   </Link>
                 )}
@@ -488,50 +483,21 @@ export default function Sidebar() {
 
         {pode("estoque") && (
           <div className="mt-1">
-            <button
-              onClick={() => setEstoque(!estoque)}
-              className={classeBotaoGrupo(estoque)}
-            >
-              <span className="flex items-center gap-4">
-                <Package size={25} strokeWidth={2.4} />
+            <button onClick={() => setEstoque(!estoque)} className={classeBotaoGrupo(estoque)}>
+              <span className="flex items-center gap-3">
+                <Package size={21} strokeWidth={2.4} />
                 Estoque
               </span>
 
-              <ChevronDown
-                size={19}
-                className={`transition-transform ${estoque ? "rotate-180" : ""}`}
-              />
+              <ChevronDown size={17} className={`transition-transform ${estoque ? "rotate-180" : ""}`} />
             </button>
 
             {estoque && (
-              <div className="ml-6 mt-2 pl-5 border-l border-white/15 space-y-1">
-                <Link
-                  href="/estoque/entrada"
-                  className={classeSubLink("/estoque/entrada")}
-                >
-                  Entrada
-                </Link>
-
-                <Link
-                  href="/estoque/saida"
-                  className={classeSubLink("/estoque/saida")}
-                >
-                  Saída
-                </Link>
-
-                <Link
-                  href="/estoque/ajuste"
-                  className={classeSubLink("/estoque/ajuste")}
-                >
-                  Ajuste Manual
-                </Link>
-
-                <Link
-                  href="/estoque/inventario"
-                  className={classeSubLink("/estoque/inventario")}
-                >
-                  Inventário
-                </Link>
+              <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
+                <Link href="/estoque/entrada" className={classeSubLink("/estoque/entrada")}>Entrada</Link>
+                <Link href="/estoque/saida" className={classeSubLink("/estoque/saida")}>Saída</Link>
+                <Link href="/estoque/ajuste" className={classeSubLink("/estoque/ajuste")}>Ajuste Manual</Link>
+                <Link href="/estoque/inventario" className={classeSubLink("/estoque/inventario")}>Inventário</Link>
               </div>
             )}
           </div>
@@ -539,55 +505,21 @@ export default function Sidebar() {
 
         {pode("vendas") && (
           <div className="mt-1">
-            <button
-              onClick={() => setVendas(!vendas)}
-              className={classeBotaoGrupo(vendas)}
-            >
-              <span className="flex items-center gap-4">
-                <ShoppingCart size={25} strokeWidth={2.4} />
+            <button onClick={() => setVendas(!vendas)} className={classeBotaoGrupo(vendas)}>
+              <span className="flex items-center gap-3">
+                <ShoppingCart size={21} strokeWidth={2.4} />
                 Vendas
               </span>
 
-              <ChevronDown
-                size={19}
-                className={`transition-transform ${vendas ? "rotate-180" : ""}`}
-              />
+              <ChevronDown size={17} className={`transition-transform ${vendas ? "rotate-180" : ""}`} />
             </button>
 
             {vendas && (
-              <div className="ml-6 mt-2 pl-5 border-l border-white/15 space-y-1">
-                {pode("pdv") && (
-                  <Link href="/caixa/pdv" className={classeSubLink("/caixa/pdv")}>
-                    PDV
-                  </Link>
-                )}
-
-                {pode("orcamentos") && (
-                  <Link
-                    href="/vendas/orcamentos"
-                    className={classeSubLink("/vendas/orcamentos")}
-                  >
-                    Orçamentos
-                  </Link>
-                )}
-
-                {pode("pedidos") && (
-                  <Link
-                    href="/vendas/pedidos"
-                    className={classeSubLink("/vendas/pedidos")}
-                  >
-                    Pedidos
-                  </Link>
-                )}
-
-                {pode("devolucoes") && (
-                  <Link
-                    href="/vendas/devolucoes"
-                    className={classeSubLink("/vendas/devolucoes")}
-                  >
-                    Devoluções
-                  </Link>
-                )}
+              <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
+                {pode("pdv") && <Link href="/caixa/pdv" className={classeSubLink("/caixa/pdv")}>PDV</Link>}
+                {pode("orcamentos") && <Link href="/vendas/orcamentos" className={classeSubLink("/vendas/orcamentos")}>Orçamentos</Link>}
+                {pode("pedidos") && <Link href="/vendas/pedidos" className={classeSubLink("/vendas/pedidos")}>Pedidos</Link>}
+                {pode("devolucoes") && <Link href="/vendas/devolucoes" className={classeSubLink("/vendas/devolucoes")}>Devoluções</Link>}
               </div>
             )}
           </div>
@@ -597,54 +529,22 @@ export default function Sidebar() {
 
         {pode("financeiro") && (
           <div className="mt-1">
-            <button
-              onClick={() => setFinanceiro(!financeiro)}
-              className={classeBotaoGrupo(financeiro)}
-            >
-              <span className="flex items-center gap-4">
-                <CircleDollarSign size={25} strokeWidth={2.4} />
+            <button onClick={() => setFinanceiro(!financeiro)} className={classeBotaoGrupo(financeiro)}>
+              <span className="flex items-center gap-3">
+                <CircleDollarSign size={21} strokeWidth={2.4} />
                 Financeiro
               </span>
 
-              <ChevronDown
-                size={19}
-                className={`transition-transform ${financeiro ? "rotate-180" : ""}`}
-              />
+              <ChevronDown size={17} className={`transition-transform ${financeiro ? "rotate-180" : ""}`} />
             </button>
 
             {financeiro && (
-              <div className="ml-6 mt-2 pl-5 border-l border-white/15 space-y-1">
-                <Link href="/financeiro" className={classeSubLink("/financeiro")}>
-                  Dashboard Financeiro
-                </Link>
-
-                <Link
-                  href="/financeiro/contas-receber"
-                  className={classeSubLink("/financeiro/contas-receber")}
-                >
-                  Contas a Receber
-                </Link>
-
-                <Link
-                  href="/financeiro/contas-pagar"
-                  className={classeSubLink("/financeiro/contas-pagar")}
-                >
-                  Contas a Pagar
-                </Link>
-
-                <Link
-                  href="/financeiro/fluxo-caixa"
-                  className={classeSubLink("/financeiro/fluxo-caixa")}
-                >
-                  Fluxo de Caixa
-                </Link>
-
-                <Link
-                  href="/financeiro/dre"
-                  className={classeSubLink("/financeiro/dre")}
-                >
-                  DRE
-                </Link>
+              <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
+                <Link href="/financeiro" className={classeSubLink("/financeiro")}>Dashboard Financeiro</Link>
+                <Link href="/financeiro/contas-receber" className={classeSubLink("/financeiro/contas-receber")}>Contas a Receber</Link>
+                <Link href="/financeiro/contas-pagar" className={classeSubLink("/financeiro/contas-pagar")}>Contas a Pagar</Link>
+                <Link href="/financeiro/fluxo-caixa" className={classeSubLink("/financeiro/fluxo-caixa")}>Fluxo de Caixa</Link>
+                <Link href="/financeiro/dre" className={classeSubLink("/financeiro/dre")}>DRE</Link>
               </div>
             )}
           </div>
@@ -652,27 +552,18 @@ export default function Sidebar() {
 
         {pode("relatorios") && (
           <div className="mt-1">
-            <button
-              onClick={() => setRelatorios(!relatorios)}
-              className={classeBotaoGrupo(relatorios)}
-            >
-              <span className="flex items-center gap-4">
-                <BarChart3 size={25} strokeWidth={2.4} />
+            <button onClick={() => setRelatorios(!relatorios)} className={classeBotaoGrupo(relatorios)}>
+              <span className="flex items-center gap-3">
+                <BarChart3 size={21} strokeWidth={2.4} />
                 Relatórios
               </span>
 
-              <ChevronDown
-                size={19}
-                className={`transition-transform ${relatorios ? "rotate-180" : ""}`}
-              />
+              <ChevronDown size={17} className={`transition-transform ${relatorios ? "rotate-180" : ""}`} />
             </button>
 
             {relatorios && (
-              <div className="ml-6 mt-2 pl-5 border-l border-white/15 space-y-1">
-                <Link href="/relatorios" className={classeSubLink("/relatorios")}>
-                  Central de Relatórios
-                </Link>
-
+              <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
+                <Link href="/relatorios" className={classeSubLink("/relatorios")}>Central de Relatórios</Link>
                 <Link href="/relatorios/dre" className={classeSubLink("/relatorios/dre")}>DRE</Link>
                 <Link href="/relatorios/fluxo-caixa" className={classeSubLink("/relatorios/fluxo-caixa")}>Fluxo de Caixa</Link>
                 <Link href="/relatorios/caixas" className={classeSubLink("/relatorios/caixas")}>Caixas</Link>
@@ -712,21 +603,21 @@ export default function Sidebar() {
 
         {temModuloPremium("whatsapp") && (
           <Link href="/whatsapp" className={classeLink("/whatsapp")}>
-            <Bell size={25} strokeWidth={2.4} />
+            <Bell size={21} strokeWidth={2.4} />
             WhatsApp
           </Link>
         )}
 
         {temModuloPremium("crm") && (
           <Link href="/crm" className={classeLink("/crm")}>
-            <Users size={25} strokeWidth={2.4} />
+            <Users size={21} strokeWidth={2.4} />
             CRM
           </Link>
         )}
 
         {temModuloPremium("delivery") && (
           <Link href="/delivery" className={classeLink("/delivery")}>
-            <Truck size={25} strokeWidth={2.4} />
+            <Truck size={21} strokeWidth={2.4} />
             Delivery
           </Link>
         )}
@@ -737,47 +628,41 @@ export default function Sidebar() {
 
         {temModuloPremium("fiscal") && (
           <Link href="/fiscal" className={classeLink("/fiscal")}>
-            <FileText size={25} strokeWidth={2.4} />
+            <FileText size={21} strokeWidth={2.4} />
             Fiscal
           </Link>
         )}
 
         {temModuloPremium("multiloja") && (
           <Link href="/lojas" className={classeLink("/lojas")}>
-            <Store size={25} strokeWidth={2.4} />
+            <Store size={21} strokeWidth={2.4} />
             Multiloja
           </Link>
         )}
 
         {podeVerConfiguracoes && (
           <div className="mt-1">
-            <button
-              onClick={() => setConfiguracoes(!configuracoes)}
-              className={classeBotaoGrupo(configuracoes)}
-            >
-              <span className="flex items-center gap-4">
-                <Settings size={25} strokeWidth={2.4} />
+            <button onClick={() => setConfiguracoes(!configuracoes)} className={classeBotaoGrupo(configuracoes)}>
+              <span className="flex items-center gap-3">
+                <Settings size={21} strokeWidth={2.4} />
                 Configurações
               </span>
 
-              <ChevronDown
-                size={19}
-                className={`transition-transform ${configuracoes ? "rotate-180" : ""}`}
-              />
+              <ChevronDown size={17} className={`transition-transform ${configuracoes ? "rotate-180" : ""}`} />
             </button>
 
             {configuracoes && (
-              <div className="ml-6 mt-2 pl-5 border-l border-white/15 space-y-1">
+              <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
                 {!isSuperAdmin && (
                   <>
                     <Link href="/empresas" className={classeSubLink("/empresas")}>
-                      <span className="flex items-center gap-2"><Building2 size={15} /> Minha Empresa</span>
+                      <span className="flex items-center gap-2"><Building2 size={14} /> Minha Empresa</span>
                     </Link>
                     <Link href="/usuarios" className={classeSubLink("/usuarios")}>
-                      <span className="flex items-center gap-2"><Users size={15} /> Usuários</span>
+                      <span className="flex items-center gap-2"><Users size={14} /> Usuários</span>
                     </Link>
                     <Link href="/configuracoes" className={classeSubLink("/configuracoes")}>
-                      <span className="flex items-center gap-2"><Settings size={15} /> Configurações Gerais</span>
+                      <span className="flex items-center gap-2"><Settings size={14} /> Configurações Gerais</span>
                     </Link>
                     <Link href="/configuracoes/backup" className={classeSubLink("/configuracoes/backup")}>
                       Backup
@@ -791,10 +676,10 @@ export default function Sidebar() {
                       Administração SaaS
                     </p>
                     <Link href="/admin/empresas" className={classeSubLink("/admin/empresas")}>
-                      <span className="flex items-center gap-2"><Building2 size={15} /> Empresas SaaS</span>
+                      <span className="flex items-center gap-2"><Building2 size={14} /> Empresas SaaS</span>
                     </Link>
                     <Link href="/admin/assinaturas" className={classeSubLink("/admin/assinaturas")}>
-                      <span className="flex items-center gap-2"><CircleDollarSign size={15} /> Assinaturas SaaS</span>
+                      <span className="flex items-center gap-2"><CircleDollarSign size={14} /> Assinaturas SaaS</span>
                     </Link>
                   </>
                 )}
@@ -804,46 +689,46 @@ export default function Sidebar() {
         )}
       </nav>
 
-      <div className="relative px-6 pb-6 pt-3">
-        <div className="bg-blue-500/20 backdrop-blur-md rounded-3xl p-5 border border-white/10 shadow-2xl shadow-blue-950/30">
+      <div className="relative px-4 pb-4 pt-2">
+        <div className="bg-blue-500/20 backdrop-blur-md rounded-3xl p-4 border border-white/10 shadow-2xl shadow-blue-950/30">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="h-12 w-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-black text-xl shadow-xl">
+              <div className="h-11 w-11 rounded-full bg-blue-500 text-white flex items-center justify-center font-black text-lg shadow-xl">
                 {(usuario?.nome || "U").slice(0, 1).toUpperCase()}
               </div>
 
               <div className="min-w-0">
-                <p className="text-white font-black truncate">{usuario?.nome || "-"}</p>
-                <p className="text-blue-100 text-sm font-medium truncate">{usuario?.perfil || "-"}</p>
+                <p className="text-white font-black truncate text-sm">{usuario?.nome || "-"}</p>
+                <p className="text-blue-100 text-xs font-medium truncate">{usuario?.perfil || "-"}</p>
               </div>
             </div>
 
-            <ChevronDown size={18} className="text-blue-100" />
+            <ChevronDown size={16} className="text-blue-100" />
           </div>
 
           {(usuario?.plano || usuario?.plano_nome || usuario?.nome_plano) && (
-            <div className="mt-5">
+            <div className="mt-4">
               <p className="text-sm font-black text-white">
                 Plano {usuario?.plano_nome || usuario?.nome_plano || usuario?.plano}
               </p>
 
-              <div className="mt-3 w-full bg-blue-950/70 rounded-full h-3 overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-400 to-cyan-300 h-3 rounded-full w-3/4" />
+              <div className="mt-2 w-full bg-blue-950/70 rounded-full h-2 overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-400 to-cyan-300 h-2 rounded-full w-3/4" />
               </div>
 
-              <div className="mt-2 flex items-center justify-between text-[11px] text-blue-100 font-semibold">
+              <div className="mt-2 flex items-center justify-between text-[10px] text-blue-100 font-semibold">
                 <span>75% utilizado</span>
                 <span>Vence em breve</span>
               </div>
             </div>
           )}
 
-          <div className="border-t border-white/10 mt-5 pt-4">
+          <div className="border-t border-white/10 mt-4 pt-3">
             <button
               onClick={sair}
-              className="w-full flex items-center gap-3 text-white hover:text-red-100 py-2 rounded-2xl font-black transition"
+              className="w-full flex items-center gap-3 text-white hover:text-red-100 py-2 rounded-2xl font-black transition text-sm"
             >
-              <LogOut size={22} />
+              <LogOut size={19} />
               Sair da conta
             </button>
           </div>
@@ -862,7 +747,7 @@ export default function Sidebar() {
         <Menu size={24} />
       </button>
 
-      <div className="hidden lg:block sticky top-0 h-dvh min-h-dvh">{menu}</div>
+      <div className="hidden lg:block sticky top-0 h-screen shrink-0">{menu}</div>
 
       {mobileAberto && (
         <div className="lg:hidden fixed inset-0 z-[100]">
@@ -871,7 +756,7 @@ export default function Sidebar() {
             onClick={() => setMobileAberto(false)}
           />
 
-          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[88vw] shadow-2xl">
+          <div className="absolute left-0 top-0 bottom-0 w-[280px] max-w-[88vw] shadow-2xl">
             {menu}
           </div>
         </div>
