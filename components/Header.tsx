@@ -74,6 +74,9 @@ const rotasBusca: ResultadoBusca[] = [
   { titulo: "Relatórios", descricao: "Central de relatórios", rota: "/relatorios", palavras: "relatorios relatório vendas financeiro estoque clientes imprimir" },
   { titulo: "Minha Empresa", descricao: "Dados da empresa logada", rota: "/empresas", palavras: "empresa minha empresa configuração cnpj dados loja" },
   { titulo: "Usuários", descricao: "Usuários e permissões", rota: "/usuarios", palavras: "usuarios usuario senha permissao perfil operador gerente" },
+  { titulo: "Dashboard SaaS", descricao: "Painel master do Super Admin", rota: "/admin", palavras: "admin saas master dashboard empresas assinaturas clientes" },
+  { titulo: "Empresas SaaS", descricao: "Clientes e empresas do sistema", rota: "/admin/empresas", palavras: "admin empresas clientes saas cadastro bloquear liberar plano" },
+  { titulo: "Assinaturas SaaS", descricao: "Controle de mensalidades e vencimentos", rota: "/admin/assinaturas", palavras: "admin assinaturas mensalidade vencimento cobrança plano" },
   { titulo: "Notificações SaaS", descricao: "Painel do Super Admin para avisos", rota: "/admin/notificacoes", palavras: "notificações notificacao avisos alerta super admin saas" },
 ];
 
@@ -91,8 +94,8 @@ export default function Header() {
 
   function carregarSessao() {
     try {
-      const usuarioStorage = localStorage.getItem("th_usuario");
-      const empresaStorage = localStorage.getItem("th_empresa");
+      const usuarioStorage = sessionStorage.getItem("th_usuario") || localStorage.getItem("th_usuario");
+      const empresaStorage = sessionStorage.getItem("th_empresa") || localStorage.getItem("th_empresa");
 
       if (usuarioStorage) setUsuario(JSON.parse(usuarioStorage));
       if (empresaStorage) setEmpresa(JSON.parse(empresaStorage));
@@ -108,7 +111,7 @@ export default function Header() {
     if (empresa?.empresa_id) return empresa.empresa_id;
 
     try {
-      const usuarioStorage = localStorage.getItem("th_usuario");
+      const usuarioStorage = sessionStorage.getItem("th_usuario") || localStorage.getItem("th_usuario");
       if (usuarioStorage) {
         const dados = JSON.parse(usuarioStorage);
         if (dados.empresa_id) return dados.empresa_id;
@@ -119,6 +122,8 @@ export default function Header() {
   }
 
   function nomeEmpresa() {
+    if (usuario?.perfil === "Super Admin") return "Painel SaaS";
+
     return (
       empresa?.nome_fantasia ||
       empresa?.nome ||
@@ -129,7 +134,8 @@ export default function Header() {
   }
 
   function planoEmpresa() {
-    return empresa?.plano || usuario?.plano || "Plano Premium";
+    if (usuario?.perfil === "Super Admin") return "Master";
+    return empresa?.plano || usuario?.plano || "Plano Básico";
   }
 
   function iniciaisUsuario() {
@@ -142,8 +148,14 @@ export default function Header() {
   }
 
   function sair() {
+    sessionStorage.removeItem("th_usuario");
+    sessionStorage.removeItem("th_empresa");
+    sessionStorage.removeItem("th_permissoes");
     localStorage.removeItem("th_usuario");
     localStorage.removeItem("th_empresa");
+    localStorage.removeItem("th_permissoes");
+    localStorage.removeItem("empresa_id");
+    localStorage.removeItem("th_empresa_id");
     router.push("/login");
   }
 
@@ -154,32 +166,54 @@ export default function Header() {
     const perfil = usuario?.perfil || "";
     const isSuperAdmin = perfil === "Super Admin";
 
-    if (empresaId && !isSuperAdmin) {
-      await gerarNotificacoesAutomaticas(empresaId, usuario?.nome || "Sistema");
-    }
+    try {
+      if (empresaId && !isSuperAdmin) {
+        await gerarNotificacoesAutomaticas(empresaId, usuario?.nome || "Sistema");
+      }
 
-    let query = supabase
-      .from("notificacoes")
-      .select("*")
-      .eq("ativo", true)
-      .order("created_at", { ascending: false })
-      .limit(30);
+      let query = supabase
+        .from("notificacoes")
+        .select("*")
+        .eq("ativo", true)
+        .order("created_at", { ascending: false })
+        .limit(30);
 
-    if (!isSuperAdmin && empresaId) {
-      query = query.or(
-        `empresa_id.eq.${empresaId},empresa_id.is.null,destino.eq.todos,destino.eq.${perfil}`
-      );
-    }
+      if (isSuperAdmin) {
+        query = query.or(
+          "destino.eq.super_admin,destino.eq.Super Admin,destino.eq.saas,destino.eq.SaaS,tipo.eq.saas,tipo.eq.admin"
+        );
+      } else if (empresaId) {
+        query = query.or(
+          `empresa_id.eq.${empresaId},empresa_id.is.null,destino.eq.todos,destino.eq.${perfil}`
+        );
+      } else {
+        setNotificacoes([]);
+        setCarregandoNotificacoes(false);
+        return;
+      }
 
-    const { data, error } = await query;
+      const { data, error } = await query;
 
-    if (error) {
+      if (error) {
+        setNotificacoes([]);
+        setCarregandoNotificacoes(false);
+        return;
+      }
+
+      const lista = ((data || []) as Notificacao[]).filter((item) => {
+        if (isSuperAdmin) {
+          const destino = String(item.destino || "").toLowerCase();
+          const tipo = String(item.tipo || "").toLowerCase();
+          return destino === "super_admin" || destino === "saas" || tipo === "saas" || tipo === "admin";
+        }
+        return true;
+      });
+
+      setNotificacoes(lista);
+    } catch {
       setNotificacoes([]);
-      setCarregandoNotificacoes(false);
-      return;
     }
 
-    setNotificacoes((data || []) as Notificacao[]);
     setCarregandoNotificacoes(false);
   }
 
@@ -191,9 +225,7 @@ export default function Header() {
         .eq("id", notificacao.id);
 
       setNotificacoes((lista) =>
-        lista.map((item) =>
-          item.id === notificacao.id ? { ...item, lida: true } : item
-        )
+        lista.map((item) => (item.id === notificacao.id ? { ...item, lida: true } : item))
       );
     }
 
@@ -212,14 +244,12 @@ export default function Header() {
     }
 
     const termo = busca.trim();
-
     if (!termo) {
       setAbrirBusca(false);
       return;
     }
 
     const encontrado = resultadosBusca[0];
-
     if (encontrado) {
       setBusca("");
       setAbrirBusca(false);
@@ -232,7 +262,6 @@ export default function Header() {
 
   const resultadosBusca = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-
     if (!termo) return rotasBusca.slice(0, 6);
 
     return rotasBusca
@@ -254,13 +283,13 @@ export default function Header() {
   }, [usuario]);
 
   return (
-    <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-40">
-      <div>
+    <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-5 lg:px-8 sticky top-0 z-40">
+      <div className="min-w-[190px]">
         <h1 className="text-xl font-black text-slate-900">THCloud ERP</h1>
-        <p className="text-sm text-slate-500">Sistema de gestão inteligente para varejo</p>
+        <p className="text-sm text-slate-500 leading-tight">Sistema de gestão inteligente para varejo</p>
       </div>
 
-      <div className="relative w-full max-w-xl mx-8">
+      <div className="relative w-full max-w-xl mx-4 lg:mx-8 hidden md:block">
         <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500">
           <Search size={18} className="text-slate-400 mr-3" />
 
@@ -320,12 +349,10 @@ export default function Header() {
         )}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 lg:gap-4">
         <div className="hidden xl:block text-right">
           <p className="text-sm text-slate-900 font-black">{usuario?.nome || "-"}</p>
-
           <p className="text-xs text-slate-500">{nomeEmpresa()}</p>
-
           <p className="text-xs text-blue-700 font-black flex items-center justify-end gap-1">
             <Crown size={12} /> {planoEmpresa()}
           </p>
@@ -341,7 +368,6 @@ export default function Header() {
             className="relative h-12 w-12 rounded-2xl bg-yellow-50 hover:bg-yellow-100 text-yellow-700 flex items-center justify-center"
           >
             <Bell size={20} />
-
             {naoLidas > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-black h-5 min-w-5 rounded-full flex items-center justify-center px-1">
                 {naoLidas}
@@ -350,11 +376,15 @@ export default function Header() {
           </button>
 
           {abrirNotificacoes && (
-            <div className="absolute right-0 mt-3 w-96 bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden z-50">
+            <div className="absolute right-0 mt-3 w-[92vw] max-w-96 bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden z-50">
               <div className="p-5 border-b bg-slate-50 flex items-center justify-between">
                 <div>
-                  <p className="font-black text-slate-900">Notificações</p>
-                  <p className="text-xs text-slate-500">Avisos manuais e automáticos</p>
+                  <p className="font-black text-slate-900">
+                    {usuario?.perfil === "Super Admin" ? "Notificações SaaS" : "Notificações"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {usuario?.perfil === "Super Admin" ? "Somente avisos administrativos" : "Avisos manuais e automáticos"}
+                  </p>
                 </div>
 
                 {usuario?.perfil === "Super Admin" && (
@@ -369,14 +399,10 @@ export default function Header() {
               </div>
 
               <div className="max-h-96 overflow-y-auto">
-                {carregandoNotificacoes && (
-                  <div className="p-5 text-center text-slate-500">Carregando...</div>
-                )}
-
+                {carregandoNotificacoes && <div className="p-5 text-center text-slate-500">Carregando...</div>}
                 {!carregandoNotificacoes && notificacoes.length === 0 && (
                   <div className="p-5 text-center text-slate-500">Nenhuma notificação encontrada.</div>
                 )}
-
                 {!carregandoNotificacoes &&
                   notificacoes.map((item) => (
                     <button
@@ -394,8 +420,7 @@ export default function Header() {
                             {new Date(item.created_at).toLocaleString("pt-BR")}
                           </p>
                         </div>
-
-                        {item.lida !== true && <span className="h-3 w-3 rounded-full bg-red-600 mt-1" />}
+                        {item.lida !== true && <span className="h-3 w-3 rounded-full bg-red-600 mt-1 shrink-0" />}
                       </div>
                     </button>
                   ))}
@@ -412,21 +437,17 @@ export default function Header() {
             }}
             className="h-12 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white flex items-center gap-3 px-4 font-black"
           >
-            <span className="h-8 w-8 bg-white/15 rounded-xl flex items-center justify-center">
-              {iniciaisUsuario()}
-            </span>
-
+            <span className="h-8 w-8 bg-white/15 rounded-xl flex items-center justify-center">{iniciaisUsuario()}</span>
             <ChevronDown size={16} />
           </button>
 
           {abrirPerfil && (
-            <div className="absolute right-0 mt-3 w-80 bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden z-50">
+            <div className="absolute right-0 mt-3 w-[92vw] max-w-80 bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden z-50">
               <div className="p-5 bg-slate-900 text-white">
                 <div className="flex items-center gap-3">
                   <div className="h-14 w-14 rounded-2xl bg-blue-700 flex items-center justify-center font-black text-2xl">
                     {iniciaisUsuario()}
                   </div>
-
                   <div>
                     <p className="font-black text-lg">{usuario?.nome || "Usuário"}</p>
                     <p className="text-slate-300 text-sm">{usuario?.email || perfilUsuario()}</p>
@@ -437,7 +458,6 @@ export default function Header() {
               <div className="p-5 space-y-4">
                 <div className="flex gap-3">
                   <User className="text-blue-700" />
-
                   <div>
                     <p className="text-xs text-slate-500 font-bold">Usuário logado</p>
                     <p className="font-black text-slate-900">{usuario?.nome || "-"}</p>
@@ -447,7 +467,6 @@ export default function Header() {
 
                 <div className="flex gap-3">
                   <Building2 className="text-green-700" />
-
                   <div>
                     <p className="text-xs text-slate-500 font-bold">Empresa logada</p>
                     <p className="font-black text-slate-900">{nomeEmpresa()}</p>
@@ -458,18 +477,25 @@ export default function Header() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-2">
-                  <Link
-                    href="/empresas"
-                    onClick={() => setAbrirPerfil(false)}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-3 rounded-2xl font-black text-center"
-                  >
-                    Minha Empresa
-                  </Link>
+                  {usuario?.perfil === "Super Admin" ? (
+                    <Link
+                      href="/admin/empresas"
+                      onClick={() => setAbrirPerfil(false)}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-3 rounded-2xl font-black text-center"
+                    >
+                      Empresas SaaS
+                    </Link>
+                  ) : (
+                    <Link
+                      href="/empresas"
+                      onClick={() => setAbrirPerfil(false)}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-3 rounded-2xl font-black text-center"
+                    >
+                      Minha Empresa
+                    </Link>
+                  )}
 
-                  <button
-                    onClick={sair}
-                    className="bg-red-50 hover:bg-red-100 text-red-700 px-4 py-3 rounded-2xl font-black"
-                  >
+                  <button onClick={sair} className="bg-red-50 hover:bg-red-100 text-red-700 px-4 py-3 rounded-2xl font-black">
                     <LogOut size={16} className="inline mr-2" />
                     Sair do Sistema
                   </button>

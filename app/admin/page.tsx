@@ -10,6 +10,7 @@ import {
   CircleDollarSign,
   Clock,
   PackageCheck,
+  RefreshCw,
   ShieldAlert,
   TrendingUp,
   XCircle,
@@ -27,7 +28,6 @@ type Empresa = {
   data_inicio_assinatura: string | null;
   data_vencimento_assinatura: string | null;
   created_at: string | null;
-
   modulo_fiscal: boolean | null;
   modulo_whatsapp: boolean | null;
   modulo_delivery: boolean | null;
@@ -69,7 +69,6 @@ export default function AdminPage() {
   function estaVencida(empresa: Empresa) {
     if (empresa.status_assinatura === "Vencido") return true;
     if (!empresa.data_vencimento_assinatura) return false;
-
     return empresa.data_vencimento_assinatura < hojeISO();
   }
 
@@ -114,7 +113,7 @@ export default function AdminPage() {
       return;
     }
 
-    setEmpresas(data || []);
+    setEmpresas((data || []) as Empresa[]);
   }
 
   useEffect(() => {
@@ -189,48 +188,123 @@ export default function AdminPage() {
   const empresasRecentes = empresas.slice(0, 8);
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen">
-      <div className="bg-gradient-to-r from-slate-950 to-blue-800 rounded-3xl p-8 text-white mb-8 shadow-lg">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-          <div>
-            <p className="text-blue-100 font-bold">Painel Master THCloud</p>
+    <div className="min-h-screen bg-slate-50 p-4 lg:p-6 overflow-x-hidden">
+      <section className="bg-gradient-to-r from-slate-950 via-blue-950 to-blue-700 rounded-[30px] p-6 lg:p-8 text-white shadow-xl mb-6 overflow-hidden relative">
+        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-blue-300/20 blur-3xl" />
 
-            <h1 className="text-4xl font-black mt-2">
+        <div className="relative flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
+          <div>
+            <p className="text-blue-200 font-black">Painel Master THCloud</p>
+
+            <h1 className="text-3xl lg:text-4xl font-black mt-2">
               Dashboard SaaS
             </h1>
 
-            <p className="mt-2 text-blue-100 max-w-3xl">
-              Visão geral das empresas, assinaturas, receita recorrente e módulos adicionais contratados.
+            <p className="mt-2 text-blue-100 max-w-4xl">
+              Controle geral das empresas, assinaturas, receita recorrente,
+              módulos adicionais e clientes que contrataram seu sistema.
             </p>
           </div>
 
-          <button
-            onClick={carregarEmpresas}
-            className="bg-white text-blue-800 px-6 py-3 rounded-2xl font-black hover:bg-blue-50"
-          >
-            {carregando ? "Atualizando..." : "Atualizar"}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={carregarEmpresas}
+              className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-3 rounded-2xl font-black inline-flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={18} />
+              {carregando ? "Atualizando..." : "Atualizar"}
+            </button>
+
+            <Link
+              href="/admin/empresas"
+              className="bg-white text-blue-800 hover:bg-blue-50 px-5 py-3 rounded-2xl font-black inline-flex items-center justify-center gap-2"
+            >
+              <Building2 size={18} />
+              Gerenciar Empresas
+            </Link>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-        <Card titulo="Total Empresas" valor={`${totalEmpresas}`} detalhe="Clientes cadastrados" cor="text-blue-700" icone={<Building2 size={24} />} />
-        <Card titulo="Ativas" valor={`${empresasAtivas}`} detalhe="Clientes liberados" cor="text-green-700" icone={<CheckCircle2 size={24} />} />
-        <Card titulo="Em Teste" valor={`${empresasTeste}`} detalhe="Período experimental" cor="text-cyan-700" icone={<Clock size={24} />} />
-        <Card titulo="Bloqueadas" valor={`${empresasBloqueadas}`} detalhe="Acesso suspenso" cor="text-red-700" icone={<XCircle size={24} />} />
-        <Card titulo="Vencendo" valor={`${assinaturasVencendo}`} detalhe="Próximos 7 dias" cor="text-orange-700" icone={<ShieldAlert size={24} />} />
-        <Card titulo="Vencidas" valor={`${assinaturasVencidas}`} detalhe="Precisam atenção" cor="text-red-700" icone={<ShieldAlert size={24} />} />
-      </div>
+      <section className="grid grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
+        <Card
+          titulo="Total"
+          valor={`${totalEmpresas}`}
+          detalhe="Empresas cadastradas"
+          cor="text-blue-700"
+          icone={<Building2 size={22} />}
+        />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-        <Card titulo="Receita Mensal" valor={moeda(receitaMensal)} detalhe="MRR previsto" cor="text-purple-700" icone={<CircleDollarSign size={24} />} />
-        <Card titulo="Receita Anual" valor={moeda(receitaAnual)} detalhe="Estimativa 12 meses" cor="text-blue-800" icone={<TrendingUp size={24} />} />
-        <Card titulo="Módulos Vendidos" valor={`${totalModulosVendidos}`} detalhe="Adicionais contratados" cor="text-emerald-700" icone={<PackageCheck size={24} />} />
-      </div>
+        <Card
+          titulo="Ativas"
+          valor={`${empresasAtivas}`}
+          detalhe="Clientes liberados"
+          cor="text-green-700"
+          icone={<CheckCircle2 size={22} />}
+        />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-        <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center justify-between gap-4 mb-6">
+        <Card
+          titulo="Em Teste"
+          valor={`${empresasTeste}`}
+          detalhe="Período experimental"
+          cor="text-cyan-700"
+          icone={<Clock size={22} />}
+        />
+
+        <Card
+          titulo="Bloqueadas"
+          valor={`${empresasBloqueadas}`}
+          detalhe="Acesso suspenso"
+          cor="text-red-700"
+          icone={<XCircle size={22} />}
+        />
+
+        <Card
+          titulo="Vencendo"
+          valor={`${assinaturasVencendo}`}
+          detalhe="Próximos 7 dias"
+          cor="text-orange-700"
+          icone={<ShieldAlert size={22} />}
+        />
+
+        <Card
+          titulo="Vencidas"
+          valor={`${assinaturasVencidas}`}
+          detalhe="Precisam atenção"
+          cor="text-red-700"
+          icone={<ShieldAlert size={22} />}
+        />
+      </section>
+
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card
+          titulo="Receita Mensal"
+          valor={moeda(receitaMensal)}
+          detalhe="MRR previsto"
+          cor="text-purple-700"
+          icone={<CircleDollarSign size={22} />}
+        />
+
+        <Card
+          titulo="Receita Anual"
+          valor={moeda(receitaAnual)}
+          detalhe="Estimativa 12 meses"
+          cor="text-blue-800"
+          icone={<TrendingUp size={22} />}
+        />
+
+        <Card
+          titulo="Módulos Vendidos"
+          valor={`${totalModulosVendidos}`}
+          detalhe="Adicionais contratados"
+          cor="text-emerald-700"
+          icone={<PackageCheck size={22} />}
+        />
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+        <div className="xl:col-span-2 bg-white rounded-[28px] border border-slate-200 shadow-sm p-5 lg:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
             <div>
               <h2 className="text-2xl font-black text-slate-900">
                 Empresas Recentes
@@ -241,15 +315,18 @@ export default function AdminPage() {
               </p>
             </div>
 
-            <Link href="/admin/empresas" className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-3 rounded-2xl font-bold">
+            <Link
+              href="/admin/empresas"
+              className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-3 rounded-2xl font-bold text-center"
+            >
               Ver empresas
             </Link>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[850px]">
               <thead>
-                <tr className="bg-slate-100 text-slate-700">
+                <tr className="bg-blue-700 text-white">
                   <th className="p-3 text-left">Empresa</th>
                   <th className="p-3 text-left">Plano</th>
                   <th className="p-3 text-left">Mensalidade</th>
@@ -263,7 +340,9 @@ export default function AdminPage() {
                 {empresasRecentes.map((empresa) => (
                   <tr key={empresa.id} className="border-b hover:bg-slate-50">
                     <td className="p-3">
-                      <p className="font-bold text-slate-900">{nomeEmpresa(empresa)}</p>
+                      <p className="font-bold text-slate-900">
+                        {nomeEmpresa(empresa)}
+                      </p>
                       <p className="text-xs text-slate-500">{empresa.cnpj || "-"}</p>
                     </td>
 
@@ -279,13 +358,21 @@ export default function AdminPage() {
 
                     <td className="p-3">
                       {estaVencida(empresa) ? (
-                        <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">Vencida</span>
+                        <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">
+                          Vencida
+                        </span>
                       ) : empresa.ativo === false ? (
-                        <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-bold">Bloqueada</span>
+                        <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-bold">
+                          Bloqueada
+                        </span>
                       ) : venceEmBreve(empresa) ? (
-                        <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">Vencendo</span>
+                        <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">
+                          Vencendo
+                        </span>
                       ) : (
-                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">Ativa</span>
+                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
+                          Ativa
+                        </span>
                       )}
                     </td>
 
@@ -307,18 +394,21 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-5 lg:p-6">
           <h2 className="text-2xl font-black text-slate-900 mb-2">
             Módulos Adicionais
           </h2>
 
-          <p className="text-slate-500 mb-6">
-            Quantidade de empresas com cada módulo contratado.
+          <p className="text-slate-500 mb-5">
+            Empresas com módulos contratados.
           </p>
 
           <div className="space-y-3">
             {modulos.map((modulo) => (
-              <div key={modulo.nome} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
+              <div
+                key={modulo.nome}
+                className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4"
+              >
                 <p className="font-bold text-slate-800">{modulo.nome}</p>
 
                 <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-black">
@@ -328,20 +418,24 @@ export default function AdminPage() {
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <Link href="/admin/empresas" className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm hover:shadow-lg transition">
-          <h2 className="text-2xl font-black text-blue-700">
-            Empresas SaaS
-          </h2>
+      <section className="grid md:grid-cols-2 gap-5">
+        <Link
+          href="/admin/empresas"
+          className="bg-white border border-slate-200 rounded-[28px] p-6 shadow-sm hover:shadow-lg transition"
+        >
+          <h2 className="text-2xl font-black text-blue-700">Empresas SaaS</h2>
 
           <p className="text-slate-500 mt-2">
             Gerenciar clientes, planos, status de acesso e módulos adicionais.
           </p>
         </Link>
 
-        <Link href="/admin/assinaturas" className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm hover:shadow-lg transition">
+        <Link
+          href="/admin/assinaturas"
+          className="bg-white border border-slate-200 rounded-[28px] p-6 shadow-sm hover:shadow-lg transition"
+        >
           <h2 className="text-2xl font-black text-green-700">
             Assinaturas SaaS
           </h2>
@@ -350,7 +444,7 @@ export default function AdminPage() {
             Controle de mensalidades, vencimentos, renovações e bloqueios.
           </p>
         </Link>
-      </div>
+      </section>
     </div>
   );
 }
@@ -369,8 +463,8 @@ function Card({
   icone: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm">
-      <div className="flex items-center justify-between">
+    <div className="bg-white rounded-3xl border border-slate-200 p-4 shadow-sm min-w-0">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-bold text-slate-500">{titulo}</p>
 
         <div className={`${cor} bg-slate-50 border border-slate-100 rounded-2xl p-2`}>
@@ -378,9 +472,9 @@ function Card({
         </div>
       </div>
 
-      <h2 className={`text-3xl font-black mt-4 ${cor}`}>{valor}</h2>
+      <h2 className={`text-2xl font-black mt-3 ${cor}`}>{valor}</h2>
 
-      <p className="text-xs text-slate-500 mt-2">{detalhe}</p>
+      <p className="text-xs text-slate-500 mt-1">{detalhe}</p>
     </div>
   );
 }
