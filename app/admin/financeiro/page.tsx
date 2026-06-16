@@ -13,7 +13,9 @@ import {
   Filter,
   RefreshCw,
   Search,
+  TrendingDown,
   TrendingUp,
+  Users,
   XCircle,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
@@ -27,7 +29,9 @@ type Empresa = {
   plano: string | null;
   valor_mensal: number | null;
   status_assinatura: string | null;
+  data_inicio_assinatura: string | null;
   data_vencimento_assinatura: string | null;
+  created_at: string | null;
 };
 
 type Cobranca = {
@@ -47,6 +51,19 @@ type CobrancaTratada = Omit<Cobranca, "empresas"> & {
   empresas: Empresa | null;
 };
 
+type MetricaSaas = {
+  id: string;
+  referencia: string | null;
+  mrr: number | null;
+  arr: number | null;
+  ticket_medio: number | null;
+  clientes_ativos: number | null;
+  clientes_teste: number | null;
+  clientes_inadimplentes: number | null;
+  clientes_bloqueados: number | null;
+  created_at: string | null;
+};
+
 function tratarEmpresaRelacionada(valor: Empresa | Empresa[] | null): Empresa | null {
   if (Array.isArray(valor)) return valor[0] || null;
   return valor || null;
@@ -55,7 +72,9 @@ function tratarEmpresaRelacionada(valor: Empresa | Empresa[] | null): Empresa | 
 export default function AdminFinanceiroPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [cobrancas, setCobrancas] = useState<CobrancaTratada[]>([]);
+  const [metricas, setMetricas] = useState<MetricaSaas[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [salvandoMetrica, setSalvandoMetrica] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
 
@@ -63,11 +82,20 @@ export default function AdminFinanceiroPage() {
     return new Date().toISOString().split("T")[0];
   }
 
+  function mesAtualISO() {
+    const data = new Date();
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-01`;
+  }
+
   function moeda(valor: number) {
     return Number(valor || 0).toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
     });
+  }
+
+  function percentual(valor: number) {
+    return `${Number(valor || 0).toFixed(1).replace(".", ",")}%`;
   }
 
   function formatarData(data: string | null) {
@@ -79,14 +107,37 @@ export default function AdminFinanceiroPage() {
     return empresa?.nome_fantasia || empresa?.razao_social || "Empresa não informada";
   }
 
-  function statusCobranca(cobranca: CobrancaTratada) {
-    const status = String(cobranca.status || "").toLowerCase();
+  function normalizarStatus(status: string | null) {
+    const valor = String(status || "").toLowerCase();
 
-    if (status === "pago" || status === "paga") return "Pago";
-    if (status === "cancelado" || status === "cancelada") return "Cancelado";
+    if (valor === "pago" || valor === "paga") return "Pago";
+    if (valor === "cancelado" || valor === "cancelada") return "Cancelado";
+    if (valor === "vencido" || valor === "vencida") return "Vencido";
+    if (valor === "bloqueado" || valor === "bloqueada") return "Bloqueado";
+    if (valor === "teste") return "Teste";
+    if (valor === "ativo" || valor === "ativa") return "Ativo";
+    if (valor === "aberto" || valor === "aberta") return "Aberta";
+
+    return status || "Aberta";
+  }
+
+  function statusCobranca(cobranca: CobrancaTratada) {
+    const status = normalizarStatus(cobranca.status);
+
+    if (status === "Pago") return "Pago";
+    if (status === "Cancelado") return "Cancelado";
     if (cobranca.vencimento && cobranca.vencimento < hojeISO()) return "Vencido";
 
     return "Aberta";
+  }
+
+  function empresaVencida(empresa: Empresa) {
+    const status = normalizarStatus(empresa.status_assinatura);
+
+    if (status === "Vencido" || status === "Bloqueado") return true;
+    if (!empresa.data_vencimento_assinatura) return false;
+
+    return empresa.data_vencimento_assinatura < hojeISO();
   }
 
   async function carregarDados() {
@@ -94,7 +145,9 @@ export default function AdminFinanceiroPage() {
 
     const { data: empresasData, error: empresasError } = await supabase
       .from("empresas")
-      .select("id,nome_fantasia,razao_social,cnpj,ativo,plano,valor_mensal,status_assinatura,data_vencimento_assinatura")
+      .select(
+        "id,nome_fantasia,razao_social,cnpj,ativo,plano,valor_mensal,status_assinatura,data_inicio_assinatura,data_vencimento_assinatura,created_at"
+      )
       .order("nome_fantasia", { ascending: true });
 
     if (empresasError) {
@@ -126,14 +179,15 @@ export default function AdminFinanceiroPage() {
           plano,
           valor_mensal,
           status_assinatura,
-          data_vencimento_assinatura
+          data_inicio_assinatura,
+          data_vencimento_assinatura,
+          created_at
         )
       `)
       .order("vencimento", { ascending: false });
 
-    setCarregando(false);
-
     if (cobrancasError) {
+      setCarregando(false);
       alert("Erro ao carregar financeiro SaaS: " + cobrancasError.message);
       return;
     }
@@ -144,11 +198,70 @@ export default function AdminFinanceiroPage() {
     }));
 
     setCobrancas(lista);
+
+    const { data: metricasData } = await supabase
+      .from("metricas_saas")
+      .select("*")
+      .order("referencia", { ascending: false })
+      .limit(12);
+
+    setMetricas((metricasData || []) as MetricaSaas[]);
+    setCarregando(false);
   }
 
   useEffect(() => {
     carregarDados();
   }, []);
+
+  const empresasAtivas = empresas.filter(
+    (empresa) =>
+      empresa.ativo !== false &&
+      !empresaVencida(empresa) &&
+      normalizarStatus(empresa.status_assinatura) !== "Cancelado"
+  );
+
+  const empresasTeste = empresas.filter(
+    (empresa) => normalizarStatus(empresa.status_assinatura) === "Teste"
+  );
+
+  const empresasBloqueadas = empresas.filter(
+    (empresa) => empresa.ativo === false || normalizarStatus(empresa.status_assinatura) === "Bloqueado"
+  );
+
+  const empresasInadimplentes = empresas.filter((empresa) => empresaVencida(empresa));
+
+  const empresasCanceladas = empresas.filter(
+    (empresa) => normalizarStatus(empresa.status_assinatura) === "Cancelado"
+  );
+
+  const mrr = empresasAtivas.reduce(
+    (total, empresa) => total + Number(empresa.valor_mensal || 0),
+    0
+  );
+
+  const arr = mrr * 12;
+  const ticketMedio = empresasAtivas.length > 0 ? mrr / empresasAtivas.length : 0;
+  const churn = empresas.length > 0 ? (empresasCanceladas.length / empresas.length) * 100 : 0;
+
+  const recebido = cobrancas
+    .filter((cobranca) => statusCobranca(cobranca) === "Pago")
+    .reduce((total, cobranca) => total + Number(cobranca.valor || 0), 0);
+
+  const aberto = cobrancas
+    .filter((cobranca) => statusCobranca(cobranca) === "Aberta")
+    .reduce((total, cobranca) => total + Number(cobranca.valor || 0), 0);
+
+  const vencido = cobrancas
+    .filter((cobranca) => statusCobranca(cobranca) === "Vencido")
+    .reduce((total, cobranca) => total + Number(cobranca.valor || 0), 0);
+
+  const aVencer = cobrancas
+    .filter((cobranca) => {
+      if (statusCobranca(cobranca) !== "Aberta") return false;
+      if (!cobranca.vencimento) return false;
+      return cobranca.vencimento >= hojeISO();
+    })
+    .reduce((total, cobranca) => total + Number(cobranca.valor || 0), 0);
 
   const cobrancasFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -165,38 +278,6 @@ export default function AdminFinanceiroPage() {
     });
   }, [cobrancas, busca, filtroStatus]);
 
-  const empresasAtivas = empresas.filter(
-    (empresa) => empresa.ativo !== false && empresa.status_assinatura !== "Bloqueado"
-  );
-
-  const mrr = empresasAtivas.reduce(
-    (total, empresa) => total + Number(empresa.valor_mensal || 0),
-    0
-  );
-
-  const arr = mrr * 12;
-
-  const recebido = cobrancas
-    .filter((cobranca) => statusCobranca(cobranca) === "Pago")
-    .reduce((total, cobranca) => total + Number(cobranca.valor || 0), 0);
-
-  const aberto = cobrancas
-    .filter((cobranca) => statusCobranca(cobranca) === "Aberta")
-    .reduce((total, cobranca) => total + Number(cobranca.valor || 0), 0);
-
-  const vencido = cobrancas
-    .filter((cobranca) => statusCobranca(cobranca) === "Vencido")
-    .reduce((total, cobranca) => total + Number(cobranca.valor || 0), 0);
-
-  const ticketMedio = empresasAtivas.length > 0 ? mrr / empresasAtivas.length : 0;
-
-  const inadimplentes = cobrancas.filter(
-    (cobranca) => statusCobranca(cobranca) === "Vencido"
-  ).length;
-
-  const taxaInadimplencia =
-    cobrancas.length > 0 ? (inadimplentes / cobrancas.length) * 100 : 0;
-
   const porPlano = ["Básico", "Profissional", "Premium", "Enterprise"].map((plano) => {
     const lista = empresasAtivas.filter((empresa) => empresa.plano === plano);
     const total = lista.reduce(
@@ -204,12 +285,90 @@ export default function AdminFinanceiroPage() {
       0
     );
 
-    return { plano, quantidade: lista.length, total };
+    return {
+      plano,
+      quantidade: lista.length,
+      total,
+    };
   });
+
+  const receitaPorMes = useMemo(() => {
+    const meses: Record<string, number> = {};
+
+    cobrancas
+      .filter((cobranca) => statusCobranca(cobranca) === "Pago")
+      .forEach((cobranca) => {
+        const base = cobranca.data_pagamento || cobranca.vencimento || cobranca.created_at?.slice(0, 10);
+        if (!base) return;
+
+        const chave = base.slice(0, 7);
+        meses[chave] = (meses[chave] || 0) + Number(cobranca.valor || 0);
+      });
+
+    return Object.entries(meses)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([mes, total]) => ({ mes, total }));
+  }, [cobrancas]);
+
+  const crescimentoClientes = useMemo(() => {
+    const meses: Record<string, number> = {};
+
+    empresas.forEach((empresa) => {
+      if (!empresa.created_at) return;
+      const chave = empresa.created_at.slice(0, 7);
+      meses[chave] = (meses[chave] || 0) + 1;
+    });
+
+    return Object.entries(meses)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([mes, total]) => ({ mes, total }));
+  }, [empresas]);
+
+  const maiorReceitaMes = Math.max(...receitaPorMes.map((item) => item.total), 1);
+  const maiorClientesMes = Math.max(...crescimentoClientes.map((item) => item.total), 1);
 
   const ultimosRecebimentos = cobrancas
     .filter((cobranca) => statusCobranca(cobranca) === "Pago")
     .slice(0, 8);
+
+  async function salvarMetricaMensal() {
+    setSalvandoMetrica(true);
+
+    const referencia = mesAtualISO();
+
+    const dados = {
+      referencia,
+      mrr,
+      arr,
+      ticket_medio: ticketMedio,
+      clientes_ativos: empresasAtivas.length,
+      clientes_teste: empresasTeste.length,
+      clientes_inadimplentes: empresasInadimplentes.length,
+      clientes_bloqueados: empresasBloqueadas.length,
+    };
+
+    const { data: existente } = await supabase
+      .from("metricas_saas")
+      .select("id")
+      .eq("referencia", referencia)
+      .maybeSingle();
+
+    const resultado = existente?.id
+      ? await supabase.from("metricas_saas").update(dados).eq("id", existente.id)
+      : await supabase.from("metricas_saas").insert([dados]);
+
+    setSalvandoMetrica(false);
+
+    if (resultado.error) {
+      alert("Erro ao salvar métricas: " + resultado.error.message);
+      return;
+    }
+
+    await carregarDados();
+    alert("Métricas SaaS salvas com sucesso.");
+  }
 
   function exportarCSV() {
     const cabecalho = [
@@ -264,11 +423,11 @@ export default function AdminFinanceiroPage() {
             <p className="text-blue-200 font-black">Painel Master THCloud</p>
 
             <h1 className="text-3xl lg:text-4xl font-black mt-2">
-              Financeiro SaaS
+              Financeiro SaaS Profissional
             </h1>
 
             <p className="mt-2 text-blue-100 max-w-4xl">
-              Acompanhe MRR, ARR, recebimentos, inadimplência, ticket médio e desempenho financeiro do THCloud.
+              Controle MRR, ARR, ticket médio, inadimplência, churn, cobranças, crescimento e saúde financeira do THCloud.
             </p>
           </div>
 
@@ -279,6 +438,15 @@ export default function AdminFinanceiroPage() {
             >
               <RefreshCw size={18} />
               {carregando ? "Atualizando..." : "Atualizar"}
+            </button>
+
+            <button
+              onClick={salvarMetricaMensal}
+              disabled={salvandoMetrica}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-2xl font-black inline-flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              <BarChart3 size={18} />
+              {salvandoMetrica ? "Salvando..." : "Salvar Métricas"}
             </button>
 
             <button
@@ -295,16 +463,23 @@ export default function AdminFinanceiroPage() {
       <section className="grid grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
         <Card titulo="MRR" valor={moeda(mrr)} detalhe="Receita mensal recorrente" cor="text-purple-700" icone={<CircleDollarSign size={22} />} />
         <Card titulo="ARR" valor={moeda(arr)} detalhe="Receita anual prevista" cor="text-blue-700" icone={<TrendingUp size={22} />} />
-        <Card titulo="Recebido" valor={moeda(recebido)} detalhe="Pagamentos confirmados" cor="text-green-700" icone={<CheckCircle2 size={22} />} />
-        <Card titulo="Em Aberto" valor={moeda(aberto)} detalhe="Cobranças pendentes" cor="text-orange-700" icone={<CalendarClock size={22} />} />
-        <Card titulo="Vencido" valor={moeda(vencido)} detalhe="Valor inadimplente" cor="text-red-700" icone={<AlertTriangle size={22} />} />
         <Card titulo="Ticket Médio" valor={moeda(ticketMedio)} detalhe="Por cliente ativo" cor="text-slate-800" icone={<Banknote size={22} />} />
+        <Card titulo="Ativos" valor={`${empresasAtivas.length}`} detalhe="Clientes liberados" cor="text-green-700" icone={<Users size={22} />} />
+        <Card titulo="Inadimplentes" valor={`${empresasInadimplentes.length}`} detalhe={moeda(vencido)} cor="text-red-700" icone={<AlertTriangle size={22} />} />
+        <Card titulo="Churn" valor={percentual(churn)} detalhe="Clientes cancelados" cor="text-orange-700" icone={<TrendingDown size={22} />} />
+      </section>
+
+      <section className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <Card titulo="Recebido" valor={moeda(recebido)} detalhe="Pagamentos confirmados" cor="text-green-700" icone={<CheckCircle2 size={22} />} />
+        <Card titulo="Em aberto" valor={moeda(aberto)} detalhe="Cobranças pendentes" cor="text-blue-700" icone={<CalendarClock size={22} />} />
+        <Card titulo="A vencer" valor={moeda(aVencer)} detalhe="Pendentes no prazo" cor="text-cyan-700" icone={<Building2 size={22} />} />
+        <Card titulo="Vencido" valor={moeda(vencido)} detalhe="Valor em atraso" cor="text-red-700" icone={<XCircle size={22} />} />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6">
-        <ResumoCard titulo="Clientes ativos" valor={`${empresasAtivas.length}`} detalhe="Empresas liberadas e com assinatura ativa." cor="text-blue-700" icone={<Building2 size={36} />} />
-        <ResumoCard titulo="Inadimplentes" valor={`${inadimplentes}`} detalhe={`Taxa aproximada: ${taxaInadimplencia.toFixed(1).replace(".", ",")}%`} cor="text-red-700" icone={<XCircle size={36} />} />
-        <ResumoCard titulo="Cobranças" valor={`${cobrancas.length}`} detalhe="Total de registros financeiros SaaS." cor="text-purple-700" icone={<BarChart3 size={36} />} />
+        <ResumoCard titulo="Empresas em teste" valor={`${empresasTeste.length}`} detalhe="Clientes no período experimental." cor="text-cyan-700" icone={<Building2 size={36} />} />
+        <ResumoCard titulo="Empresas bloqueadas" valor={`${empresasBloqueadas.length}`} detalhe="Acesso suspenso por atraso ou bloqueio manual." cor="text-red-700" icone={<XCircle size={36} />} />
+        <ResumoCard titulo="Cobranças totais" valor={`${cobrancas.length}`} detalhe="Registros financeiros SaaS." cor="text-purple-700" icone={<BarChart3 size={36} />} />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6">
@@ -318,7 +493,7 @@ export default function AdminFinanceiroPage() {
 
           <div className="space-y-3">
             {porPlano.map((item) => {
-              const percentual = mrr > 0 ? (item.total / mrr) * 100 : 0;
+              const perc = mrr > 0 ? (item.total / mrr) * 100 : 0;
 
               return (
                 <div key={item.plano} className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
@@ -334,7 +509,7 @@ export default function AdminFinanceiroPage() {
                   <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-blue-700 rounded-full"
-                      style={{ width: `${Math.min(percentual, 100)}%` }}
+                      style={{ width: `${Math.min(perc, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -347,31 +522,94 @@ export default function AdminFinanceiroPage() {
           <h2 className="text-2xl font-black text-slate-900 mb-1">
             Últimos Recebimentos
           </h2>
-          <p className="text-slate-500 mb-5">
-            Pagamentos confirmados recentemente.
-          </p>
+          <p className="text-slate-500 mb-5">Pagamentos confirmados recentemente.</p>
 
           <div className="space-y-3">
             {ultimosRecebimentos.map((cobranca) => (
               <div key={cobranca.id} className="border border-slate-100 bg-slate-50 rounded-2xl p-4">
-                <p className="font-black text-slate-900">
-                  {nomeEmpresa(cobranca.empresas)}
-                </p>
-                <p className="text-sm text-green-700 font-black">
-                  {moeda(Number(cobranca.valor || 0))}
-                </p>
-                <p className="text-xs text-slate-500">
-                  Pago em {formatarData(cobranca.data_pagamento)}
-                </p>
+                <p className="font-black text-slate-900">{nomeEmpresa(cobranca.empresas)}</p>
+                <p className="text-sm text-green-700 font-black">{moeda(Number(cobranca.valor || 0))}</p>
+                <p className="text-xs text-slate-500">Pago em {formatarData(cobranca.data_pagamento)}</p>
               </div>
             ))}
 
             {ultimosRecebimentos.length === 0 && (
-              <div className="text-center text-slate-500 p-6">
-                Nenhum pagamento confirmado.
-              </div>
+              <div className="text-center text-slate-500 p-6">Nenhum pagamento confirmado.</div>
             )}
           </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
+        <GraficoBarras
+          titulo="Receita por mês"
+          descricao="Valores recebidos nos últimos meses."
+          dados={receitaPorMes.map((item) => ({
+            label: item.mes,
+            valor: item.total,
+            texto: moeda(item.total),
+            largura: Math.max(4, (item.total / maiorReceitaMes) * 100),
+          }))}
+        />
+
+        <GraficoBarras
+          titulo="Crescimento de clientes"
+          descricao="Novas empresas cadastradas por mês."
+          dados={crescimentoClientes.map((item) => ({
+            label: item.mes,
+            valor: item.total,
+            texto: `${item.total} cliente(s)`,
+            largura: Math.max(4, (item.total / maiorClientesMes) * 100),
+          }))}
+        />
+      </section>
+
+      <section className="bg-white rounded-[28px] border border-slate-200 p-5 shadow-sm mb-6">
+        <h2 className="text-2xl font-black text-slate-900 mb-1">
+          Histórico de Métricas
+        </h2>
+        <p className="text-slate-500 mb-5">
+          Métricas mensais salvas para acompanhamento executivo.
+        </p>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[850px]">
+            <thead>
+              <tr className="bg-slate-900 text-white">
+                <th className="p-3 text-left">Referência</th>
+                <th className="p-3 text-left">MRR</th>
+                <th className="p-3 text-left">ARR</th>
+                <th className="p-3 text-left">Ticket</th>
+                <th className="p-3 text-left">Ativos</th>
+                <th className="p-3 text-left">Teste</th>
+                <th className="p-3 text-left">Inadimplentes</th>
+                <th className="p-3 text-left">Bloqueados</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {metricas.map((metrica) => (
+                <tr key={metrica.id} className="border-b hover:bg-slate-50">
+                  <td className="p-3 font-black text-slate-900">{formatarData(metrica.referencia)}</td>
+                  <td className="p-3 text-purple-700 font-black">{moeda(Number(metrica.mrr || 0))}</td>
+                  <td className="p-3 text-blue-700 font-black">{moeda(Number(metrica.arr || 0))}</td>
+                  <td className="p-3 text-slate-800 font-black">{moeda(Number(metrica.ticket_medio || 0))}</td>
+                  <td className="p-3">{metrica.clientes_ativos || 0}</td>
+                  <td className="p-3">{metrica.clientes_teste || 0}</td>
+                  <td className="p-3">{metrica.clientes_inadimplentes || 0}</td>
+                  <td className="p-3">{metrica.clientes_bloqueados || 0}</td>
+                </tr>
+              ))}
+
+              {metricas.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="p-6 text-center text-slate-500">
+                    Nenhuma métrica salva ainda.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -435,12 +673,8 @@ export default function AdminFinanceiroPage() {
                 cobrancasFiltradas.map((cobranca) => (
                   <tr key={cobranca.id} className="border-b last:border-b-0 hover:bg-slate-50">
                     <td className="p-4">
-                      <p className="font-black text-slate-950">
-                        {nomeEmpresa(cobranca.empresas)}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {cobranca.empresas?.cnpj || "Sem documento"}
-                      </p>
+                      <p className="font-black text-slate-950">{nomeEmpresa(cobranca.empresas)}</p>
+                      <p className="text-xs text-slate-500">{cobranca.empresas?.cnpj || "Sem documento"}</p>
                     </td>
 
                     <td className="p-4">
@@ -454,17 +688,9 @@ export default function AdminFinanceiroPage() {
                       <p className="text-xs text-slate-500">{cobranca.forma_pagamento || "Sem forma de pagamento"}</p>
                     </td>
 
-                    <td className="p-4 font-black text-purple-700">
-                      {moeda(Number(cobranca.valor || 0))}
-                    </td>
-
-                    <td className="p-4 font-bold text-slate-800">
-                      {formatarData(cobranca.vencimento)}
-                    </td>
-
-                    <td className="p-4 text-slate-700">
-                      {formatarData(cobranca.data_pagamento)}
-                    </td>
+                    <td className="p-4 font-black text-purple-700">{moeda(Number(cobranca.valor || 0))}</td>
+                    <td className="p-4 font-bold text-slate-800">{formatarData(cobranca.vencimento)}</td>
+                    <td className="p-4 text-slate-700">{formatarData(cobranca.data_pagamento)}</td>
 
                     <td className="p-4">
                       <StatusBadge status={statusCobranca(cobranca)} />
@@ -511,7 +737,6 @@ function Card({
       </div>
 
       <h2 className={`text-2xl font-black mt-3 ${cor}`}>{valor}</h2>
-
       <p className="text-xs text-slate-500 mt-1">{detalhe}</p>
     </div>
   );
@@ -542,6 +767,47 @@ function ResumoCard({
       </div>
 
       <p className="text-sm text-slate-500 mt-3">{detalhe}</p>
+    </div>
+  );
+}
+
+function GraficoBarras({
+  titulo,
+  descricao,
+  dados,
+}: {
+  titulo: string;
+  descricao: string;
+  dados: { label: string; valor: number; texto: string; largura: number }[];
+}) {
+  return (
+    <div className="bg-white rounded-[28px] border border-slate-200 p-5 shadow-sm">
+      <h2 className="text-2xl font-black text-slate-900 mb-1">{titulo}</h2>
+      <p className="text-slate-500 mb-5">{descricao}</p>
+
+      <div className="space-y-4">
+        {dados.map((item) => (
+          <div key={item.label}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-black text-slate-800">{item.label}</p>
+              <p className="font-black text-blue-700">{item.texto}</p>
+            </div>
+
+            <div className="h-4 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-700 rounded-full"
+                style={{ width: `${item.largura}%` }}
+              />
+            </div>
+          </div>
+        ))}
+
+        {dados.length === 0 && (
+          <div className="text-center text-slate-500 p-6">
+            Sem dados suficientes.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ type UsuarioBanco = {
   id: string;
   nome: string | null;
   email: string | null;
+  usuario: string | null;
   senha: string | null;
   perfil: string | null;
   empresa_id: string | null;
@@ -29,9 +30,10 @@ type EmpresaBanco = {
   id: string;
   nome_fantasia: string | null;
   razao_social: string | null;
-  nome: string | null;
   plano: string | null;
   ativo: boolean | null;
+  status_assinatura: string | null;
+  data_vencimento_assinatura: string | null;
   modulo_fiscal: boolean | null;
   modulo_whatsapp: boolean | null;
   modulo_delivery: boolean | null;
@@ -48,20 +50,80 @@ export default function LoginPage() {
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
+  function hojeISO() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  function assinaturaVencida(empresa: EmpresaBanco | null) {
+    if (!empresa) return false;
+
+    const status = String(empresa.status_assinatura || "").toLowerCase();
+
+    if (
+      status === "vencido" ||
+      status === "vencida" ||
+      status === "bloqueado" ||
+      status === "bloqueada" ||
+      status === "cancelado" ||
+      status === "cancelada" ||
+      status === "suspenso" ||
+      status === "suspensa"
+    ) {
+      return true;
+    }
+
+    if (
+      empresa.data_vencimento_assinatura &&
+      empresa.data_vencimento_assinatura < hojeISO()
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  async function bloquearEmpresaVencida(empresa: EmpresaBanco | null) {
+    if (!empresa) return;
+
+    try {
+      await supabase
+        .from("empresas")
+        .update({
+          ativo: false,
+          status_assinatura: "Bloqueado",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", empresa.id);
+
+      await supabase.from("notificacoes_saas").insert([
+        {
+          tipo: "bloqueio_login",
+          titulo: "Login bloqueado por assinatura vencida",
+          descricao: `${
+            empresa.nome_fantasia || empresa.razao_social || "Empresa"
+          } tentou acessar com assinatura vencida.`,
+          empresa_id: empresa.id,
+          lida: false,
+        },
+      ]);
+    } catch {
+      // Não interrompe a mensagem para o usuário.
+    }
+  }
+
   function salvarSessao(usuario: UsuarioBanco, empresa: EmpresaBanco | null) {
     const plano = empresa?.plano || "Básico";
 
     const empresaNome =
       empresa?.nome_fantasia ||
       empresa?.razao_social ||
-      empresa?.nome ||
       "Empresa";
 
     const usuarioSessao = {
       id: usuario.id,
-      nome: usuario.nome || usuario.email || "Usuário",
+      nome: usuario.nome || usuario.email || usuario.usuario || "Usuário",
       email: usuario.email || "",
-      usuario: usuario.email || "",
+      usuario: usuario.usuario || "",
       perfil: usuario.perfil || "Operador",
       empresa_id: usuario.empresa_id || empresa?.id || null,
       empresa_nome: empresaNome,
@@ -85,6 +147,8 @@ export default function LoginPage() {
           razao_social: empresa.razao_social || empresaNome,
           plano,
           ativo: empresa.ativo !== false,
+          status_assinatura: empresa.status_assinatura || "Ativo",
+          data_vencimento_assinatura: empresa.data_vencimento_assinatura || null,
         }
       : null;
 
@@ -105,7 +169,7 @@ export default function LoginPage() {
     const { data, error } = await supabase
       .from("empresas")
       .select(
-        "id,nome_fantasia,razao_social,nome,plano,ativo,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
+        "id,nome_fantasia,razao_social,plano,ativo,status_assinatura,data_vencimento_assinatura,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
       )
       .eq("id", empresaId)
       .maybeSingle();
@@ -119,9 +183,10 @@ export default function LoginPage() {
     e.preventDefault();
 
     const loginLimpo = login.trim();
+    const senhaLimpa = senha.trim();
 
-    if (!loginLimpo || !senha.trim()) {
-      alert("Informe o e-mail e a senha.");
+    if (!loginLimpo || !senhaLimpa) {
+      alert("Informe o e-mail/usuário e a senha.");
       return;
     }
 
@@ -130,8 +195,8 @@ export default function LoginPage() {
     try {
       const { data, error } = await supabase
         .from("usuarios")
-        .select("id,nome,email,senha,perfil,empresa_id,ativo")
-        .eq("email", loginLimpo)
+        .select("id,nome,email,usuario,senha,perfil,empresa_id,ativo")
+        .or(`email.eq.${loginLimpo},usuario.eq.${loginLimpo}`)
         .maybeSingle();
 
       if (error) {
@@ -154,27 +219,50 @@ export default function LoginPage() {
         return;
       }
 
-      if ((usuario.senha || "") !== senha) {
+      if ((usuario.senha || "") !== senhaLimpa) {
         alert("Senha incorreta.");
+        setCarregando(false);
+        return;
+      }
+
+      const isSuperAdmin = usuario.perfil === "Super Admin";
+
+      if (isSuperAdmin) {
+        salvarSessao(usuario, null);
+        router.push("/admin");
         setCarregando(false);
         return;
       }
 
       const empresa = await buscarEmpresa(usuario.empresa_id);
 
-      if (empresa && empresa.ativo === false) {
-        alert("Empresa inativa. Fale com o suporte.");
+      if (!empresa) {
+        alert("Empresa não encontrada. Fale com o suporte.");
+        setCarregando(false);
+        return;
+      }
+
+      if (empresa.ativo === false) {
+        alert(
+          "Acesso bloqueado. Sua empresa está inativa ou com assinatura bloqueada. Fale com o suporte THCloud."
+        );
+        setCarregando(false);
+        return;
+      }
+
+      if (assinaturaVencida(empresa)) {
+        await bloquearEmpresaVencida(empresa);
+
+        alert(
+          "Acesso bloqueado. Sua assinatura está vencida. Regularize o pagamento para liberar o sistema."
+        );
+
         setCarregando(false);
         return;
       }
 
       salvarSessao(usuario, empresa);
-
-      if (usuario.perfil === "Super Admin") {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
-      }
+      router.push("/dashboard");
     } catch (erro) {
       console.error(erro);
       alert("Erro ao entrar no sistema.");
@@ -242,12 +330,14 @@ export default function LoginPage() {
                 <h1 className="text-2xl font-black tracking-[-0.04em]">
                   THCloud ERP
                 </h1>
-                <p className="text-sm text-blue-100">Gestão inteligente</p>
+                <p className="text-sm text-blue-100">
+                  Gestão inteligente
+                </p>
               </div>
             </div>
 
             <div className="rounded-[32px] bg-white/95 backdrop-blur-xl border border-white/80 shadow-2xl p-6 sm:p-8 lg:p-10">
-              <div className="hidden lg:flex justify-center mb-6">
+              <div className="hidden lg:flex justify-center mb-8">
                 <LogoMarca grande />
               </div>
 
@@ -268,7 +358,7 @@ export default function LoginPage() {
               <form onSubmit={entrar} className="mt-8 space-y-5">
                 <div>
                   <label className="block text-sm font-black text-slate-900 mb-2">
-                    E-mail
+                    E-mail ou usuário
                   </label>
 
                   <div className="relative">
@@ -280,9 +370,9 @@ export default function LoginPage() {
                     <input
                       value={login}
                       onChange={(e) => setLogin(e.target.value)}
-                      type="email"
+                      type="text"
                       autoComplete="username"
-                      placeholder="Digite seu e-mail"
+                      placeholder="E-mail ou usuário"
                       className="w-full rounded-2xl border border-slate-300 bg-white px-12 py-4 font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
                     />
                   </div>
@@ -340,7 +430,9 @@ export default function LoginPage() {
               </form>
 
               <div className="mt-6 rounded-2xl bg-blue-50 border border-blue-100 p-4 text-center">
-                <p className="font-black text-blue-900">Ambiente seguro</p>
+                <p className="font-black text-blue-900">
+                  Ambiente seguro
+                </p>
 
                 <p className="mt-1 text-sm text-blue-700">
                   Login isolado por empresa, plano e permissões.
@@ -361,14 +453,14 @@ export default function LoginPage() {
 function LogoMarca({ grande = false }: { grande?: boolean }) {
   return (
     <div
-      className={`flex items-center justify-center ${
+      className={`overflow-hidden flex items-center justify-center ${
         grande ? "h-24 w-24" : "h-16 w-16"
       }`}
     >
       <img
         src="/logo-thcloud-original.png"
         alt="THCloud"
-        className="h-full w-full object-contain drop-shadow-xl"
+        className="h-full w-full object-contain"
         onError={(e) => {
           e.currentTarget.src = "/logo-thcloud-transparente.png";
         }}
