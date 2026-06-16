@@ -1,36 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabase";
+import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
-  CalendarDays,
-  CheckCircle,
+  CheckCircle2,
+  CircleDollarSign,
+  Clock,
   Edit,
+  Eye,
+  Filter,
+  History,
   Lock,
+  PackageCheck,
   Plus,
   RefreshCw,
   Search,
-  Trash2,
+  ShieldAlert,
+  Unlock,
   X,
+  XCircle,
 } from "lucide-react";
+import { supabase } from "../../../lib/supabase";
 
 type Empresa = {
   id: string;
-  razao_social: string | null;
   nome_fantasia: string | null;
+  razao_social: string | null;
   cnpj: string | null;
-  telefone: string | null;
   email: string | null;
+  telefone: string | null;
+  celular: string | null;
+  cidade: string | null;
+  estado: string | null;
   ativo: boolean | null;
-  created_at: string | null;
-  updated_at: string | null;
   plano: string | null;
+  valor_mensal: number | null;
   status_assinatura: string | null;
+  data_inicio_assinatura: string | null;
   data_vencimento_assinatura: string | null;
-  limite_usuarios: number | null;
-  limite_produtos: number | null;
-  observacoes_internas: string | null;
+  observacoes: string | null;
+  created_at: string | null;
   modulo_fiscal: boolean | null;
   modulo_whatsapp: boolean | null;
   modulo_delivery: boolean | null;
@@ -39,95 +48,91 @@ type Empresa = {
   modulo_multiloja: boolean | null;
 };
 
+type Plano = {
+  id: string;
+  nome: string;
+  valor_mensal: number | null;
+  modulo_fiscal: boolean | null;
+  modulo_whatsapp: boolean | null;
+  modulo_delivery: boolean | null;
+  modulo_crm: boolean | null;
+  modulo_relatorios_premium: boolean | null;
+  modulo_multiloja: boolean | null;
+};
+
+type Historico = {
+  id: string;
+  empresa_id: string | null;
+  acao: string | null;
+  descricao: string | null;
+  usuario: string | null;
+  created_at: string | null;
+};
+
 type FormEmpresa = {
   id: string;
-  razao_social: string;
   nome_fantasia: string;
+  razao_social: string;
   cnpj: string;
-  telefone: string;
   email: string;
+  telefone: string;
+  celular: string;
+  cidade: string;
+  estado: string;
   plano: string;
+  valor_mensal: string;
   status_assinatura: string;
+  data_inicio_assinatura: string;
   data_vencimento_assinatura: string;
-  limite_usuarios: string;
-  limite_produtos: string;
-  observacoes_internas: string;
   ativo: boolean;
+  observacoes: string;
   modulo_fiscal: boolean;
   modulo_whatsapp: boolean;
   modulo_delivery: boolean;
   modulo_crm: boolean;
   modulo_relatorios_premium: boolean;
   modulo_multiloja: boolean;
-  nome_admin: string;
-  email_admin: string;
-  senha_admin: string;
-  telefone_admin: string;
 };
 
-const planos = ["Teste", "Básico", "Profissional", "Premium", "Enterprise"];
-const statusAssinaturas = ["Ativo", "Teste", "Vencido", "Bloqueado", "Cancelado"];
-
-const formInicial: FormEmpresa = {
+const FORM_VAZIO: FormEmpresa = {
   id: "",
-  razao_social: "",
   nome_fantasia: "",
+  razao_social: "",
   cnpj: "",
-  telefone: "",
   email: "",
-  plano: "Teste",
-  status_assinatura: "Teste",
+  telefone: "",
+  celular: "",
+  cidade: "",
+  estado: "",
+  plano: "Básico",
+  valor_mensal: "99.90",
+  status_assinatura: "Ativo",
+  data_inicio_assinatura: "",
   data_vencimento_assinatura: "",
-  limite_usuarios: "999999",
-  limite_produtos: "999999",
-  observacoes_internas: "",
   ativo: true,
+  observacoes: "",
   modulo_fiscal: false,
   modulo_whatsapp: false,
   modulo_delivery: false,
   modulo_crm: false,
   modulo_relatorios_premium: false,
   modulo_multiloja: false,
-  nome_admin: "",
-  email_admin: "",
-  senha_admin: "123456",
-  telefone_admin: "",
 };
 
 export default function AdminEmpresasPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [planos, setPlanos] = useState<Plano[]>([]);
+  const [historico, setHistorico] = useState<Historico[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
   const [filtroPlano, setFiltroPlano] = useState("Todos");
   const [modalAberto, setModalAberto] = useState(false);
-  const [modoEdicao, setModoEdicao] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [form, setForm] = useState<FormEmpresa>(formInicial);
-
-  function somenteNumeros(valor: string) {
-    return valor.replace(/\D/g, "");
-  }
-
-  function validarEmail(email: string) {
-    return /\S+@\S+\.\S+/.test(email);
-  }
-
-  function formatarCNPJ(valor: string | null) {
-    if (!valor) return "-";
-    const numeros = somenteNumeros(valor);
-    if (numeros.length !== 14) return valor;
-    return numeros.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
-  }
-
-  function formatarDataHora(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
-  }
+  const [modalHistorico, setModalHistorico] = useState(false);
+  const [visualizando, setVisualizando] = useState<Empresa | null>(null);
+  const [empresaHistorico, setEmpresaHistorico] = useState<Empresa | null>(null);
+  const [form, setForm] = useState<FormEmpresa>(FORM_VAZIO);
 
   function hojeISO() {
     return new Date().toISOString().split("T")[0];
@@ -139,21 +144,75 @@ export default function AdminEmpresasPage() {
     return data.toISOString().split("T")[0];
   }
 
-  function diasParaVencer(vencimento: string | null) {
-    if (!vencimento) return null;
-    const hoje = new Date(hojeISO() + "T00:00:00");
-    const dataVencimento = new Date(vencimento + "T00:00:00");
-    return Math.ceil((dataVencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+  function moeda(valor: number) {
+    return Number(valor || 0).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
   }
 
-  function classeStatus(status: string | null, ativo: boolean | null) {
-    if (ativo === false) return "bg-red-100 text-red-700";
-    if (status === "Ativo") return "bg-green-100 text-green-700";
-    if (status === "Teste") return "bg-blue-100 text-blue-700";
-    if (status === "Vencido") return "bg-orange-100 text-orange-700";
-    if (status === "Bloqueado") return "bg-red-100 text-red-700";
-    if (status === "Cancelado") return "bg-slate-200 text-slate-700";
-    return "bg-slate-100 text-slate-700";
+  function formatarData(data: string | null) {
+    if (!data) return "-";
+    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
+  }
+
+  function nomeEmpresa(empresa: Empresa) {
+    return empresa.nome_fantasia || empresa.razao_social || "Empresa sem nome";
+  }
+
+  function usuarioAtual() {
+    try {
+      const storage =
+        sessionStorage.getItem("th_usuario") || localStorage.getItem("th_usuario");
+
+      if (!storage) return "Super Admin";
+
+      const usuario = JSON.parse(storage);
+      return usuario?.nome || usuario?.email || "Super Admin";
+    } catch {
+      return "Super Admin";
+    }
+  }
+
+  function normalizarStatus(status: string | null) {
+    const valor = String(status || "Ativo").toLowerCase();
+
+    if (valor === "ativa") return "Ativo";
+    if (valor === "ativo") return "Ativo";
+    if (valor === "teste") return "Teste";
+    if (valor === "vencido" || valor === "vencida") return "Vencido";
+    if (valor === "bloqueado" || valor === "bloqueada") return "Bloqueado";
+    if (valor === "cancelado" || valor === "cancelada") return "Cancelado";
+    if (valor === "suspenso" || valor === "suspensa") return "Suspenso";
+
+    return status || "Ativo";
+  }
+
+  function estaVencida(empresa: Empresa) {
+    if (normalizarStatus(empresa.status_assinatura) === "Vencido") return true;
+    if (!empresa.data_vencimento_assinatura) return false;
+
+    return empresa.data_vencimento_assinatura < hojeISO();
+  }
+
+  function venceEmBreve(empresa: Empresa) {
+    if (!empresa.data_vencimento_assinatura) return false;
+    if (estaVencida(empresa)) return false;
+
+    const hoje = hojeISO();
+    const limite = adicionarDias(7);
+
+    return (
+      empresa.data_vencimento_assinatura >= hoje &&
+      empresa.data_vencimento_assinatura <= limite
+    );
+  }
+
+  function statusReal(empresa: Empresa) {
+    if (empresa.ativo === false) return "Bloqueado";
+    if (estaVencida(empresa)) return "Vencido";
+    if (venceEmBreve(empresa)) return "Vencendo";
+    return normalizarStatus(empresa.status_assinatura);
   }
 
   function quantidadeModulos(empresa: Empresa) {
@@ -167,220 +226,268 @@ export default function AdminEmpresasPage() {
     ].filter(Boolean).length;
   }
 
+  async function registrarHistorico(
+    empresaId: string,
+    acao: string,
+    descricao: string
+  ) {
+    try {
+      await supabase.from("historico_empresas").insert([
+        {
+          empresa_id: empresaId,
+          acao,
+          descricao,
+          usuario: usuarioAtual(),
+        },
+      ]);
+    } catch {}
+  }
+
+  async function carregarDados() {
+    setCarregando(true);
+
+    const { data: empresasData, error: empresasError } = await supabase
+      .from("empresas")
+      .select(
+        "id,nome_fantasia,razao_social,cnpj,email,telefone,celular,cidade,estado,ativo,plano,valor_mensal,status_assinatura,data_inicio_assinatura,data_vencimento_assinatura,observacoes,created_at,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
+      )
+      .order("created_at", { ascending: false });
+
+    if (empresasError) {
+      setCarregando(false);
+      alert("Erro ao carregar empresas SaaS: " + empresasError.message);
+      return;
+    }
+
+    setEmpresas((empresasData || []) as Empresa[]);
+
+    const { data: planosData } = await supabase
+      .from("planos_saas")
+      .select(
+        "id,nome,valor_mensal,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
+      )
+      .eq("ativo", true)
+      .order("valor_mensal", { ascending: true });
+
+    setPlanos((planosData || []) as Plano[]);
+    setCarregando(false);
+  }
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  const empresasFiltradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    return empresas.filter((empresa) => {
+      const texto = `${nomeEmpresa(empresa)} ${empresa.cnpj || ""} ${empresa.email || ""} ${empresa.telefone || ""} ${empresa.celular || ""} ${empresa.cidade || ""} ${empresa.estado || ""}`.toLowerCase();
+
+      const passaBusca = !termo || texto.includes(termo);
+      const passaPlano = filtroPlano === "Todos" || empresa.plano === filtroPlano;
+      const passaStatus =
+        filtroStatus === "Todos" || statusReal(empresa) === filtroStatus;
+
+      return passaBusca && passaPlano && passaStatus;
+    });
+  }, [empresas, busca, filtroStatus, filtroPlano]);
+
+  const totalEmpresas = empresas.length;
+  const empresasAtivas = empresas.filter(
+    (empresa) => empresa.ativo !== false && !estaVencida(empresa)
+  ).length;
+  const empresasTeste = empresas.filter(
+    (empresa) => statusReal(empresa) === "Teste"
+  ).length;
+  const empresasBloqueadas = empresas.filter(
+    (empresa) => empresa.ativo === false
+  ).length;
+  const empresasVencidas = empresas.filter((empresa) => estaVencida(empresa)).length;
+  const empresasVencendo = empresas.filter((empresa) => venceEmBreve(empresa)).length;
+  const receitaMensal = empresas
+    .filter((empresa) => empresa.ativo !== false && !estaVencida(empresa))
+    .reduce((total, empresa) => total + Number(empresa.valor_mensal || 0), 0);
+
+  function aplicarPlano(nomePlano: string) {
+    const plano = planos.find((item) => item.nome === nomePlano);
+
+    setForm((atual) => ({
+      ...atual,
+      plano: nomePlano,
+      valor_mensal: plano?.valor_mensal ? String(plano.valor_mensal) : atual.valor_mensal,
+      modulo_fiscal: plano?.modulo_fiscal === true,
+      modulo_whatsapp: plano?.modulo_whatsapp === true,
+      modulo_delivery: plano?.modulo_delivery === true,
+      modulo_crm: plano?.modulo_crm === true,
+      modulo_relatorios_premium: plano?.modulo_relatorios_premium === true,
+      modulo_multiloja: plano?.modulo_multiloja === true,
+    }));
+  }
+
   function abrirNovaEmpresa() {
-    setForm({ ...formInicial, data_vencimento_assinatura: adicionarDias(7) });
-    setModoEdicao(false);
+    setForm({
+      ...FORM_VAZIO,
+      data_inicio_assinatura: hojeISO(),
+      data_vencimento_assinatura: adicionarDias(30),
+    });
+    setVisualizando(null);
     setModalAberto(true);
   }
 
-  function abrirEditarEmpresa(empresa: Empresa) {
+  function editarEmpresa(empresa: Empresa) {
     setForm({
       id: empresa.id,
-      razao_social: empresa.razao_social || "",
       nome_fantasia: empresa.nome_fantasia || "",
+      razao_social: empresa.razao_social || "",
       cnpj: empresa.cnpj || "",
-      telefone: empresa.telefone || "",
       email: empresa.email || "",
-      plano: empresa.plano || "Teste",
-      status_assinatura: empresa.status_assinatura || "Teste",
-      data_vencimento_assinatura: empresa.data_vencimento_assinatura || "",
-      limite_usuarios: String(empresa.limite_usuarios || 999999),
-      limite_produtos: String(empresa.limite_produtos || 999999),
-      observacoes_internas: empresa.observacoes_internas || "",
+      telefone: empresa.telefone || "",
+      celular: empresa.celular || "",
+      cidade: empresa.cidade || "",
+      estado: empresa.estado || "",
+      plano: empresa.plano || "Básico",
+      valor_mensal: String(empresa.valor_mensal || 0),
+      status_assinatura: normalizarStatus(empresa.status_assinatura),
+      data_inicio_assinatura: empresa.data_inicio_assinatura || hojeISO(),
+      data_vencimento_assinatura:
+        empresa.data_vencimento_assinatura || adicionarDias(30),
       ativo: empresa.ativo !== false,
+      observacoes: empresa.observacoes || "",
       modulo_fiscal: empresa.modulo_fiscal === true,
       modulo_whatsapp: empresa.modulo_whatsapp === true,
       modulo_delivery: empresa.modulo_delivery === true,
       modulo_crm: empresa.modulo_crm === true,
       modulo_relatorios_premium: empresa.modulo_relatorios_premium === true,
       modulo_multiloja: empresa.modulo_multiloja === true,
-      nome_admin: "",
-      email_admin: "",
-      senha_admin: "123456",
-      telefone_admin: "",
     });
-    setModoEdicao(true);
+
+    setVisualizando(null);
     setModalAberto(true);
   }
 
-  async function carregarEmpresas() {
-    const { data, error } = await supabase
-      .from("empresas")
-      .select("id,razao_social,nome_fantasia,cnpj,telefone,email,ativo,created_at,updated_at,plano,status_assinatura,data_vencimento_assinatura,limite_usuarios,limite_produtos,observacoes_internas,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      alert("Erro ao carregar empresas: " + error.message);
-      return;
-    }
-
-    setEmpresas(data || []);
-  }
-
-  function validarFormulario() {
-    if (!form.razao_social.trim()) {
-      alert("Informe a razão social.");
-      return false;
-    }
-    if (!form.nome_fantasia.trim()) {
-      alert("Informe o nome fantasia.");
-      return false;
-    }
-    if (form.email.trim() && !validarEmail(form.email.trim())) {
-      alert("Informe um e-mail válido para a empresa.");
-      return false;
-    }
-    if (!form.data_vencimento_assinatura) {
-      alert("Informe o vencimento da assinatura.");
-      return false;
-    }
-
-    if (!modoEdicao) {
-      if (!form.nome_admin.trim()) {
-        alert("Informe o nome do administrador da empresa.");
-        return false;
-      }
-      if (!form.email_admin.trim()) {
-        alert("Informe o e-mail de login do administrador.");
-        return false;
-      }
-      if (!validarEmail(form.email_admin.trim())) {
-        alert("Informe um e-mail válido para o administrador.");
-        return false;
-      }
-      if (!form.senha_admin.trim()) {
-        alert("Informe a senha inicial do administrador.");
-        return false;
-      }
-      if (form.senha_admin.trim().length < 4) {
-        alert("A senha inicial precisa ter pelo menos 4 caracteres.");
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  async function emailUsuarioJaExiste(email: string) {
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("id")
-      .eq("email", email.trim().toLowerCase())
-      .limit(1);
-
-    if (error) throw new Error(error.message);
-    return (data || []).length > 0;
+  function alterarCampo(campo: keyof FormEmpresa, valor: string | boolean) {
+    setForm((atual) => ({
+      ...atual,
+      [campo]: valor,
+    }));
   }
 
   async function salvarEmpresa() {
-    if (!validarFormulario()) return;
+    if (!form.nome_fantasia.trim() && !form.razao_social.trim()) {
+      alert("Informe o nome fantasia ou razão social.");
+      return;
+    }
+
     setSalvando(true);
 
-    try {
-      const dadosEmpresa = {
-        razao_social: form.razao_social.trim(),
-        nome_fantasia: form.nome_fantasia.trim(),
-        cnpj: somenteNumeros(form.cnpj.trim()) || null,
-        telefone: form.telefone.trim() || null,
-        email: form.email.trim().toLowerCase() || null,
-        plano: form.plano,
-        status_assinatura: form.status_assinatura,
-        data_vencimento_assinatura: form.data_vencimento_assinatura,
-        limite_usuarios: Number(form.limite_usuarios || 999999),
-        limite_produtos: Number(form.limite_produtos || 999999),
-        observacoes_internas: form.observacoes_internas.trim() || null,
-        ativo: form.ativo,
-        modulo_fiscal: form.modulo_fiscal,
-        modulo_whatsapp: form.modulo_whatsapp,
-        modulo_delivery: form.modulo_delivery,
-        modulo_crm: form.modulo_crm,
-        modulo_relatorios_premium: form.modulo_relatorios_premium,
-        modulo_multiloja: form.modulo_multiloja,
-        updated_at: new Date().toISOString(),
-      };
+    const dados = {
+      nome_fantasia: form.nome_fantasia.trim(),
+      razao_social: form.razao_social.trim(),
+      cnpj: form.cnpj.trim(),
+      email: form.email.trim(),
+      telefone: form.telefone.trim(),
+      celular: form.celular.trim(),
+      cidade: form.cidade.trim(),
+      estado: form.estado.trim().toUpperCase(),
+      plano: form.plano,
+      valor_mensal: Number(String(form.valor_mensal).replace(",", ".") || 0),
+      status_assinatura: form.status_assinatura,
+      data_inicio_assinatura: form.data_inicio_assinatura || null,
+      data_vencimento_assinatura: form.data_vencimento_assinatura || null,
+      ativo: form.ativo,
+      observacoes: form.observacoes.trim() || null,
+      modulo_fiscal: form.modulo_fiscal,
+      modulo_whatsapp: form.modulo_whatsapp,
+      modulo_delivery: form.modulo_delivery,
+      modulo_crm: form.modulo_crm,
+      modulo_relatorios_premium: form.modulo_relatorios_premium,
+      modulo_multiloja: form.modulo_multiloja,
+      updated_at: new Date().toISOString(),
+    };
 
-      if (modoEdicao) {
-        const { error } = await supabase.from("empresas").update(dadosEmpresa).eq("id", form.id);
-        if (error) {
-          alert("Erro ao atualizar empresa: " + error.message);
-          setSalvando(false);
-          return;
-        }
-        alert("Empresa atualizada com sucesso!");
-      } else {
-        const emailAdmin = form.email_admin.trim().toLowerCase();
-        const existe = await emailUsuarioJaExiste(emailAdmin);
+    let resultado;
+    let empresaId = form.id;
 
-        if (existe) {
-          alert("Já existe um usuário cadastrado com este e-mail de administrador.");
-          setSalvando(false);
-          return;
-        }
-
-        const { data: empresaCriada, error: erroEmpresa } = await supabase
-          .from("empresas")
-          .insert(dadosEmpresa)
-          .select("id")
-          .single();
-
-        if (erroEmpresa || !empresaCriada) {
-          alert("Erro ao cadastrar empresa: " + (erroEmpresa?.message || ""));
-          setSalvando(false);
-          return;
-        }
-
-        const { error: erroUsuario } = await supabase.from("usuarios").insert({
-          empresa_id: empresaCriada.id,
-          nome: form.nome_admin.trim(),
-          email: emailAdmin,
-          senha: form.senha_admin.trim(),
-          telefone: form.telefone_admin.trim() || null,
-          cargo: "Administrador",
-          perfil: "Administrador",
-          ativo: true,
-          observacoes: "Usuário administrador criado automaticamente pelo cadastro da empresa SaaS.",
-          trocar_senha: true,
-          modulo_fiscal: false,
-          modulo_whatsapp: false,
-          modulo_crm: false,
-          modulo_delivery: false,
-          modulo_multiloja: false,
-          modulo_relatorios_premium: false,
-          updated_at: new Date().toISOString(),
-        });
-
-        if (erroUsuario) {
-          await supabase.from("empresas").delete().eq("id", empresaCriada.id);
-          alert(
-            "A empresa foi criada, mas houve erro ao criar o usuário administrador. A empresa foi removida para evitar cadastro incompleto. Erro: " +
-              erroUsuario.message
-          );
-          setSalvando(false);
-          return;
-        }
-
-        alert(
-          `Empresa cadastrada com sucesso!\n\nLogin do administrador:\nE-mail: ${emailAdmin}\nSenha: ${form.senha_admin.trim()}`
-        );
-      }
-
-      setModalAberto(false);
-      setForm(formInicial);
-      await carregarEmpresas();
-    } catch (error: any) {
-      alert("Erro ao salvar empresa: " + error.message);
+    if (form.id) {
+      resultado = await supabase.from("empresas").update(dados).eq("id", form.id);
+    } else {
+      resultado = await supabase.from("empresas").insert([dados]).select("id").single();
     }
 
     setSalvando(false);
+
+    if (resultado.error) {
+      alert("Erro ao salvar empresa: " + resultado.error.message);
+      return;
+    }
+
+    if (!empresaId && resultado.data?.id) empresaId = resultado.data.id;
+
+    if (empresaId) {
+      await registrarHistorico(
+        empresaId,
+        form.id ? "Empresa atualizada" : "Empresa criada",
+        `${form.id ? "Atualização" : "Cadastro"} realizado no Super Admin. Plano: ${form.plano}.`
+      );
+
+      if (!form.id) {
+        try {
+          const provisionamento = await fetch("/api/saas/provisionar-empresa", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              empresa_id: empresaId,
+              nome_admin:
+                form.nome_fantasia || form.razao_social || "Administrador",
+              email_admin: form.email,
+              usuario_admin: form.email || form.cnpj.replace(/\D/g, ""),
+            }),
+          });
+
+          const resultadoProvisionamento = await provisionamento.json();
+
+          if (resultadoProvisionamento.ok) {
+            alert(
+              `Empresa cadastrada e provisionada com sucesso!\n\nLogin: ${resultadoProvisionamento.login}\nSenha: ${resultadoProvisionamento.senha}`
+            );
+          } else {
+            alert(
+              `Empresa salva, mas houve erro ao provisionar usuário: ${resultadoProvisionamento.erro || "Erro desconhecido."}`
+            );
+          }
+        } catch (erro) {
+          console.error("Erro ao provisionar empresa", erro);
+          alert("Empresa salva, mas houve erro ao provisionar o usuário administrador.");
+        }
+      }
+    }
+
+    setModalAberto(false);
+    await carregarDados();
   }
 
-  async function alterarStatusEmpresa(empresa: Empresa, novoStatus: string, ativo: boolean) {
-    const confirmar = confirm(`Deseja alterar ${empresa.nome_fantasia || empresa.razao_social} para ${novoStatus}?`);
-    if (!confirmar) return;
+  async function bloquearLiberar(empresa: Empresa) {
+    const liberar = empresa.ativo === false;
+
+    if (
+      !confirm(
+        liberar
+          ? "Deseja liberar o acesso desta empresa?"
+          : "Deseja bloquear o acesso desta empresa?"
+      )
+    ) {
+      return;
+    }
 
     const { error } = await supabase
       .from("empresas")
-      .update({ status_assinatura: novoStatus, ativo, updated_at: new Date().toISOString() })
+      .update({
+        ativo: liberar,
+        status_assinatura: liberar ? "Ativo" : "Bloqueado",
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", empresa.id);
 
     if (error) {
@@ -388,252 +495,277 @@ export default function AdminEmpresasPage() {
       return;
     }
 
-    carregarEmpresas();
+    await registrarHistorico(
+      empresa.id,
+      liberar ? "Empresa liberada" : "Empresa bloqueada",
+      liberar
+        ? "Acesso da empresa liberado pelo Super Admin."
+        : "Acesso da empresa bloqueado pelo Super Admin."
+    );
+
+    await carregarDados();
   }
 
-  async function renovarEmpresa(empresa: Empresa, dias: number) {
-    const confirmar = confirm(`Deseja renovar ${empresa.nome_fantasia || empresa.razao_social} por ${dias} dias?`);
-    if (!confirmar) return;
+  async function renovar30Dias(empresa: Empresa) {
+    if (!confirm("Renovar assinatura por mais 30 dias?")) return;
 
-    const base = empresa.data_vencimento_assinatura
-      ? new Date(empresa.data_vencimento_assinatura + "T00:00:00")
-      : new Date();
+    const base =
+      empresa.data_vencimento_assinatura &&
+      empresa.data_vencimento_assinatura > hojeISO()
+        ? new Date(empresa.data_vencimento_assinatura + "T00:00:00")
+        : new Date();
 
-    const hoje = new Date(hojeISO() + "T00:00:00");
-    const dataBase = base < hoje ? hoje : base;
-    dataBase.setDate(dataBase.getDate() + dias);
-    const novoVencimento = dataBase.toISOString().split("T")[0];
+    base.setDate(base.getDate() + 30);
+
+    const novoVencimento = base.toISOString().split("T")[0];
 
     const { error } = await supabase
       .from("empresas")
       .update({
-        data_vencimento_assinatura: novoVencimento,
-        status_assinatura: "Ativo",
         ativo: true,
+        status_assinatura: "Ativo",
+        data_vencimento_assinatura: novoVencimento,
         updated_at: new Date().toISOString(),
       })
       .eq("id", empresa.id);
 
     if (error) {
-      alert("Erro ao renovar empresa: " + error.message);
+      alert("Erro ao renovar assinatura: " + error.message);
       return;
     }
 
-    alert("Empresa renovada com sucesso!");
-    carregarEmpresas();
+    await registrarHistorico(
+      empresa.id,
+      "Assinatura renovada",
+      `Assinatura renovada por 30 dias. Novo vencimento: ${formatarData(novoVencimento)}.`
+    );
+
+    await carregarDados();
   }
 
-  async function excluirEmpresa(empresa: Empresa) {
-    const confirmar = confirm(
-      `Deseja realmente excluir ${empresa.nome_fantasia || empresa.razao_social}? Esta ação não poderá ser desfeita.`
-    );
-    if (!confirmar) return;
+  async function abrirHistorico(empresa: Empresa) {
+    setEmpresaHistorico(empresa);
+    setModalHistorico(true);
+    setHistorico([]);
 
-    const { error } = await supabase.from("empresas").delete().eq("id", empresa.id);
+    const { data, error } = await supabase
+      .from("historico_empresas")
+      .select("id,empresa_id,acao,descricao,usuario,created_at")
+      .eq("empresa_id", empresa.id)
+      .order("created_at", { ascending: false });
 
     if (error) {
-      alert("Erro ao excluir empresa. Ela pode estar vinculada a usuários, vendas ou cadastros: " + error.message);
+      alert("Erro ao carregar histórico: " + error.message);
       return;
     }
 
-    alert("Empresa excluída com sucesso!");
-    carregarEmpresas();
+    setHistorico((data || []) as Historico[]);
   }
 
-  useEffect(() => {
-    carregarEmpresas();
-  }, []);
-
-  const empresasFiltradas = empresas.filter((empresa) => {
-    const termo = busca.trim().toLowerCase();
-
-    const bateBusca =
-      termo === "" ||
-      String(empresa.razao_social || "").toLowerCase().includes(termo) ||
-      String(empresa.nome_fantasia || "").toLowerCase().includes(termo) ||
-      String(empresa.cnpj || "").toLowerCase().includes(termo) ||
-      String(empresa.email || "").toLowerCase().includes(termo);
-
-    const bateStatus =
-      filtroStatus === "Todos" ||
-      String(empresa.status_assinatura || "").toLowerCase() === filtroStatus.toLowerCase();
-
-    const batePlano =
-      filtroPlano === "Todos" ||
-      String(empresa.plano || "").toLowerCase() === filtroPlano.toLowerCase();
-
-    return bateBusca && bateStatus && batePlano;
-  });
-
-  const totalAtivas = empresas.filter(
-    (empresa) => empresa.ativo !== false && empresa.status_assinatura === "Ativo"
-  ).length;
-
-  const totalTeste = empresas.filter((empresa) => empresa.status_assinatura === "Teste").length;
-
-  const totalBloqueadas = empresas.filter(
-    (empresa) =>
-      empresa.ativo === false ||
-      empresa.status_assinatura === "Bloqueado" ||
-      empresa.status_assinatura === "Vencido"
-  ).length;
-
-  const vencendo = empresas.filter((empresa) => {
-    const dias = diasParaVencer(empresa.data_vencimento_assinatura);
-    return dias !== null && dias >= 0 && dias <= 7;
-  }).length;
-
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
-      <div className="bg-gradient-to-r from-slate-950 to-blue-800 rounded-3xl p-8 shadow-lg mb-8 text-white">
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
+    <div className="min-h-screen bg-slate-50 p-4 lg:p-6 overflow-x-hidden">
+      <section className="bg-gradient-to-r from-slate-950 via-blue-950 to-blue-700 rounded-[30px] p-6 lg:p-8 text-white shadow-xl mb-6 overflow-hidden relative">
+        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-blue-300/20 blur-3xl" />
+
+        <div className="relative flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
           <div>
-            <p className="text-blue-100 font-bold">Painel Master THCloud</p>
-            <h1 className="text-4xl font-black mt-2">Ativação de Clientes</h1>
-            <p className="text-blue-100 mt-2 max-w-3xl">
-              Gerencie empresas clientes, planos, vencimentos, bloqueios, módulos adicionais e status de assinatura.
+            <p className="text-blue-200 font-black">Painel Master THCloud</p>
+
+            <h1 className="text-3xl lg:text-4xl font-black mt-2">
+              Empresas SaaS
+            </h1>
+
+            <p className="mt-2 text-blue-100 max-w-4xl">
+              Cadastre, edite, bloqueie, libere e acompanhe seus clientes do THCloud ERP.
             </p>
           </div>
 
-          <button
-            onClick={abrirNovaEmpresa}
-            className="bg-white text-blue-900 px-6 py-3 rounded-2xl font-black hover:bg-blue-50 flex items-center justify-center gap-2"
-          >
-            <Plus size={20} />
-            Nova Empresa Cliente
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={carregarDados}
+              className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-3 rounded-2xl font-black inline-flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={18} />
+              {carregando ? "Atualizando..." : "Atualizar"}
+            </button>
+
+            <button
+              onClick={abrirNovaEmpresa}
+              className="bg-white text-blue-800 hover:bg-blue-50 px-5 py-3 rounded-2xl font-black inline-flex items-center justify-center gap-2"
+            >
+              <Plus size={18} />
+              Nova Empresa
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
-        <ResumoCard titulo="Total Empresas" valor={`${empresas.length}`} detalhe="Clientes cadastrados" cor="text-blue-700" icone={<Building2 size={24} />} />
-        <ResumoCard titulo="Ativas" valor={`${totalAtivas}`} detalhe="Assinaturas ativas" cor="text-green-700" icone={<CheckCircle size={24} />} />
-        <ResumoCard titulo="Bloqueadas" valor={`${totalBloqueadas}`} detalhe="Vencidas ou bloqueadas" cor="text-red-700" icone={<Lock size={24} />} />
-        <ResumoCard titulo="Vencem em 7 dias" valor={`${vencendo}`} detalhe={`${totalTeste} em teste`} cor="text-orange-700" icone={<CalendarDays size={24} />} />
-      </div>
+      <section className="grid grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
+        <Card titulo="Total" valor={`${totalEmpresas}`} detalhe="Empresas cadastradas" cor="text-blue-700" icone={<Building2 size={22} />} />
+        <Card titulo="Ativas" valor={`${empresasAtivas}`} detalhe="Clientes liberados" cor="text-green-700" icone={<CheckCircle2 size={22} />} />
+        <Card titulo="Teste" valor={`${empresasTeste}`} detalhe="Período experimental" cor="text-cyan-700" icone={<Clock size={22} />} />
+        <Card titulo="Bloqueadas" valor={`${empresasBloqueadas}`} detalhe="Acesso suspenso" cor="text-red-700" icone={<XCircle size={22} />} />
+        <Card titulo="Vencendo" valor={`${empresasVencendo}`} detalhe="Próximos 7 dias" cor="text-orange-700" icone={<ShieldAlert size={22} />} />
+        <Card titulo="MRR" valor={moeda(receitaMensal)} detalhe="Receita mensal" cor="text-purple-700" icone={<CircleDollarSign size={22} />} />
+      </section>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2 relative">
+      <section className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-4 lg:p-5 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px_220px] gap-3">
+          <div className="relative">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+
             <input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por empresa, CNPJ ou e-mail..."
-              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-300 text-slate-900"
+              placeholder="Pesquisar por empresa, CNPJ, e-mail, telefone ou cidade..."
+              className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 font-semibold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
             />
           </div>
 
-          <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-slate-900 bg-white">
-            <option value="Todos">Todos os status</option>
-            {statusAssinaturas.map((status) => <option key={status} value={status}>{status}</option>)}
+          <select
+            value={filtroStatus}
+            onChange={(e) => setFiltroStatus(e.target.value)}
+            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 font-black outline-none focus:ring-4 focus:ring-blue-100"
+          >
+            <option>Todos</option>
+            <option>Ativo</option>
+            <option>Teste</option>
+            <option>Vencendo</option>
+            <option>Vencido</option>
+            <option>Bloqueado</option>
+            <option>Cancelado</option>
+            <option>Suspenso</option>
           </select>
 
-          <select value={filtroPlano} onChange={(e) => setFiltroPlano(e.target.value)} className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-slate-900 bg-white">
-            <option value="Todos">Todos os planos</option>
-            {planos.map((plano) => <option key={plano} value={plano}>{plano}</option>)}
+          <select
+            value={filtroPlano}
+            onChange={(e) => setFiltroPlano(e.target.value)}
+            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 font-black outline-none focus:ring-4 focus:ring-blue-100"
+          >
+            <option>Todos</option>
+            {planos.map((plano) => (
+              <option key={plano.id}>{plano.nome}</option>
+            ))}
+            {planos.length === 0 && (
+              <>
+                <option>Básico</option>
+                <option>Profissional</option>
+                <option>Premium</option>
+                <option>Enterprise</option>
+              </>
+            )}
           </select>
         </div>
-      </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-black text-slate-900">Empresas Clientes</h2>
-            <p className="text-slate-500">{empresasFiltradas.length} empresa(s) encontrada(s).</p>
-          </div>
-
-          <button onClick={carregarEmpresas} className="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center gap-2">
-            <RefreshCw size={17} />
-            Atualizar
-          </button>
+        <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+          <Filter size={16} />
+          {empresasFiltradas.length} empresa(s) encontrada(s)
         </div>
+      </section>
 
+      <section className="bg-white rounded-[28px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[1200px]">
             <thead>
-              <tr className="bg-slate-50 text-left text-slate-500 border-b border-slate-100">
-                <th className="p-4">Empresa</th>
-                <th className="p-4">CNPJ</th>
-                <th className="p-4">Plano</th>
-                <th className="p-4">Módulos</th>
-                <th className="p-4">Vencimento</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Cadastro</th>
-                <th className="p-4 text-right">Ações</th>
+              <tr className="bg-blue-700 text-white">
+                <th className="p-4 text-left">Empresa</th>
+                <th className="p-4 text-left">Contato</th>
+                <th className="p-4 text-left">Plano</th>
+                <th className="p-4 text-left">Mensalidade</th>
+                <th className="p-4 text-left">Vencimento</th>
+                <th className="p-4 text-left">Status</th>
+                <th className="p-4 text-left">Módulos</th>
+                <th className="p-4 text-left">Ações</th>
               </tr>
             </thead>
 
             <tbody>
-              {empresasFiltradas.map((empresa) => {
-                const dias = diasParaVencer(empresa.data_vencimento_assinatura);
+              {carregando && (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                    Carregando empresas...
+                  </td>
+                </tr>
+              )}
 
-                return (
-                  <tr key={empresa.id} className="border-b last:border-b-0 border-slate-100 hover:bg-slate-50">
+              {!carregando &&
+                empresasFiltradas.map((empresa) => (
+                  <tr key={empresa.id} className="border-b last:border-b-0 hover:bg-slate-50">
                     <td className="p-4">
-                      <p className="font-black text-slate-900">{empresa.nome_fantasia || "-"}</p>
-                      <p className="text-slate-500">{empresa.razao_social || "-"}</p>
-                      <p className="text-xs text-blue-700 mt-1">{empresa.email || "-"}</p>
-                    </td>
-
-                    <td className="p-4 text-slate-700">{formatarCNPJ(empresa.cnpj)}</td>
-
-                    <td className="p-4">
-                      <span className="px-3 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-700">
-                        {empresa.plano || "Teste"}
-                      </span>
-                    </td>
-
-                    <td className="p-4 text-slate-700">
-                      <p className="font-bold text-slate-900">{quantidadeModulos(empresa)} adicional(is)</p>
-                      <p className="text-xs text-slate-500 mt-1">Fiscal, WhatsApp, CRM, Delivery...</p>
+                      <p className="font-black text-slate-950">{nomeEmpresa(empresa)}</p>
+                      <p className="text-xs text-slate-500">{empresa.razao_social || "-"}</p>
+                      <p className="text-xs text-blue-700 font-bold">{empresa.cnpj || "Sem CNPJ"}</p>
                     </td>
 
                     <td className="p-4">
-                      <p className="font-bold text-slate-900">{formatarData(empresa.data_vencimento_assinatura)}</p>
-                      <p className={`text-xs font-bold mt-1 ${
-                        dias !== null && dias < 0 ? "text-red-700" : dias !== null && dias <= 7 ? "text-orange-700" : "text-slate-500"
-                      }`}>
-                        {dias === null ? "Sem vencimento" : dias < 0 ? `${Math.abs(dias)} dia(s) vencido` : `${dias} dia(s) restante(s)`}
+                      <p className="font-bold text-slate-800">{empresa.email || "-"}</p>
+                      <p className="text-xs text-slate-500">{empresa.telefone || empresa.celular || "-"}</p>
+                      <p className="text-xs text-slate-500">
+                        {[empresa.cidade, empresa.estado].filter(Boolean).join(" / ") || "-"}
                       </p>
                     </td>
 
                     <td className="p-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-black ${classeStatus(empresa.status_assinatura, empresa.ativo)}`}>
-                        {empresa.ativo === false ? "Bloqueado" : empresa.status_assinatura || "Teste"}
+                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-black">
+                        {empresa.plano || "Básico"}
                       </span>
                     </td>
 
-                    <td className="p-4 text-slate-700">{formatarDataHora(empresa.created_at)}</td>
+                    <td className="p-4 font-black text-purple-700">
+                      {moeda(Number(empresa.valor_mensal || 0))}
+                    </td>
 
                     <td className="p-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => abrirEditarEmpresa(empresa)} className="h-10 w-10 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 flex items-center justify-center" title="Editar">
+                      <p className="font-bold text-slate-800">
+                        {formatarData(empresa.data_vencimento_assinatura)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Início: {formatarData(empresa.data_inicio_assinatura)}
+                      </p>
+                    </td>
+
+                    <td className="p-4">
+                      <StatusBadge status={statusReal(empresa)} />
+                    </td>
+
+                    <td className="p-4">
+                      <span className="bg-slate-100 text-slate-800 px-3 py-1 rounded-full font-black inline-flex items-center gap-2">
+                        <PackageCheck size={15} />
+                        {quantidadeModulos(empresa)}
+                      </span>
+                    </td>
+
+                    <td className="p-4">
+                      <div className="flex flex-wrap gap-2">
+                        <BotaoAcao cor="slate" titulo="Visualizar" onClick={() => setVisualizando(empresa)}>
+                          <Eye size={17} />
+                        </BotaoAcao>
+
+                        <BotaoAcao cor="blue" titulo="Editar" onClick={() => editarEmpresa(empresa)}>
                           <Edit size={17} />
-                        </button>
+                        </BotaoAcao>
 
-                        <button onClick={() => renovarEmpresa(empresa, 30)} className="h-10 w-10 rounded-xl bg-green-50 hover:bg-green-100 text-green-700 flex items-center justify-center" title="Renovar 30 dias">
-                          <CalendarDays size={17} />
-                        </button>
+                        <BotaoAcao cor="green" titulo="Renovar 30 dias" onClick={() => renovar30Dias(empresa)}>
+                          <CheckCircle2 size={17} />
+                        </BotaoAcao>
 
-                        <button onClick={() => alterarStatusEmpresa(empresa, "Ativo", true)} className="h-10 w-10 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center" title="Ativar">
-                          <CheckCircle size={17} />
-                        </button>
+                        <BotaoAcao cor="purple" titulo="Histórico" onClick={() => abrirHistorico(empresa)}>
+                          <History size={17} />
+                        </BotaoAcao>
 
-                        <button onClick={() => alterarStatusEmpresa(empresa, "Bloqueado", false)} className="h-10 w-10 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 flex items-center justify-center" title="Bloquear">
-                          <Lock size={17} />
-                        </button>
-
-                        <button onClick={() => excluirEmpresa(empresa)} className="h-10 w-10 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 flex items-center justify-center" title="Excluir">
-                          <Trash2 size={17} />
-                        </button>
+                        <BotaoAcao
+                          cor={empresa.ativo === false ? "green" : "red"}
+                          titulo={empresa.ativo === false ? "Liberar" : "Bloquear"}
+                          onClick={() => bloquearLiberar(empresa)}
+                        >
+                          {empresa.ativo === false ? <Unlock size={17} /> : <Lock size={17} />}
+                        </BotaoAcao>
                       </div>
                     </td>
                   </tr>
-                );
-              })}
+                ))}
 
-              {empresasFiltradas.length === 0 && (
+              {!carregando && empresasFiltradas.length === 0 && (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-slate-500">
                     Nenhuma empresa encontrada.
@@ -643,219 +775,216 @@ export default function AdminEmpresasPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
       {modalAberto && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-4xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[30px] shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 p-5 flex items-center justify-between rounded-t-[30px]">
               <div>
-                <h2 className="text-2xl font-black text-slate-900">
-                  {modoEdicao ? "Editar Empresa Cliente" : "Nova Empresa Cliente"}
+                <h2 className="text-2xl font-black text-slate-950">
+                  {form.id ? "Editar Empresa SaaS" : "Nova Empresa SaaS"}
                 </h2>
                 <p className="text-slate-500">
-                  Controle dados da empresa, plano, vencimento, módulos e usuário administrador.
+                  Dados cadastrais, assinatura, plano e módulos contratados.
                 </p>
               </div>
 
-              <button onClick={() => setModalAberto(false)} className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+              <button
+                onClick={() => setModalAberto(false)}
+                className="h-11 w-11 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center"
+              >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-              <section>
-                <h3 className="text-lg font-black text-slate-900 mb-4">Dados da Empresa</h3>
+            <div className="p-5 lg:p-6 space-y-6">
+              <div>
+                <h3 className="font-black text-slate-900 mb-3">Dados da empresa</h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Campo label="Razão Social" className="md:col-span-2">
-                    <input value={form.razao_social} onChange={(e) => setForm({ ...form, razao_social: e.target.value })} placeholder="Razão Social" className="input" />
-                  </Campo>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input label="Nome fantasia" value={form.nome_fantasia} onChange={(v) => alterarCampo("nome_fantasia", v)} />
+                  <Input label="Razão social" value={form.razao_social} onChange={(v) => alterarCampo("razao_social", v)} />
+                  <Input label="CPF/CNPJ" value={form.cnpj} onChange={(v) => alterarCampo("cnpj", v)} />
+                  <Input label="E-mail" value={form.email} onChange={(v) => alterarCampo("email", v)} />
+                  <Input label="Telefone" value={form.telefone} onChange={(v) => alterarCampo("telefone", v)} />
+                  <Input label="Celular/WhatsApp" value={form.celular} onChange={(v) => alterarCampo("celular", v)} />
 
-                  <Campo label="Nome Fantasia">
-                    <input value={form.nome_fantasia} onChange={(e) => setForm({ ...form, nome_fantasia: e.target.value })} placeholder="Nome Fantasia" className="input" />
-                  </Campo>
-
-                  <Campo label="CNPJ">
-                    <input value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} placeholder="00.000.000/0001-00" className="input" />
-                  </Campo>
-
-                  <Campo label="Telefone">
-                    <input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} placeholder="(99) 99999-9999" className="input" />
-                  </Campo>
-
-                  <Campo label="E-mail da Empresa">
-                    <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="contato@empresa.com" className="input" />
-                  </Campo>
+                  <div className="grid grid-cols-[1fr_100px] gap-3">
+                    <Input label="Cidade" value={form.cidade} onChange={(v) => alterarCampo("cidade", v)} />
+                    <Input label="UF" value={form.estado} onChange={(v) => alterarCampo("estado", v)} />
+                  </div>
                 </div>
-              </section>
+              </div>
 
-              {!modoEdicao && (
-                <section>
-                  <h3 className="text-lg font-black text-slate-900 mb-4">Administrador da Empresa</h3>
+              <div>
+                <h3 className="font-black text-slate-900 mb-3">Assinatura</h3>
 
-                  <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-4">
-                    <p className="text-sm text-blue-800 font-bold">
-                      Este usuário será criado automaticamente para acessar a empresa.
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <label className="block">
+                    <span className="text-sm font-black text-slate-800">Plano</span>
+                    <select
+                      value={form.plano}
+                      onChange={(e) => aplicarPlano(e.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-black outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
+                    >
+                      {planos.map((plano) => (
+                        <option key={plano.id}>{plano.nome}</option>
+                      ))}
+                      {planos.length === 0 && (
+                        <>
+                          <option>Básico</option>
+                          <option>Profissional</option>
+                          <option>Premium</option>
+                          <option>Enterprise</option>
+                        </>
+                      )}
+                    </select>
+                  </label>
+
+                  <Input label="Valor mensal" value={form.valor_mensal} onChange={(v) => alterarCampo("valor_mensal", v)} />
+
+                  <label className="block">
+                    <span className="text-sm font-black text-slate-800">Status</span>
+                    <select
+                      value={form.status_assinatura}
+                      onChange={(e) => alterarCampo("status_assinatura", e.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-black outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
+                    >
+                      <option>Ativo</option>
+                      <option>Teste</option>
+                      <option>Vencido</option>
+                      <option>Bloqueado</option>
+                      <option>Cancelado</option>
+                      <option>Suspenso</option>
+                    </select>
+                  </label>
+
+                  <Input label="Início" type="date" value={form.data_inicio_assinatura} onChange={(v) => alterarCampo("data_inicio_assinatura", v)} />
+                  <Input label="Vencimento" type="date" value={form.data_vencimento_assinatura} onChange={(v) => alterarCampo("data_vencimento_assinatura", v)} />
+                </div>
+
+                <label className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-200 p-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.ativo}
+                    onChange={(e) => alterarCampo("ativo", e.target.checked)}
+                    className="h-5 w-5"
+                  />
+                  <div>
+                    <p className="font-black text-slate-900">Empresa ativa</p>
+                    <p className="text-sm text-slate-500">
+                      Se desmarcar, o cliente fica bloqueado no sistema.
                     </p>
                   </div>
+                </label>
+              </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Campo label="Nome do Administrador">
-                      <input value={form.nome_admin} onChange={(e) => setForm({ ...form, nome_admin: e.target.value })} placeholder="Nome do responsável" className="input" />
-                    </Campo>
+              <div>
+                <h3 className="font-black text-slate-900 mb-3">Módulos adicionais</h3>
 
-                    <Campo label="Telefone do Administrador">
-                      <input value={form.telefone_admin} onChange={(e) => setForm({ ...form, telefone_admin: e.target.value })} placeholder="(99) 99999-9999" className="input" />
-                    </Campo>
-
-                    <Campo label="E-mail de Login">
-                      <input value={form.email_admin} onChange={(e) => setForm({ ...form, email_admin: e.target.value })} placeholder="admin@empresa.com" className="input" />
-                    </Campo>
-
-                    <Campo label="Senha Inicial">
-                      <input value={form.senha_admin} onChange={(e) => setForm({ ...form, senha_admin: e.target.value })} placeholder="123456" className="input" />
-                    </Campo>
-                  </div>
-                </section>
-              )}
-
-              <section>
-                <h3 className="text-lg font-black text-slate-900 mb-4">Plano e Assinatura</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Campo label="Plano">
-                    <select value={form.plano} onChange={(e) => setForm({ ...form, plano: e.target.value })} className="input bg-white">
-                      {planos.map((plano) => <option key={plano} value={plano}>{plano}</option>)}
-                    </select>
-                  </Campo>
-
-                  <Campo label="Status da Assinatura">
-                    <select value={form.status_assinatura} onChange={(e) => setForm({ ...form, status_assinatura: e.target.value, ativo: e.target.value !== "Bloqueado" })} className="input bg-white">
-                      {statusAssinaturas.map((status) => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </Campo>
-
-                  <Campo label="Vencimento">
-                    <input type="date" value={form.data_vencimento_assinatura} onChange={(e) => setForm({ ...form, data_vencimento_assinatura: e.target.value })} className="input" />
-                  </Campo>
-
-                  <Campo label="Empresa ativa?">
-                    <select value={form.ativo ? "sim" : "nao"} onChange={(e) => setForm({ ...form, ativo: e.target.value === "sim" })} className="input bg-white">
-                      <option value="sim">Sim</option>
-                      <option value="nao">Não</option>
-                    </select>
-                  </Campo>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <CheckModulo label="Fiscal" checked={form.modulo_fiscal} onChange={(v) => alterarCampo("modulo_fiscal", v)} />
+                  <CheckModulo label="WhatsApp" checked={form.modulo_whatsapp} onChange={(v) => alterarCampo("modulo_whatsapp", v)} />
+                  <CheckModulo label="Delivery" checked={form.modulo_delivery} onChange={(v) => alterarCampo("modulo_delivery", v)} />
+                  <CheckModulo label="CRM" checked={form.modulo_crm} onChange={(v) => alterarCampo("modulo_crm", v)} />
+                  <CheckModulo label="Relatórios Premium" checked={form.modulo_relatorios_premium} onChange={(v) => alterarCampo("modulo_relatorios_premium", v)} />
+                  <CheckModulo label="Multiloja" checked={form.modulo_multiloja} onChange={(v) => alterarCampo("modulo_multiloja", v)} />
                 </div>
-              </section>
+              </div>
 
-              <section>
-                <h3 className="text-lg font-black text-slate-900 mb-4">Módulos Adicionais Pagos</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <CheckBoxModulo titulo="Fiscal" descricao="NFC-e, NF-e e recursos fiscais" marcado={form.modulo_fiscal} onChange={(valor) => setForm({ ...form, modulo_fiscal: valor })} />
-                  <CheckBoxModulo titulo="WhatsApp" descricao="Comunicação e automações via WhatsApp" marcado={form.modulo_whatsapp} onChange={(valor) => setForm({ ...form, modulo_whatsapp: valor })} />
-                  <CheckBoxModulo titulo="Delivery" descricao="Pedidos externos e entregas" marcado={form.modulo_delivery} onChange={(valor) => setForm({ ...form, modulo_delivery: valor })} />
-                  <CheckBoxModulo titulo="CRM" descricao="Funil, relacionamento e oportunidades" marcado={form.modulo_crm} onChange={(valor) => setForm({ ...form, modulo_crm: valor })} />
-                  <CheckBoxModulo titulo="Relatórios Premium" descricao="Indicadores avançados e análises extras" marcado={form.modulo_relatorios_premium} onChange={(valor) => setForm({ ...form, modulo_relatorios_premium: valor })} />
-                  <CheckBoxModulo titulo="Multiloja" descricao="Gestão de várias unidades" marcado={form.modulo_multiloja} onChange={(valor) => setForm({ ...form, modulo_multiloja: valor })} />
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-lg font-black text-slate-900 mb-4">Observações Internas</h3>
-                <textarea value={form.observacoes_internas} onChange={(e) => setForm({ ...form, observacoes_internas: e.target.value })} placeholder="Observações de suporte, contrato, cobrança ou implantação..." className="input min-h-28" />
-              </section>
+              <label className="block">
+                <span className="text-sm font-black text-slate-800">Observações internas</span>
+                <textarea
+                  value={form.observacoes}
+                  onChange={(e) => alterarCampo("observacoes", e.target.value)}
+                  rows={4}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-semibold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
+                />
+              </label>
             </div>
 
-            <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3">
-              <button onClick={() => setModalAberto(false)} className="px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">
+            <div className="sticky bottom-0 bg-white border-t border-slate-200 p-5 flex flex-col sm:flex-row gap-3 justify-end rounded-b-[30px]">
+              <button
+                onClick={() => setModalAberto(false)}
+                className="px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black"
+              >
                 Cancelar
               </button>
 
-              <button onClick={salvarEmpresa} disabled={salvando} className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-bold disabled:opacity-60">
-                {salvando ? "Salvando..." : modoEdicao ? "Salvar Alterações" : "Cadastrar Empresa Cliente"}
+              <button
+                onClick={salvarEmpresa}
+                disabled={salvando}
+                className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black disabled:opacity-60"
+              >
+                {salvando ? "Salvando..." : "Salvar Empresa"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <style jsx global>{`
-        .input {
-          width: 100%;
-          border: 1px solid rgb(203 213 225);
-          border-radius: 1rem;
-          padding: 0.75rem;
-          color: rgb(15 23 42);
-          outline: none;
-        }
-
-        .input:focus {
-          border-color: rgb(37 99 235);
-          box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function Campo({
-  label,
-  children,
-  className = "",
-}: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      <label className="block text-sm font-bold text-slate-700 mb-2">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function CheckBoxModulo({
-  titulo,
-  descricao,
-  marcado,
-  onChange,
-}: {
-  titulo: string;
-  descricao: string;
-  marcado: boolean;
-  onChange: (valor: boolean) => void;
-}) {
-  return (
-    <label
-      className={`border rounded-2xl p-4 cursor-pointer transition ${
-        marcado
-          ? "border-blue-600 bg-blue-50"
-          : "border-slate-200 bg-white hover:bg-slate-50"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={marcado}
-          onChange={(e) => onChange(e.target.checked)}
-          className="mt-1 h-4 w-4"
+      {visualizando && (
+        <ModalVisualizacao
+          empresa={visualizando}
+          nomeEmpresa={nomeEmpresa}
+          statusReal={statusReal}
+          quantidadeModulos={quantidadeModulos}
+          moeda={moeda}
+          formatarData={formatarData}
+          onClose={() => setVisualizando(null)}
+          onEditar={() => {
+            const empresa = visualizando;
+            setVisualizando(null);
+            editarEmpresa(empresa);
+          }}
         />
+      )}
 
-        <div>
-          <p className="font-black text-slate-900">{titulo}</p>
-          <p className="text-sm text-slate-500 mt-1">{descricao}</p>
+      {modalHistorico && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[30px] shadow-2xl w-full max-w-3xl overflow-hidden">
+            <div className="bg-slate-950 text-white p-6 flex items-center justify-between">
+              <div>
+                <p className="text-blue-200 font-bold">Histórico da empresa</p>
+                <h2 className="text-2xl font-black">
+                  {empresaHistorico ? nomeEmpresa(empresaHistorico) : "-"}
+                </h2>
+              </div>
+
+              <button
+                onClick={() => setModalHistorico(false)}
+                className="h-11 w-11 rounded-2xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 max-h-[65vh] overflow-y-auto space-y-3">
+              {historico.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="font-black text-slate-900">{item.acao || "-"}</p>
+                  <p className="text-sm text-slate-600 mt-1">{item.descricao || "-"}</p>
+                  <p className="text-xs text-slate-400 mt-2">
+                    {item.usuario || "-"} • {item.created_at ? new Date(item.created_at).toLocaleString("pt-BR") : "-"}
+                  </p>
+                </div>
+              ))}
+
+              {historico.length === 0 && (
+                <div className="text-center text-slate-500 p-8">
+                  Nenhum histórico encontrado.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </label>
+      )}
+    </div>
   );
 }
 
-function ResumoCard({
+function Card({
   titulo,
   valor,
   detalhe,
@@ -869,20 +998,187 @@ function ResumoCard({
   icone: React.ReactNode;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-slate-500">{titulo}</p>
-          <h2 className={`text-3xl font-black mt-3 ${cor}`}>{valor}</h2>
-          <p className="text-sm text-slate-500 mt-2">{detalhe}</p>
-        </div>
-
-        <div
-          className={`h-12 w-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center ${cor}`}
-        >
+    <div className="bg-white rounded-3xl border border-slate-200 p-4 shadow-sm min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold text-slate-500">{titulo}</p>
+        <div className={`${cor} bg-slate-50 border border-slate-100 rounded-2xl p-2`}>
           {icone}
         </div>
       </div>
+      <h2 className={`text-2xl font-black mt-3 ${cor}`}>{valor}</h2>
+      <p className="text-xs text-slate-500 mt-1">{detalhe}</p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const classe =
+    status === "Ativo"
+      ? "bg-green-100 text-green-700"
+      : status === "Teste"
+      ? "bg-cyan-100 text-cyan-700"
+      : status === "Vencendo"
+      ? "bg-orange-100 text-orange-700"
+      : status === "Vencido"
+      ? "bg-red-100 text-red-700"
+      : "bg-slate-100 text-slate-700";
+
+  return <span className={`px-3 py-1 rounded-full text-xs font-black ${classe}`}>{status}</span>;
+}
+
+function BotaoAcao({
+  children,
+  onClick,
+  titulo,
+  cor,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  titulo: string;
+  cor: "slate" | "blue" | "green" | "red" | "purple";
+}) {
+  const classes = {
+    slate: "bg-slate-100 hover:bg-slate-200 text-slate-700",
+    blue: "bg-blue-50 hover:bg-blue-100 text-blue-700",
+    green: "bg-green-50 hover:bg-green-100 text-green-700",
+    red: "bg-red-50 hover:bg-red-100 text-red-700",
+    purple: "bg-purple-50 hover:bg-purple-100 text-purple-700",
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      className={`h-10 w-10 rounded-xl flex items-center justify-center ${classes[cor]}`}
+      title={titulo}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Input({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (valor: string) => void;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-black text-slate-800">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-semibold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
+      />
+    </label>
+  );
+}
+
+function CheckModulo({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (valor: boolean) => void;
+}) {
+  return (
+    <label
+      className={`flex items-center gap-3 rounded-2xl border p-4 cursor-pointer transition ${
+        checked ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50"
+      }`}
+    >
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-5 w-5" />
+      <div>
+        <p className="font-black text-slate-900">{label}</p>
+        <p className="text-xs text-slate-500">Liberar para esta empresa</p>
+      </div>
+    </label>
+  );
+}
+
+function ModalVisualizacao({
+  empresa,
+  nomeEmpresa,
+  statusReal,
+  quantidadeModulos,
+  moeda,
+  formatarData,
+  onClose,
+  onEditar,
+}: {
+  empresa: Empresa;
+  nomeEmpresa: (empresa: Empresa) => string;
+  statusReal: (empresa: Empresa) => string;
+  quantidadeModulos: (empresa: Empresa) => number;
+  moeda: (valor: number) => string;
+  formatarData: (data: string | null) => string;
+  onClose: () => void;
+  onEditar: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[30px] shadow-2xl w-full max-w-3xl overflow-hidden">
+        <div className="bg-slate-950 text-white p-6 flex items-center justify-between">
+          <div>
+            <p className="text-blue-200 font-bold">Detalhes da empresa</p>
+            <h2 className="text-2xl font-black">{nomeEmpresa(empresa)}</h2>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="h-11 w-11 rounded-2xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Info label="CNPJ" value={empresa.cnpj || "-"} />
+          <Info label="E-mail" value={empresa.email || "-"} />
+          <Info label="Telefone" value={empresa.telefone || empresa.celular || "-"} />
+          <Info label="Cidade/UF" value={[empresa.cidade, empresa.estado].filter(Boolean).join(" / ") || "-"} />
+          <Info label="Plano" value={empresa.plano || "Básico"} />
+          <Info label="Mensalidade" value={moeda(Number(empresa.valor_mensal || 0))} />
+          <Info label="Status" value={statusReal(empresa)} />
+          <Info label="Vencimento" value={formatarData(empresa.data_vencimento_assinatura)} />
+          <Info label="Módulos contratados" value={`${quantidadeModulos(empresa)} módulo(s)`} />
+          <Info label="Criada em" value={empresa.created_at ? new Date(empresa.created_at).toLocaleString("pt-BR") : "-"} />
+          <Info label="Observações" value={empresa.observacoes || "-"} />
+        </div>
+
+        <div className="p-6 border-t flex flex-col sm:flex-row gap-3 justify-end">
+          <button
+            onClick={onEditar}
+            className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black"
+          >
+            Editar
+          </button>
+
+          <button
+            onClick={onClose}
+            className="px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs uppercase tracking-widest font-black text-slate-400">{label}</p>
+      <p className="mt-1 font-black text-slate-900 break-words">{value}</p>
     </div>
   );
 }

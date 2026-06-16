@@ -1,36 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabase";
+import { useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle,
+  CheckCircle2,
   Edit,
-  Package,
+  Filter,
+  Layers3,
   Plus,
+  RefreshCw,
   Search,
-  Shield,
+  ToggleLeft,
+  ToggleRight,
   Trash2,
   X,
-  XCircle,
 } from "lucide-react";
+import { supabase } from "../../../lib/supabase";
 
-type PlanoSaas = {
+type Plano = {
   id: string;
   nome: string;
   descricao: string | null;
   valor_mensal: number | null;
   limite_usuarios: number | null;
   limite_produtos: number | null;
-  limite_filiais: number | null;
+  ativo: boolean | null;
   modulo_fiscal: boolean | null;
   modulo_whatsapp: boolean | null;
-  modulo_crm: boolean | null;
   modulo_delivery: boolean | null;
-  modulo_multiloja: boolean | null;
+  modulo_crm: boolean | null;
   modulo_relatorios_premium: boolean | null;
-  ativo: boolean | null;
+  modulo_multiloja: boolean | null;
   created_at: string | null;
-  updated_at: string | null;
+};
+
+type Empresa = {
+  id: string;
+  plano: string | null;
 };
 
 type FormPlano = {
@@ -40,249 +45,206 @@ type FormPlano = {
   valor_mensal: string;
   limite_usuarios: string;
   limite_produtos: string;
-  limite_filiais: string;
+  ativo: boolean;
   modulo_fiscal: boolean;
   modulo_whatsapp: boolean;
-  modulo_crm: boolean;
   modulo_delivery: boolean;
-  modulo_multiloja: boolean;
+  modulo_crm: boolean;
   modulo_relatorios_premium: boolean;
-  ativo: boolean;
+  modulo_multiloja: boolean;
 };
 
-const formInicial: FormPlano = {
+const FORM_VAZIO: FormPlano = {
   id: "",
   nome: "",
   descricao: "",
   valor_mensal: "0",
-  limite_usuarios: "",
-  limite_produtos: "",
-  limite_filiais: "",
+  limite_usuarios: "1",
+  limite_produtos: "100",
+  ativo: true,
   modulo_fiscal: false,
   modulo_whatsapp: false,
-  modulo_crm: false,
   modulo_delivery: false,
-  modulo_multiloja: false,
+  modulo_crm: false,
   modulo_relatorios_premium: false,
-  ativo: true,
+  modulo_multiloja: false,
 };
 
 export default function AdminPlanosPage() {
-  const [planos, setPlanos] = useState<PlanoSaas[]>([]);
+  const [planos, setPlanos] = useState<Plano[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
   const [modalAberto, setModalAberto] = useState(false);
-  const [modoEdicao, setModoEdicao] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [carregando, setCarregando] = useState(false);
-  const [erroCarregamento, setErroCarregamento] = useState("");
-  const [form, setForm] = useState<FormPlano>(formInicial);
+  const [form, setForm] = useState<FormPlano>(FORM_VAZIO);
 
-  function moeda(valor: number | null) {
+  function moeda(valor: number) {
     return Number(valor || 0).toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
     });
   }
 
-  function numero(valor: number | null) {
-    if (valor === null || valor === undefined) return "Ilimitado";
-    return Number(valor || 0).toLocaleString("pt-BR");
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
-  }
-
-  function quantidadeModulos(plano: PlanoSaas) {
+  function quantidadeModulos(plano: Plano) {
     return [
       plano.modulo_fiscal,
       plano.modulo_whatsapp,
-      plano.modulo_crm,
       plano.modulo_delivery,
-      plano.modulo_multiloja,
+      plano.modulo_crm,
       plano.modulo_relatorios_premium,
+      plano.modulo_multiloja,
     ].filter(Boolean).length;
   }
 
+  function clientesNoPlano(nome: string) {
+    return empresas.filter((empresa) => empresa.plano === nome).length;
+  }
+
+  async function carregarDados() {
+    setCarregando(true);
+
+    const { data: planosData, error: planosError } = await supabase
+      .from("planos_saas")
+      .select(
+        "id,nome,descricao,valor_mensal,limite_usuarios,limite_produtos,ativo,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja,created_at"
+      )
+      .order("valor_mensal", { ascending: true });
+
+    if (planosError) {
+      setCarregando(false);
+      alert("Erro ao carregar planos: " + planosError.message);
+      return;
+    }
+
+    setPlanos((planosData || []) as Plano[]);
+
+    const { data: empresasData } = await supabase
+      .from("empresas")
+      .select("id,plano");
+
+    setEmpresas((empresasData || []) as Empresa[]);
+    setCarregando(false);
+  }
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  const planosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    return planos.filter((plano) => {
+      const texto = `${plano.nome} ${plano.descricao || ""}`.toLowerCase();
+      const passaBusca = !termo || texto.includes(termo);
+      const passaStatus =
+        filtroStatus === "Todos" ||
+        (filtroStatus === "Ativos" && plano.ativo !== false) ||
+        (filtroStatus === "Inativos" && plano.ativo === false);
+
+      return passaBusca && passaStatus;
+    });
+  }, [planos, busca, filtroStatus]);
+
+  const planosAtivos = planos.filter((plano) => plano.ativo !== false).length;
+  const receitaPrevista = planos.reduce(
+    (total, plano) => total + Number(plano.valor_mensal || 0) * clientesNoPlano(plano.nome),
+    0
+  );
+
   function abrirNovoPlano() {
-    setForm(formInicial);
-    setModoEdicao(false);
+    setForm(FORM_VAZIO);
     setModalAberto(true);
   }
 
-  function abrirEditarPlano(plano: PlanoSaas) {
+  function editarPlano(plano: Plano) {
     setForm({
       id: plano.id,
       nome: plano.nome || "",
       descricao: plano.descricao || "",
-      valor_mensal: String(Number(plano.valor_mensal || 0)),
-      limite_usuarios:
-        plano.limite_usuarios === null || plano.limite_usuarios === undefined
-          ? ""
-          : String(plano.limite_usuarios),
-      limite_produtos:
-        plano.limite_produtos === null || plano.limite_produtos === undefined
-          ? ""
-          : String(plano.limite_produtos),
-      limite_filiais:
-        plano.limite_filiais === null || plano.limite_filiais === undefined
-          ? ""
-          : String(plano.limite_filiais),
+      valor_mensal: String(plano.valor_mensal || 0),
+      limite_usuarios: String(plano.limite_usuarios || 1),
+      limite_produtos: String(plano.limite_produtos || 100),
+      ativo: plano.ativo !== false,
       modulo_fiscal: plano.modulo_fiscal === true,
       modulo_whatsapp: plano.modulo_whatsapp === true,
-      modulo_crm: plano.modulo_crm === true,
       modulo_delivery: plano.modulo_delivery === true,
-      modulo_multiloja: plano.modulo_multiloja === true,
+      modulo_crm: plano.modulo_crm === true,
       modulo_relatorios_premium: plano.modulo_relatorios_premium === true,
-      ativo: plano.ativo !== false,
+      modulo_multiloja: plano.modulo_multiloja === true,
     });
-
-    setModoEdicao(true);
     setModalAberto(true);
   }
 
-  function validarFormulario() {
-    if (!form.nome.trim()) {
-      alert("Informe o nome do plano.");
-      return false;
-    }
-
-    const valor = Number(String(form.valor_mensal).replace(",", "."));
-
-    if (Number.isNaN(valor) || valor < 0) {
-      alert("Informe um valor mensal válido.");
-      return false;
-    }
-
-    return true;
-  }
-
-  function valorInteiroOuNull(valor: string) {
-    if (!valor.trim()) return null;
-
-    const n = Number(valor);
-
-    if (Number.isNaN(n)) return null;
-
-    return n;
-  }
-
-  async function carregarPlanos() {
-    setCarregando(true);
-    setErroCarregamento("");
-
-    const { data, error } = await supabase
-      .from("planos_saas")
-      .select(
-        "id,nome,descricao,valor_mensal,limite_usuarios,limite_produtos,limite_filiais,modulo_fiscal,modulo_whatsapp,modulo_crm,modulo_delivery,modulo_multiloja,modulo_relatorios_premium,ativo,created_at,updated_at"
-      )
-      .order("valor_mensal", { ascending: true });
-
-    setCarregando(false);
-
-    if (error) {
-      const mensagem = "Erro ao carregar planos: " + error.message;
-      setErroCarregamento(mensagem);
-      alert(mensagem);
-      return;
-    }
-
-    setPlanos(data || []);
-
-    if (!data || data.length === 0) {
-      setErroCarregamento(
-        "Nenhum plano retornou para a tela. Se no Supabase existem planos, desative o RLS da tabela planos_saas ou crie uma policy de leitura."
-      );
-    }
+  function alterarCampo(campo: keyof FormPlano, valor: string | boolean) {
+    setForm((atual) => ({ ...atual, [campo]: valor }));
   }
 
   async function salvarPlano() {
-    if (!validarFormulario()) return;
+    if (!form.nome.trim()) {
+      alert("Informe o nome do plano.");
+      return;
+    }
 
     setSalvando(true);
 
     const dados = {
       nome: form.nome.trim(),
       descricao: form.descricao.trim() || null,
-      valor_mensal: Number(String(form.valor_mensal).replace(",", ".")),
-      limite_usuarios: valorInteiroOuNull(form.limite_usuarios),
-      limite_produtos: valorInteiroOuNull(form.limite_produtos),
-      limite_filiais: valorInteiroOuNull(form.limite_filiais),
+      valor_mensal: Number(String(form.valor_mensal).replace(",", ".") || 0),
+      limite_usuarios: Number(form.limite_usuarios || 1),
+      limite_produtos: Number(form.limite_produtos || 100),
+      ativo: form.ativo,
       modulo_fiscal: form.modulo_fiscal,
       modulo_whatsapp: form.modulo_whatsapp,
-      modulo_crm: form.modulo_crm,
       modulo_delivery: form.modulo_delivery,
-      modulo_multiloja: form.modulo_multiloja,
+      modulo_crm: form.modulo_crm,
       modulo_relatorios_premium: form.modulo_relatorios_premium,
-      ativo: form.ativo,
+      modulo_multiloja: form.modulo_multiloja,
       updated_at: new Date().toISOString(),
     };
 
-    if (modoEdicao) {
-      const { error } = await supabase
-        .from("planos_saas")
-        .update(dados)
-        .eq("id", form.id);
+    const resultado = form.id
+      ? await supabase.from("planos_saas").update(dados).eq("id", form.id)
+      : await supabase.from("planos_saas").insert([dados]);
 
-      setSalvando(false);
+    setSalvando(false);
 
-      if (error) {
-        alert("Erro ao atualizar plano: " + error.message);
-        return;
-      }
-
-      alert("Plano atualizado com sucesso!");
-    } else {
-      const { error } = await supabase.from("planos_saas").insert(dados);
-
-      setSalvando(false);
-
-      if (error) {
-        alert("Erro ao cadastrar plano: " + error.message);
-        return;
-      }
-
-      alert("Plano cadastrado com sucesso!");
-    }
-
-    setModalAberto(false);
-    setForm(formInicial);
-    carregarPlanos();
-  }
-
-  async function alterarStatus(plano: PlanoSaas) {
-    const acao = plano.ativo !== false ? "inativar" : "ativar";
-
-    const confirmar = confirm(
-      `Deseja realmente ${acao} o plano ${plano.nome}?`
-    );
-
-    if (!confirmar) return;
-
-    const { error } = await supabase
-      .from("planos_saas")
-      .update({
-        ativo: plano.ativo === false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", plano.id);
-
-    if (error) {
-      alert("Erro ao alterar status: " + error.message);
+    if (resultado.error) {
+      alert("Erro ao salvar plano: " + resultado.error.message);
       return;
     }
 
-    carregarPlanos();
+    setModalAberto(false);
+    await carregarDados();
   }
 
-  async function excluirPlano(plano: PlanoSaas) {
-    const confirmar = confirm(
-      `Deseja realmente excluir o plano ${plano.nome}? Se ele estiver vinculado a alguma empresa, o Supabase pode bloquear a exclusão.`
-    );
+  async function ativarInativar(plano: Plano) {
+    const novoStatus = plano.ativo === false;
 
-    if (!confirmar) return;
+    const { error } = await supabase
+      .from("planos_saas")
+      .update({ ativo: novoStatus, updated_at: new Date().toISOString() })
+      .eq("id", plano.id);
+
+    if (error) {
+      alert("Erro ao alterar status do plano: " + error.message);
+      return;
+    }
+
+    await carregarDados();
+  }
+
+  async function excluirPlano(plano: Plano) {
+    const clientes = clientesNoPlano(plano.nome);
+
+    if (clientes > 0) {
+      alert("Este plano possui empresas usando ele. Inative o plano em vez de excluir.");
+      return;
+    }
+
+    if (!confirm("Deseja excluir este plano?")) return;
 
     const { error } = await supabase
       .from("planos_saas")
@@ -290,614 +252,273 @@ export default function AdminPlanosPage() {
       .eq("id", plano.id);
 
     if (error) {
-      alert(
-        "Erro ao excluir plano. Ele pode estar vinculado a empresas: " +
-          error.message
-      );
+      alert("Erro ao excluir plano: " + error.message);
       return;
     }
 
-    alert("Plano excluído com sucesso!");
-    carregarPlanos();
+    await carregarDados();
   }
 
-  useEffect(() => {
-    carregarPlanos();
-  }, []);
-
-  const planosFiltrados = planos.filter((plano) => {
-    const termo = busca.trim().toLowerCase();
-
-    const bateBusca =
-      termo === "" ||
-      plano.nome.toLowerCase().includes(termo) ||
-      String(plano.descricao || "").toLowerCase().includes(termo);
-
-    const bateStatus =
-      filtroStatus === "Todos" ||
-      (filtroStatus === "Ativos" && plano.ativo !== false) ||
-      (filtroStatus === "Inativos" && plano.ativo === false);
-
-    return bateBusca && bateStatus;
-  });
-
-  const totalAtivos = planos.filter((plano) => plano.ativo !== false).length;
-  const totalInativos = planos.filter((plano) => plano.ativo === false).length;
-  const valorMedio =
-    planos.length > 0
-      ? planos.reduce(
-          (total, plano) => total + Number(plano.valor_mensal || 0),
-          0
-        ) / planos.length
-      : 0;
-
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
-      <div className="bg-gradient-to-r from-blue-950 to-blue-700 rounded-3xl p-8 shadow-lg mb-8 text-white">
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
+    <div className="min-h-screen bg-slate-50 p-4 lg:p-6 overflow-x-hidden">
+      <section className="bg-gradient-to-r from-slate-950 via-blue-950 to-blue-700 rounded-[30px] p-6 lg:p-8 text-white shadow-xl mb-6 overflow-hidden relative">
+        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-blue-300/20 blur-3xl" />
+        <div className="relative flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
           <div>
-            <p className="text-blue-100 font-bold">THCloud SaaS</p>
-
-            <h1 className="text-4xl font-black mt-2">Planos do Sistema</h1>
-
-            <p className="text-blue-100 mt-2 max-w-3xl">
-              Cadastre planos comerciais, valores, limites e módulos liberados
-              para empresas clientes.
+            <p className="text-blue-200 font-black">Painel Master THCloud</p>
+            <h1 className="text-3xl lg:text-4xl font-black mt-2">Planos SaaS</h1>
+            <p className="mt-2 text-blue-100 max-w-4xl">
+              Cadastre e controle os planos vendidos aos clientes, valores, limites e módulos liberados.
             </p>
           </div>
 
-          <button
-            onClick={abrirNovoPlano}
-            className="bg-white text-blue-800 px-6 py-3 rounded-2xl font-black hover:bg-blue-50 flex items-center justify-center gap-2"
-          >
-            <Plus size={20} />
-            Novo Plano
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={carregarDados}
+              className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-3 rounded-2xl font-black inline-flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={18} />
+              {carregando ? "Atualizando..." : "Atualizar"}
+            </button>
+
+            <button
+              onClick={abrirNovoPlano}
+              className="bg-white text-blue-800 hover:bg-blue-50 px-5 py-3 rounded-2xl font-black inline-flex items-center justify-center gap-2"
+            >
+              <Plus size={18} />
+              Novo Plano
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {erroCarregamento && (
-        <div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-3xl p-5 mb-8">
-          <p className="font-black">Atenção</p>
-          <p className="text-sm mt-1">{erroCarregamento}</p>
-        </div>
-      )}
+      <section className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <Card titulo="Planos" valor={`${planos.length}`} detalhe="Cadastrados" cor="text-blue-700" />
+        <Card titulo="Ativos" valor={`${planosAtivos}`} detalhe="Disponíveis para venda" cor="text-green-700" />
+        <Card titulo="Clientes" valor={`${empresas.length}`} detalhe="Empresas vinculadas" cor="text-purple-700" />
+        <Card titulo="Receita prevista" valor={moeda(receitaPrevista)} detalhe="Clientes por plano" cor="text-orange-700" />
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
-        <ResumoCard
-          titulo="Total de Planos"
-          valor={`${planos.length}`}
-          detalhe="Planos cadastrados"
-          cor="text-blue-700"
-          icone={<Package size={24} />}
-        />
-
-        <ResumoCard
-          titulo="Ativos"
-          valor={`${totalAtivos}`}
-          detalhe="Planos disponíveis"
-          cor="text-green-700"
-          icone={<CheckCircle size={24} />}
-        />
-
-        <ResumoCard
-          titulo="Inativos"
-          valor={`${totalInativos}`}
-          detalhe="Planos bloqueados"
-          cor="text-red-700"
-          icone={<XCircle size={24} />}
-        />
-
-        <ResumoCard
-          titulo="Valor Médio"
-          valor={moeda(valorMedio)}
-          detalhe="Média mensal"
-          cor="text-purple-700"
-          icone={<Shield size={24} />}
-        />
-      </div>
-
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 relative">
-            <Search
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-
+      <section className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-4 lg:p-5 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-3">
+          <div className="relative">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por nome ou descrição..."
-              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-300 text-slate-900"
+              placeholder="Pesquisar plano ou descrição..."
+              className="w-full rounded-2xl border border-slate-300 bg-white pl-11 pr-4 py-3 font-semibold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
             />
           </div>
 
           <select
             value={filtroStatus}
             onChange={(e) => setFiltroStatus(e.target.value)}
-            className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-slate-900 bg-white"
+            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 font-black outline-none focus:ring-4 focus:ring-blue-100"
           >
-            <option value="Todos">Todos os status</option>
-            <option value="Ativos">Ativos</option>
-            <option value="Inativos">Inativos</option>
+            <option>Todos</option>
+            <option>Ativos</option>
+            <option>Inativos</option>
           </select>
         </div>
-      </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-black text-slate-900">
-              Lista de Planos
-            </h2>
-
-            <p className="text-slate-500">
-              {carregando
-                ? "Carregando planos..."
-                : `${planosFiltrados.length} plano(s) encontrado(s).`}
-            </p>
-          </div>
-
-          <button
-            onClick={carregarPlanos}
-            className="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
-          >
-            Atualizar
-          </button>
+        <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+          <Filter size={16} />
+          {planosFiltrados.length} plano(s) encontrado(s)
         </div>
+      </section>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-left text-slate-500 border-b border-slate-100">
-                <th className="p-4">Plano</th>
-                <th className="p-4">Valor</th>
-                <th className="p-4">Limites</th>
-                <th className="p-4">Módulos</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Criado em</th>
-                <th className="p-4 text-right">Ações</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {planosFiltrados.map((plano) => (
-                <tr
-                  key={plano.id}
-                  className="border-b last:border-b-0 border-slate-100 hover:bg-slate-50"
-                >
-                  <td className="p-4">
-                    <p className="font-black text-slate-900">{plano.nome}</p>
-                    <p className="text-slate-500 mt-1">
-                      {plano.descricao || "-"}
-                    </p>
-                  </td>
-
-                  <td className="p-4">
-                    <p className="font-black text-green-700 text-lg">
-                      {moeda(plano.valor_mensal)}
-                    </p>
-                    <p className="text-xs text-slate-500">por mês</p>
-                  </td>
-
-                  <td className="p-4 text-slate-700">
-                    <p>
-                      <strong>Usuários:</strong>{" "}
-                      {numero(plano.limite_usuarios)}
-                    </p>
-                    <p>
-                      <strong>Produtos:</strong>{" "}
-                      {numero(plano.limite_produtos)}
-                    </p>
-                    <p>
-                      <strong>Filiais:</strong> {numero(plano.limite_filiais)}
-                    </p>
-                  </td>
-
-                  <td className="p-4">
-                    <span className="px-3 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-700">
-                      {quantidadeModulos(plano)} módulo(s)
-                    </span>
-
-                    <div className="text-xs text-slate-500 mt-2 space-y-1">
-                      {plano.modulo_fiscal && <p>Fiscal</p>}
-                      {plano.modulo_whatsapp && <p>WhatsApp</p>}
-                      {plano.modulo_crm && <p>CRM</p>}
-                      {plano.modulo_delivery && <p>Delivery</p>}
-                      {plano.modulo_multiloja && <p>Multiloja</p>}
-                      {plano.modulo_relatorios_premium && (
-                        <p>Relatórios Premium</p>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="p-4">
-                    {plano.ativo !== false ? (
-                      <span className="px-3 py-1 rounded-full text-xs font-black bg-green-100 text-green-700">
-                        Ativo
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 rounded-full text-xs font-black bg-red-100 text-red-700">
-                        Inativo
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="p-4 text-slate-700">
-                    {formatarData(plano.created_at)}
-                  </td>
-
-                  <td className="p-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => abrirEditarPlano(plano)}
-                        className="h-10 w-10 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 flex items-center justify-center"
-                        title="Editar"
-                      >
-                        <Edit size={17} />
-                      </button>
-
-                      <button
-                        onClick={() => alterarStatus(plano)}
-                        className={`h-10 w-10 rounded-xl flex items-center justify-center ${
-                          plano.ativo !== false
-                            ? "bg-orange-50 hover:bg-orange-100 text-orange-700"
-                            : "bg-green-50 hover:bg-green-100 text-green-700"
-                        }`}
-                        title={plano.ativo !== false ? "Inativar" : "Ativar"}
-                      >
-                        <CheckCircle size={17} />
-                      </button>
-
-                      <button
-                        onClick={() => excluirPlano(plano)}
-                        className="h-10 w-10 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 flex items-center justify-center"
-                        title="Excluir"
-                      >
-                        <Trash2 size={17} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {planosFiltrados.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500">
-                    Nenhum plano encontrado.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {modalAberto && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-4xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        {planosFiltrados.map((plano) => (
+          <div key={plano.id} className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-5">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-black text-slate-900">
-                  {modoEdicao ? "Editar Plano" : "Novo Plano"}
-                </h2>
-
-                <p className="text-slate-500">
-                  Defina valor, limites e módulos liberados.
-                </p>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center">
+                    <Layers3 size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-950">{plano.nome}</h2>
+                    <p className="text-sm text-slate-500">{plano.ativo === false ? "Inativo" : "Ativo"}</p>
+                  </div>
+                </div>
+                <p className="mt-4 text-slate-600">{plano.descricao || "Sem descrição."}</p>
               </div>
 
+              <div className="text-left sm:text-right">
+                <p className="text-3xl font-black text-blue-700">{moeda(Number(plano.valor_mensal || 0))}</p>
+                <p className="text-xs text-slate-500">mensal</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+              <MiniInfo label="Clientes" value={`${clientesNoPlano(plano.nome)}`} />
+              <MiniInfo label="Usuários" value={`${plano.limite_usuarios || 0}`} />
+              <MiniInfo label="Produtos" value={`${plano.limite_produtos || 0}`} />
+              <MiniInfo label="Módulos" value={`${quantidadeModulos(plano)}`} />
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-2">
+              <ModuloAtivo label="Fiscal" ativo={plano.modulo_fiscal === true} />
+              <ModuloAtivo label="WhatsApp" ativo={plano.modulo_whatsapp === true} />
+              <ModuloAtivo label="Delivery" ativo={plano.modulo_delivery === true} />
+              <ModuloAtivo label="CRM" ativo={plano.modulo_crm === true} />
+              <ModuloAtivo label="Relatórios" ativo={plano.modulo_relatorios_premium === true} />
+              <ModuloAtivo label="Multiloja" ativo={plano.modulo_multiloja === true} />
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button onClick={() => editarPlano(plano)} className="px-4 py-3 rounded-2xl bg-blue-50 text-blue-700 hover:bg-blue-100 font-black inline-flex items-center gap-2">
+                <Edit size={17} />
+                Editar
+              </button>
+
               <button
-                onClick={() => setModalAberto(false)}
-                className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center"
+                onClick={() => ativarInativar(plano)}
+                className={`px-4 py-3 rounded-2xl font-black inline-flex items-center gap-2 ${
+                  plano.ativo === false
+                    ? "bg-green-50 text-green-700 hover:bg-green-100"
+                    : "bg-orange-50 text-orange-700 hover:bg-orange-100"
+                }`}
               >
+                {plano.ativo === false ? <ToggleRight size={17} /> : <ToggleLeft size={17} />}
+                {plano.ativo === false ? "Ativar" : "Inativar"}
+              </button>
+
+              <button onClick={() => excluirPlano(plano)} className="px-4 py-3 rounded-2xl bg-red-50 text-red-700 hover:bg-red-100 font-black inline-flex items-center gap-2">
+                <Trash2 size={17} />
+                Excluir
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {!carregando && planosFiltrados.length === 0 && (
+          <div className="xl:col-span-2 bg-white rounded-[28px] border border-slate-200 p-8 text-center text-slate-500">
+            Nenhum plano encontrado.
+          </div>
+        )}
+      </section>
+
+      {modalAberto && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[30px] shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 p-5 flex items-center justify-between rounded-t-[30px]">
+              <div>
+                <h2 className="text-2xl font-black text-slate-950">{form.id ? "Editar Plano" : "Novo Plano"}</h2>
+                <p className="text-slate-500">Configure valor, limites e módulos do plano.</p>
+              </div>
+
+              <button onClick={() => setModalAberto(false)} className="h-11 w-11 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 mb-3">
-                  Dados do Plano
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Campo>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">
-                      Nome do Plano
-                    </label>
-
-                    <input
-                      value={form.nome}
-                      onChange={(e) =>
-                        setForm({ ...form, nome: e.target.value })
-                      }
-                      placeholder="Ex.: Starter"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">
-                      Valor Mensal
-                    </label>
-
-                    <input
-                      value={form.valor_mensal}
-                      onChange={(e) =>
-                        setForm({ ...form, valor_mensal: e.target.value })
-                      }
-                      placeholder="99.90"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">
-                      Limite de Usuários
-                    </label>
-
-                    <input
-                      value={form.limite_usuarios}
-                      onChange={(e) =>
-                        setForm({ ...form, limite_usuarios: e.target.value })
-                      }
-                      placeholder="Vazio = ilimitado"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">
-                      Limite de Produtos
-                    </label>
-
-                    <input
-                      value={form.limite_produtos}
-                      onChange={(e) =>
-                        setForm({ ...form, limite_produtos: e.target.value })
-                      }
-                      placeholder="Vazio = ilimitado"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">
-                      Limite de Filiais
-                    </label>
-
-                    <input
-                      value={form.limite_filiais}
-                      onChange={(e) =>
-                        setForm({ ...form, limite_filiais: e.target.value })
-                      }
-                      placeholder="Vazio = ilimitado"
-                      className="input"
-                    />
-                  </Campo>
-
-                  <Campo>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">
-                      Status
-                    </label>
-
-                    <select
-                      value={form.ativo ? "ativo" : "inativo"}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          ativo: e.target.value === "ativo",
-                        })
-                      }
-                      className="input bg-white"
-                    >
-                      <option value="ativo">Ativo</option>
-                      <option value="inativo">Inativo</option>
-                    </select>
-                  </Campo>
-
-                  <Campo className="md:col-span-2">
-                    <label className="block text-sm font-bold text-slate-700 mb-2">
-                      Descrição
-                    </label>
-
-                    <textarea
-                      value={form.descricao}
-                      onChange={(e) =>
-                        setForm({ ...form, descricao: e.target.value })
-                      }
-                      placeholder="Descrição comercial do plano"
-                      className="input min-h-24"
-                    />
-                  </Campo>
-                </div>
+            <div className="p-5 lg:p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input label="Nome do plano" value={form.nome} onChange={(v) => alterarCampo("nome", v)} />
+                <Input label="Valor mensal" value={form.valor_mensal} onChange={(v) => alterarCampo("valor_mensal", v)} />
+                <Input label="Limite de usuários" value={form.limite_usuarios} onChange={(v) => alterarCampo("limite_usuarios", v)} />
+                <Input label="Limite de produtos" value={form.limite_produtos} onChange={(v) => alterarCampo("limite_produtos", v)} />
               </div>
 
+              <label className="block">
+                <span className="text-sm font-black text-slate-800">Descrição</span>
+                <textarea
+                  value={form.descricao}
+                  onChange={(e) => alterarCampo("descricao", e.target.value)}
+                  rows={3}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-semibold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
+                />
+              </label>
+
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 p-4 cursor-pointer">
+                <input type="checkbox" checked={form.ativo} onChange={(e) => alterarCampo("ativo", e.target.checked)} className="h-5 w-5" />
+                <div>
+                  <p className="font-black text-slate-900">Plano ativo</p>
+                  <p className="text-sm text-slate-500">Planos ativos ficam disponíveis para novos clientes.</p>
+                </div>
+              </label>
+
               <div>
-                <h3 className="text-lg font-black text-slate-900 mb-3">
-                  Módulos Liberados
-                </h3>
+                <h3 className="font-black text-slate-900 mb-3">Módulos incluídos</h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <CheckBoxModulo
-                    titulo="Fiscal"
-                    descricao="NF-e, NFC-e e rotinas fiscais"
-                    marcado={form.modulo_fiscal}
-                    onChange={(valor) =>
-                      setForm({ ...form, modulo_fiscal: valor })
-                    }
-                  />
-
-                  <CheckBoxModulo
-                    titulo="WhatsApp"
-                    descricao="Envios e automações"
-                    marcado={form.modulo_whatsapp}
-                    onChange={(valor) =>
-                      setForm({ ...form, modulo_whatsapp: valor })
-                    }
-                  />
-
-                  <CheckBoxModulo
-                    titulo="CRM"
-                    descricao="Relacionamento e oportunidades"
-                    marcado={form.modulo_crm}
-                    onChange={(valor) => setForm({ ...form, modulo_crm: valor })}
-                  />
-
-                  <CheckBoxModulo
-                    titulo="Delivery"
-                    descricao="Pedidos externos e entregas"
-                    marcado={form.modulo_delivery}
-                    onChange={(valor) =>
-                      setForm({ ...form, modulo_delivery: valor })
-                    }
-                  />
-
-                  <CheckBoxModulo
-                    titulo="Multiloja"
-                    descricao="Várias unidades"
-                    marcado={form.modulo_multiloja}
-                    onChange={(valor) =>
-                      setForm({ ...form, modulo_multiloja: valor })
-                    }
-                  />
-
-                  <CheckBoxModulo
-                    titulo="Relatórios Premium"
-                    descricao="Indicadores avançados"
-                    marcado={form.modulo_relatorios_premium}
-                    onChange={(valor) =>
-                      setForm({
-                        ...form,
-                        modulo_relatorios_premium: valor,
-                      })
-                    }
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <CheckModulo label="Fiscal" checked={form.modulo_fiscal} onChange={(v) => alterarCampo("modulo_fiscal", v)} />
+                  <CheckModulo label="WhatsApp" checked={form.modulo_whatsapp} onChange={(v) => alterarCampo("modulo_whatsapp", v)} />
+                  <CheckModulo label="Delivery" checked={form.modulo_delivery} onChange={(v) => alterarCampo("modulo_delivery", v)} />
+                  <CheckModulo label="CRM" checked={form.modulo_crm} onChange={(v) => alterarCampo("modulo_crm", v)} />
+                  <CheckModulo label="Relatórios Premium" checked={form.modulo_relatorios_premium} onChange={(v) => alterarCampo("modulo_relatorios_premium", v)} />
+                  <CheckModulo label="Multiloja" checked={form.modulo_multiloja} onChange={(v) => alterarCampo("modulo_multiloja", v)} />
                 </div>
               </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3">
-              <button
-                onClick={() => setModalAberto(false)}
-                className="px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
-              >
+            <div className="sticky bottom-0 bg-white border-t border-slate-200 p-5 flex flex-col sm:flex-row gap-3 justify-end rounded-b-[30px]">
+              <button onClick={() => setModalAberto(false)} className="px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black">
                 Cancelar
               </button>
 
-              <button
-                onClick={salvarPlano}
-                disabled={salvando}
-                className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-bold disabled:opacity-60"
-              >
-                {salvando
-                  ? "Salvando..."
-                  : modoEdicao
-                  ? "Salvar Alterações"
-                  : "Cadastrar Plano"}
+              <button onClick={salvarPlano} disabled={salvando} className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black disabled:opacity-60">
+                {salvando ? "Salvando..." : "Salvar Plano"}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      <style jsx global>{`
-        .input {
-          width: 100%;
-          border: 1px solid rgb(203 213 225);
-          border-radius: 1rem;
-          padding: 0.75rem;
-          color: rgb(15 23 42);
-          outline: none;
-        }
-
-        .input:focus {
-          border-color: rgb(37 99 235);
-          box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
-        }
-      `}</style>
     </div>
   );
 }
 
-function Campo({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return <div className={className}>{children}</div>;
+function Card({ titulo, valor, detalhe, cor }: { titulo: string; valor: string; detalhe: string; cor: string }) {
+  return (
+    <div className="bg-white rounded-3xl border border-slate-200 p-4 shadow-sm min-w-0">
+      <p className="text-sm font-bold text-slate-500">{titulo}</p>
+      <h2 className={`text-2xl font-black mt-3 ${cor}`}>{valor}</h2>
+      <p className="text-xs text-slate-500 mt-1">{detalhe}</p>
+    </div>
+  );
 }
 
-function CheckBoxModulo({
-  titulo,
-  descricao,
-  marcado,
-  onChange,
-}: {
-  titulo: string;
-  descricao: string;
-  marcado: boolean;
-  onChange: (valor: boolean) => void;
-}) {
+function MiniInfo({ label, value }: { label: string; value: string }) {
   return (
-    <label
-      className={`border rounded-2xl p-4 cursor-pointer transition ${
-        marcado
-          ? "border-blue-600 bg-blue-50"
-          : "border-slate-200 bg-white hover:bg-slate-50"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={marcado}
-          onChange={(e) => onChange(e.target.checked)}
-          className="mt-1 h-4 w-4"
-        />
+    <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3">
+      <p className="text-xs text-slate-500 font-bold">{label}</p>
+      <p className="text-lg font-black text-slate-900">{value}</p>
+    </div>
+  );
+}
 
-        <div>
-          <p className="font-black text-slate-900">{titulo}</p>
-          <p className="text-sm text-slate-500 mt-1">{descricao}</p>
-        </div>
-      </div>
+function ModuloAtivo({ label, ativo }: { label: string; ativo: boolean }) {
+  return (
+    <div className={`rounded-2xl px-3 py-2 text-sm font-black flex items-center gap-2 ${ativo ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"}`}>
+      <CheckCircle2 size={15} />
+      {label}
+    </div>
+  );
+}
+
+function Input({ label, value, onChange }: { label: string; value: string; onChange: (valor: string) => void }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-black text-slate-800">{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-semibold outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
+      />
     </label>
   );
 }
 
-function ResumoCard({
-  titulo,
-  valor,
-  detalhe,
-  cor,
-  icone,
-}: {
-  titulo: string;
-  valor: string;
-  detalhe: string;
-  cor: string;
-  icone: React.ReactNode;
-}) {
+function CheckModulo({ label, checked, onChange }: { label: string; checked: boolean; onChange: (valor: boolean) => void }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-slate-500">{titulo}</p>
-
-          <h2 className={`text-3xl font-black mt-3 ${cor}`}>{valor}</h2>
-
-          <p className="text-sm text-slate-500 mt-2">{detalhe}</p>
-        </div>
-
-        <div
-          className={`h-12 w-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center ${cor}`}
-        >
-          {icone}
-        </div>
+    <label className={`flex items-center gap-3 rounded-2xl border p-4 cursor-pointer transition ${checked ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-5 w-5" />
+      <div>
+        <p className="font-black text-slate-900">{label}</p>
+        <p className="text-xs text-slate-500">Incluído no plano</p>
       </div>
-    </div>
+    </label>
   );
 }
