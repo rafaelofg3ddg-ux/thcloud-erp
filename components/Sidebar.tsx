@@ -12,10 +12,12 @@ import {
   CircleDollarSign,
   FileText,
   Home,
+  Lock,
   LogOut,
   Menu,
   Package,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   Store,
   Tags,
@@ -91,9 +93,10 @@ export default function Sidebar() {
       const usuarioLocal = JSON.parse(salvo) as UsuarioLogado;
       let usuarioFinal: UsuarioLogado = usuarioLocal;
 
-      if (usuarioLocal.perfil === "Super Admin") {
+      if (ehSuperAdminPorPerfil(usuarioLocal.perfil)) {
         usuarioFinal = {
           ...usuarioLocal,
+          perfil: "Super Admin",
           modulo_fiscal: true,
           modulo_whatsapp: true,
           modulo_delivery: true,
@@ -103,7 +106,7 @@ export default function Sidebar() {
         };
 
         setModulosEmpresa({
-          plano: "Administração SaaS",
+          plano: "Master",
           modulo_fiscal: true,
           modulo_whatsapp: true,
           modulo_delivery: true,
@@ -148,7 +151,7 @@ export default function Sidebar() {
 
         if (empresaBanco) {
           const modulosAtualizados: ModulosEmpresa = {
-            plano: empresaBanco.plano || usuarioFinal.plano || null,
+            plano: empresaBanco.plano || usuarioFinal.plano || "Básico",
             modulo_fiscal: empresaBanco.modulo_fiscal === true,
             modulo_whatsapp: empresaBanco.modulo_whatsapp === true,
             modulo_delivery: empresaBanco.modulo_delivery === true,
@@ -208,14 +211,39 @@ export default function Sidebar() {
     if (
       pathname?.startsWith("/empresas") ||
       pathname?.startsWith("/usuarios") ||
-      pathname?.startsWith("/configuracoes")
+      pathname?.startsWith("/configuracoes") ||
+      pathname?.startsWith("/admin/configuracoes")
     ) {
       setConfiguracoes(true);
     }
   }, [pathname]);
 
-  const isSuperAdmin = usuario?.perfil === "Super Admin";
-  const isAdministrador = usuario?.perfil === "Administrador";
+  function normalizarPerfil(perfil?: string | null) {
+    return String(perfil || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function ehSuperAdminPorPerfil(perfil?: string | null) {
+    const valor = normalizarPerfil(perfil);
+    return valor === "super admin" || valor === "superadmin" || valor === "master";
+  }
+
+  function ehAdministradorPorPerfil(perfil?: string | null) {
+    const valor = normalizarPerfil(perfil);
+    return (
+      valor === "admin" ||
+      valor === "administrador" ||
+      valor === "administrador empresa" ||
+      valor === "gestor" ||
+      valor === "gerente geral"
+    );
+  }
+
+  const isSuperAdmin = ehSuperAdminPorPerfil(usuario?.perfil);
+  const isAdministrador = ehAdministradorPorPerfil(usuario?.perfil);
   const podeVerConfiguracoes = isAdministrador || isSuperAdmin;
 
   function temModuloPremium(modulo: string) {
@@ -235,16 +263,20 @@ export default function Sidebar() {
 
   function pode(modulo: string) {
     const perfil = usuario?.perfil || "";
+    const perfilNormalizado = normalizarPerfil(perfil);
 
     if (permissoes && Object.keys(permissoes).length > 0) {
       if (permissoes[modulo] === true) return true;
       if (permissoes[modulo] === false) return false;
     }
 
-    if (perfil === "Super Admin") return ["admin", "configuracoes"].includes(modulo);
-    if (perfil === "Administrador") return true;
+    if (isSuperAdmin) {
+      return ["admin", "configuracoes"].includes(modulo);
+    }
 
-    if (perfil === "Gerente") {
+    if (isAdministrador) return true;
+
+    if (perfilNormalizado === "gerente") {
       return [
         "dashboard",
         "clientes",
@@ -263,7 +295,7 @@ export default function Sidebar() {
       ].includes(modulo);
     }
 
-    if (perfil === "Operador de Caixa") {
+    if (perfilNormalizado === "operador de caixa" || perfilNormalizado === "caixa") {
       return [
         "dashboard",
         "clientes",
@@ -274,11 +306,11 @@ export default function Sidebar() {
       ].includes(modulo);
     }
 
-    if (perfil === "Financeiro") {
+    if (perfilNormalizado === "financeiro") {
       return ["dashboard", "clientes", "financeiro", "relatorios"].includes(modulo);
     }
 
-    if (perfil === "Estoquista") {
+    if (perfilNormalizado === "estoquista") {
       return [
         "dashboard",
         "produtos",
@@ -289,7 +321,7 @@ export default function Sidebar() {
       ].includes(modulo);
     }
 
-    if (perfil === "Vendedor") {
+    if (perfilNormalizado === "vendedor") {
       return [
         "dashboard",
         "clientes",
@@ -312,12 +344,15 @@ export default function Sidebar() {
     localStorage.removeItem("th_usuario");
     localStorage.removeItem("th_empresa");
     localStorage.removeItem("th_permissoes");
+    localStorage.removeItem("empresa_id");
+    localStorage.removeItem("th_empresa_id");
 
     router.push("/login");
   }
 
   function ativo(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/admin") return pathname === "/admin";
     return pathname === href || pathname?.startsWith(href + "/");
   }
 
@@ -397,91 +432,164 @@ export default function Sidebar() {
       <nav className="relative px-4 pb-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
         {isSuperAdmin && (
           <>
-            <TituloSecao>SaaS</TituloSecao>
+            <TituloSecao>Visão Geral</TituloSecao>
 
             <Link href="/admin" className={classeLink("/admin")}>
               <Home size={21} strokeWidth={2.4} />
-              Dashboard SaaS
+              Dashboard Executivo
+            </Link>
+
+            <TituloSecao>Gestão SaaS</TituloSecao>
+
+            <Link href="/admin/empresas" className={classeLink("/admin/empresas")}>
+              <Building2 size={21} strokeWidth={2.4} />
+              Empresas
+            </Link>
+
+            <Link href="/admin/assinaturas" className={classeLink("/admin/assinaturas")}>
+              <CircleDollarSign size={21} strokeWidth={2.4} />
+              Assinaturas
+            </Link>
+
+            <Link href="/admin/financeiro" className={classeLink("/admin/financeiro")}>
+              <CircleDollarSign size={21} strokeWidth={2.4} />
+              Métricas SaaS
+            </Link>
+
+            <Link href="/admin/notificacoes" className={classeLink("/admin/notificacoes")}>
+              <Bell size={21} strokeWidth={2.4} />
+              Notificações
+            </Link>
+
+            <Link href="/onboarding" className={classeLink("/onboarding")}>
+              <Package size={21} strokeWidth={2.4} />
+              Onboarding
+            </Link>
+
+            <TituloSecao>Operação</TituloSecao>
+
+            <Link href="/admin/implantacoes" className={classeLink("/admin/implantacoes")}>
+              <Package size={21} strokeWidth={2.4} />
+              Implantação
+            </Link>
+
+            <Link href="/admin/bloqueios" className={classeLink("/admin/bloqueios")}>
+              <Lock size={21} strokeWidth={2.4} />
+              Bloqueios
+            </Link>
+
+            <Link href="/admin/empresas" className={classeLink("/admin/empresas")}>
+              <Users size={21} strokeWidth={2.4} />
+              Entrar como Cliente
+            </Link>
+
+            <Link href="/admin/empresas" className={classeLink("/admin/empresas")}>
+              <ShieldCheck size={21} strokeWidth={2.4} />
+              Saúde das Empresas
+            </Link>
+
+            <Link href="/admin/auditoria" className={classeLink("/admin/auditoria")}>
+              <FileText size={21} strokeWidth={2.4} />
+              Auditoria
+            </Link>
+
+            <TituloSecao>Administração</TituloSecao>
+
+            <Link href="/usuarios" className={classeLink("/usuarios")}>
+              <Users size={21} strokeWidth={2.4} />
+              Usuários Admin
+            </Link>
+
+            <Link href="/admin/planos" className={classeLink("/admin/planos")}>
+              <Tags size={21} strokeWidth={2.4} />
+              Planos e Preços
+            </Link>
+
+            <Link href="/admin/configuracoes" className={classeLink("/admin/configuracoes")}>
+              <Settings size={21} strokeWidth={2.4} />
+              Configurações
             </Link>
           </>
         )}
 
-        {pode("dashboard") && (
+        {!isSuperAdmin && pode("dashboard") && (
           <Link href="/dashboard" className={classeLink("/dashboard")}>
             <Home size={21} strokeWidth={2.4} />
             Dashboard
           </Link>
         )}
 
-        {(pode("produtos") ||
-          pode("clientes") ||
-          pode("fornecedores") ||
-          pode("grupos") ||
-          pode("etiquetas") ||
-          pode("estoque") ||
-          pode("vendas")) && <TituloSecao>Operação</TituloSecao>}
+        {!isSuperAdmin &&
+          (pode("produtos") ||
+            pode("clientes") ||
+            pode("fornecedores") ||
+            pode("grupos") ||
+            pode("etiquetas") ||
+            pode("estoque") ||
+            pode("vendas")) && <TituloSecao>Operação</TituloSecao>}
 
-        {(pode("produtos") ||
-          pode("clientes") ||
-          pode("fornecedores") ||
-          pode("grupos") ||
-          pode("etiquetas")) && (
-          <div className="mt-1">
-            <button
-              onClick={() => setCadastros(!cadastros)}
-              className={classeBotaoGrupo(cadastros)}
-            >
-              <span className="flex items-center gap-3">
-                <Users size={21} strokeWidth={2.4} />
-                Cadastros
-              </span>
+        {!isSuperAdmin &&
+          (pode("produtos") ||
+            pode("clientes") ||
+            pode("fornecedores") ||
+            pode("grupos") ||
+            pode("etiquetas")) && (
+            <div className="mt-1">
+              <button
+                onClick={() => setCadastros(!cadastros)}
+                className={classeBotaoGrupo(cadastros)}
+              >
+                <span className="flex items-center gap-3">
+                  <Users size={21} strokeWidth={2.4} />
+                  Cadastros
+                </span>
 
-              <ChevronDown
-                size={17}
-                className={`transition-transform ${cadastros ? "rotate-180" : ""}`}
-              />
-            </button>
+                <ChevronDown
+                  size={17}
+                  className={`transition-transform ${cadastros ? "rotate-180" : ""}`}
+                />
+              </button>
 
-            {cadastros && (
-              <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
-                {pode("produtos") && (
-                  <Link href="/produtos" className={classeSubLink("/produtos")}>
-                    Produtos
-                  </Link>
-                )}
+              {cadastros && (
+                <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
+                  {pode("produtos") && (
+                    <Link href="/produtos" className={classeSubLink("/produtos")}>
+                      Produtos
+                    </Link>
+                  )}
 
-                {pode("grupos") && (
-                  <Link href="/grupos" className={classeSubLink("/grupos")}>
-                    Grupos
-                  </Link>
-                )}
+                  {pode("grupos") && (
+                    <Link href="/grupos" className={classeSubLink("/grupos")}>
+                      Grupos
+                    </Link>
+                  )}
 
-                {pode("etiquetas") && (
-                  <Link href="/etiquetas" className={classeSubLink("/etiquetas")}>
-                    <span className="flex items-center gap-2">
-                      <Tags size={14} />
-                      Etiquetas
-                    </span>
-                  </Link>
-                )}
+                  {pode("etiquetas") && (
+                    <Link href="/etiquetas" className={classeSubLink("/etiquetas")}>
+                      <span className="flex items-center gap-2">
+                        <Tags size={14} />
+                        Etiquetas
+                      </span>
+                    </Link>
+                  )}
 
-                {pode("fornecedores") && (
-                  <Link href="/fornecedores" className={classeSubLink("/fornecedores")}>
-                    Fornecedores
-                  </Link>
-                )}
+                  {pode("fornecedores") && (
+                    <Link href="/fornecedores" className={classeSubLink("/fornecedores")}>
+                      Fornecedores
+                    </Link>
+                  )}
 
-                {pode("clientes") && (
-                  <Link href="/clientes" className={classeSubLink("/clientes")}>
-                    Clientes
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                  {pode("clientes") && (
+                    <Link href="/clientes" className={classeSubLink("/clientes")}>
+                      Clientes
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
-        {pode("estoque") && (
+        {!isSuperAdmin && pode("estoque") && (
           <div className="mt-1">
             <button onClick={() => setEstoque(!estoque)} className={classeBotaoGrupo(estoque)}>
               <span className="flex items-center gap-3">
@@ -503,7 +611,7 @@ export default function Sidebar() {
           </div>
         )}
 
-        {pode("vendas") && (
+        {!isSuperAdmin && pode("vendas") && (
           <div className="mt-1">
             <button onClick={() => setVendas(!vendas)} className={classeBotaoGrupo(vendas)}>
               <span className="flex items-center gap-3">
@@ -525,9 +633,9 @@ export default function Sidebar() {
           </div>
         )}
 
-        {pode("financeiro") || pode("relatorios") ? <TituloSecao>Gestão</TituloSecao> : null}
+        {!isSuperAdmin && (pode("financeiro") || pode("relatorios")) ? <TituloSecao>Gestão</TituloSecao> : null}
 
-        {pode("financeiro") && (
+        {!isSuperAdmin && pode("financeiro") && (
           <div className="mt-1">
             <button onClick={() => setFinanceiro(!financeiro)} className={classeBotaoGrupo(financeiro)}>
               <span className="flex items-center gap-3">
@@ -550,7 +658,7 @@ export default function Sidebar() {
           </div>
         )}
 
-        {pode("relatorios") && (
+        {!isSuperAdmin && pode("relatorios") && (
           <div className="mt-1">
             <button onClick={() => setRelatorios(!relatorios)} className={classeBotaoGrupo(relatorios)}>
               <span className="flex items-center gap-3">
@@ -597,50 +705,52 @@ export default function Sidebar() {
           </div>
         )}
 
-        {(temModuloPremium("whatsapp") || temModuloPremium("crm") || temModuloPremium("delivery")) && (
-          <TituloSecao>Comunicação</TituloSecao>
-        )}
+        {!isSuperAdmin &&
+          (temModuloPremium("whatsapp") || temModuloPremium("crm") || temModuloPremium("delivery")) && (
+            <TituloSecao>Comunicação</TituloSecao>
+          )}
 
-        {temModuloPremium("whatsapp") && (
+        {!isSuperAdmin && temModuloPremium("whatsapp") && (
           <Link href="/whatsapp" className={classeLink("/whatsapp")}>
             <Bell size={21} strokeWidth={2.4} />
             WhatsApp
           </Link>
         )}
 
-        {temModuloPremium("crm") && (
+        {!isSuperAdmin && temModuloPremium("crm") && (
           <Link href="/crm" className={classeLink("/crm")}>
             <Users size={21} strokeWidth={2.4} />
             CRM
           </Link>
         )}
 
-        {temModuloPremium("delivery") && (
+        {!isSuperAdmin && temModuloPremium("delivery") && (
           <Link href="/delivery" className={classeLink("/delivery")}>
             <Truck size={21} strokeWidth={2.4} />
             Delivery
           </Link>
         )}
 
-        {(podeVerConfiguracoes || temModuloPremium("fiscal") || temModuloPremium("multiloja")) && (
-          <TituloSecao>Administração</TituloSecao>
-        )}
+        {!isSuperAdmin &&
+          (podeVerConfiguracoes || temModuloPremium("fiscal") || temModuloPremium("multiloja")) && (
+            <TituloSecao>Administração</TituloSecao>
+          )}
 
-        {temModuloPremium("fiscal") && (
+        {!isSuperAdmin && temModuloPremium("fiscal") && (
           <Link href="/fiscal" className={classeLink("/fiscal")}>
             <FileText size={21} strokeWidth={2.4} />
             Fiscal
           </Link>
         )}
 
-        {temModuloPremium("multiloja") && (
+        {!isSuperAdmin && temModuloPremium("multiloja") && (
           <Link href="/lojas" className={classeLink("/lojas")}>
             <Store size={21} strokeWidth={2.4} />
             Multiloja
           </Link>
         )}
 
-        {podeVerConfiguracoes && (
+        {!isSuperAdmin && podeVerConfiguracoes && (
           <div className="mt-1">
             <button onClick={() => setConfiguracoes(!configuracoes)} className={classeBotaoGrupo(configuracoes)}>
               <span className="flex items-center gap-3">
@@ -653,36 +763,18 @@ export default function Sidebar() {
 
             {configuracoes && (
               <div className="ml-5 mt-2 pl-4 border-l border-white/15 space-y-1">
-                {!isSuperAdmin && (
-                  <>
-                    <Link href="/empresas" className={classeSubLink("/empresas")}>
-                      <span className="flex items-center gap-2"><Building2 size={14} /> Minha Empresa</span>
-                    </Link>
-                    <Link href="/usuarios" className={classeSubLink("/usuarios")}>
-                      <span className="flex items-center gap-2"><Users size={14} /> Usuários</span>
-                    </Link>
-                    <Link href="/configuracoes" className={classeSubLink("/configuracoes")}>
-                      <span className="flex items-center gap-2"><Settings size={14} /> Configurações Gerais</span>
-                    </Link>
-                    <Link href="/configuracoes/backup" className={classeSubLink("/configuracoes/backup")}>
-                      Backup
-                    </Link>
-                  </>
-                )}
-
-                {isSuperAdmin && (
-                  <>
-                    <p className="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-blue-200/70">
-                      Administração SaaS
-                    </p>
-                    <Link href="/admin/empresas" className={classeSubLink("/admin/empresas")}>
-                      <span className="flex items-center gap-2"><Building2 size={14} /> Empresas SaaS</span>
-                    </Link>
-                    <Link href="/admin/assinaturas" className={classeSubLink("/admin/assinaturas")}>
-                      <span className="flex items-center gap-2"><CircleDollarSign size={14} /> Assinaturas SaaS</span>
-                    </Link>
-                  </>
-                )}
+                <Link href="/empresas" className={classeSubLink("/empresas")}>
+                  <span className="flex items-center gap-2"><Building2 size={14} /> Minha Empresa</span>
+                </Link>
+                <Link href="/usuarios" className={classeSubLink("/usuarios")}>
+                  <span className="flex items-center gap-2"><Users size={14} /> Usuários</span>
+                </Link>
+                <Link href="/configuracoes" className={classeSubLink("/configuracoes")}>
+                  <span className="flex items-center gap-2"><Settings size={14} /> Configurações Gerais</span>
+                </Link>
+                <Link href="/configuracoes/backup" className={classeSubLink("/configuracoes/backup")}>
+                  Backup
+                </Link>
               </div>
             )}
           </div>
@@ -699,26 +791,27 @@ export default function Sidebar() {
 
               <div className="min-w-0">
                 <p className="text-white font-black truncate text-sm">{usuario?.nome || "-"}</p>
-                <p className="text-blue-100 text-xs font-medium truncate">{usuario?.perfil || "-"}</p>
+                <p className="text-blue-100 text-xs font-medium truncate">
+                  {isSuperAdmin ? "Super Admin" : usuario?.perfil || "-"}
+                </p>
               </div>
             </div>
 
             <ChevronDown size={16} className="text-blue-100" />
           </div>
 
-          {(usuario?.plano || usuario?.plano_nome || usuario?.nome_plano) && (
+          {(usuario?.plano || usuario?.plano_nome || usuario?.nome_plano || isSuperAdmin) && (
             <div className="mt-4">
               <p className="text-sm font-black text-white">
-                Plano {usuario?.plano_nome || usuario?.nome_plano || usuario?.plano}
+                Plano {isSuperAdmin ? "Master" : usuario?.plano_nome || usuario?.nome_plano || usuario?.plano}
               </p>
 
-              <div className="mt-2 w-full bg-blue-950/70 rounded-full h-2 overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-400 to-cyan-300 h-2 rounded-full w-3/4" />
-              </div>
-
-              <div className="mt-2 flex items-center justify-between text-[10px] text-blue-100 font-semibold">
-                <span>75% utilizado</span>
-                <span>Vence em breve</span>
+              <div className="mt-3">
+                <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-950/50 border border-white/10">
+                  <span className="text-xs font-bold text-blue-100">
+                    {isSuperAdmin ? "Painel Master SaaS" : `Plano ${usuario?.plano_nome || usuario?.nome_plano || usuario?.plano}`}
+                  </span>
+                </div>
               </div>
             </div>
           )}

@@ -1,154 +1,202 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
-import Sidebar from "./Sidebar";
+import { usePathname, useRouter } from "next/navigation";
 import Header from "./Header";
+import Sidebar from "./Sidebar";
 import { supabase } from "../lib/supabase";
 
-type ConfiguracaoSistema = {
-  modo_compacto?: boolean | null;
-  cor_principal?: string | null;
-  nome_sistema?: string | null;
+type UsuarioLogado = {
+  id: string;
+  empresa_id: string | null;
+  nome?: string;
+  email?: string;
+  usuario?: string;
+  perfil?: string;
+};
+
+type EmpresaStatus = {
+  id: string;
+  ativo: boolean | null;
+  status_assinatura: string | null;
+  onboarding_concluido: boolean | null;
+  etapa_onboarding: number | null;
 };
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const pathname = usePathname();
-  const [modoCompacto, setModoCompacto] = useState(false);
 
-  const semLayout =
-    pathname === "/" ||
-    pathname?.startsWith("/login") ||
-    pathname?.startsWith("/api");
+  const [verificando, setVerificando] = useState(true);
+  const [liberado, setLiberado] = useState(false);
 
-  function getEmpresaId() {
+  function normalizarPerfil(perfil?: string | null) {
+    return String(perfil || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function ehSuperAdmin(usuario: UsuarioLogado | null) {
+    const perfil = normalizarPerfil(usuario?.perfil);
+    return perfil === "super admin" || perfil === "superadmin" || perfil === "master";
+  }
+
+  function lerUsuarioSessao(): UsuarioLogado | null {
     try {
-      const usuarioStorage =
+      const storage =
         sessionStorage.getItem("th_usuario") ||
         localStorage.getItem("th_usuario");
 
-      if (usuarioStorage) {
-        const usuario = JSON.parse(usuarioStorage);
-        if (usuario?.empresa_id) return usuario.empresa_id;
-        if (usuario?.empresa?.id) return usuario.empresa.id;
-      }
+      if (!storage) return null;
 
-      const empresaStorage =
-        sessionStorage.getItem("th_empresa") ||
-        localStorage.getItem("th_empresa");
-
-      if (empresaStorage) {
-        const empresa = JSON.parse(empresaStorage);
-        if (empresa?.id) return empresa.id;
-        if (empresa?.empresa_id) return empresa.empresa_id;
-      }
-
-      return localStorage.getItem("empresa_id") || localStorage.getItem("th_empresa_id");
+      return JSON.parse(storage) as UsuarioLogado;
     } catch {
       return null;
     }
   }
 
-  function aplicarModoCompacto(ativo: boolean) {
-    setModoCompacto(ativo);
+  function limparSessao() {
+    sessionStorage.removeItem("th_usuario");
+    sessionStorage.removeItem("th_empresa");
+    sessionStorage.removeItem("th_permissoes");
 
-    if (typeof document !== "undefined") {
-      document.documentElement.classList.toggle("th-compact", ativo);
-      document.body.classList.toggle("th-compact", ativo);
-    }
+    localStorage.removeItem("th_usuario");
+    localStorage.removeItem("th_empresa");
+    localStorage.removeItem("th_permissoes");
+    localStorage.removeItem("empresa_id");
+    localStorage.removeItem("th_empresa_id");
   }
 
-  async function carregarConfiguracoes() {
-    if (semLayout) return;
+  function rotaLivre() {
+    return (
+      pathname === "/login" ||
+      pathname === "/onboarding" ||
+      pathname?.startsWith("/onboarding")
+    );
+  }
 
-    let compacto = false;
+  async function verificarAcesso() {
+    setVerificando(true);
 
-    try {
-      const configLocal =
-        localStorage.getItem("th_configuracoes_sistema") ||
-        sessionStorage.getItem("th_configuracoes_sistema");
+    const usuario = lerUsuarioSessao();
 
-      if (configLocal) {
-        const config = JSON.parse(configLocal) as ConfiguracaoSistema;
-        compacto = config?.modo_compacto === true;
+    if (!usuario) {
+      setLiberado(false);
+      setVerificando(false);
+
+      if (pathname !== "/login") {
+        router.replace("/login");
       }
-    } catch {}
 
-    const empresaId = getEmpresaId();
-
-    if (empresaId) {
-      try {
-        const { data } = await supabase
-          .from("configuracoes_gerais")
-          .select("modo_compacto,cor_principal,nome_sistema")
-          .eq("empresa_id", empresaId)
-          .maybeSingle();
-
-        if (data) {
-          const config = data as ConfiguracaoSistema;
-          compacto = config?.modo_compacto === true;
-          localStorage.setItem("th_configuracoes_sistema", JSON.stringify(config));
-        }
-      } catch {
-        try {
-          const { data } = await supabase
-            .from("configuracoes_sistema")
-            .select("modo_compacto,cor_principal,nome_sistema")
-            .eq("empresa_id", empresaId)
-            .maybeSingle();
-
-          if (data) {
-            const config = data as ConfiguracaoSistema;
-            compacto = config?.modo_compacto === true;
-            localStorage.setItem("th_configuracoes_sistema", JSON.stringify(config));
-          }
-        } catch {}
-      }
+      return;
     }
 
-    aplicarModoCompacto(compacto);
+    if (ehSuperAdmin(usuario)) {
+      setLiberado(true);
+      setVerificando(false);
+      return;
+    }
+
+    if (!usuario.empresa_id) {
+      limparSessao();
+      setLiberado(false);
+      setVerificando(false);
+      router.replace("/login");
+      return;
+    }
+
+    const { data: empresaData, error } = await supabase
+      .from("empresas")
+      .select("id,ativo,status_assinatura,onboarding_concluido,etapa_onboarding")
+      .eq("id", usuario.empresa_id)
+      .maybeSingle();
+
+    if (error || !empresaData) {
+      limparSessao();
+      setLiberado(false);
+      setVerificando(false);
+      router.replace("/login");
+      return;
+    }
+
+    const empresa = empresaData as EmpresaStatus;
+
+    if (empresa.ativo === false || empresa.status_assinatura === "Bloqueado") {
+      setLiberado(true);
+      setVerificando(false);
+
+      if (pathname !== "/bloqueado") {
+        router.replace("/bloqueado");
+      }
+
+      return;
+    }
+
+    if (empresa.status_assinatura === "Cancelado") {
+      setLiberado(true);
+      setVerificando(false);
+
+      if (pathname !== "/bloqueado") {
+        router.replace("/bloqueado");
+      }
+
+      return;
+    }
+
+    if (empresa.onboarding_concluido !== true && !rotaLivre()) {
+      setLiberado(true);
+      setVerificando(false);
+      router.replace("/onboarding");
+      return;
+    }
+
+    setLiberado(true);
+    setVerificando(false);
   }
 
   useEffect(() => {
-    carregarConfiguracoes();
-
-    const intervalo = window.setInterval(() => {
-      carregarConfiguracoes();
-    }, 2500);
-
-    function ouvirStorage() {
-      carregarConfiguracoes();
-    }
-
-    window.addEventListener("storage", ouvirStorage);
-    window.addEventListener("th_configuracoes_atualizadas", ouvirStorage);
-
-    return () => {
-      window.clearInterval(intervalo);
-      window.removeEventListener("storage", ouvirStorage);
-      window.removeEventListener("th_configuracoes_atualizadas", ouvirStorage);
-    };
+    verificarAcesso();
   }, [pathname]);
 
-  if (semLayout) {
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
+
+  if (verificando) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="h-12 w-12 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto" />
+          <p className="mt-4 font-black text-slate-900">
+            Verificando ambiente...
+          </p>
+          <p className="text-sm text-slate-500 mt-1">
+            Aguarde um instante.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!liberado) return null;
+
+  if (pathname === "/onboarding" || pathname?.startsWith("/onboarding")) {
     return <>{children}</>;
   }
 
   return (
-    <div
-      className={`th-app-shell flex min-h-screen w-full overflow-x-hidden bg-slate-100 ${
-        modoCompacto ? "is-compact" : ""
-      }`}
-    >
+    <div className="th-app-shell min-h-screen bg-slate-50 flex overflow-x-hidden">
       <Sidebar />
 
-      <div className="th-main-area min-w-0 flex-1 overflow-x-hidden">
+      <main className="th-main-area flex-1 min-w-0 overflow-x-hidden">
         <Header />
 
-        <main className="th-page-content w-full min-w-0 overflow-x-hidden">
+        <div className="th-page-content w-full max-w-full overflow-x-hidden">
           {children}
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

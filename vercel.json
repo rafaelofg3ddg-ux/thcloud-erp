@@ -7,6 +7,10 @@
     {
       "path": "/api/saas/verificar-assinaturas?token=SEU_TOKEN_SECRETO_AQUI",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/saas/automacao-financeira?token=SEU_TOKEN_SECRETO_AQUI",
+      "schedule": "30 4 * * *"
     }
   ]
 }

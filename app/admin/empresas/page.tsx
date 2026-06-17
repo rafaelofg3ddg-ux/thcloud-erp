@@ -10,6 +10,8 @@ import {
   Eye,
   Filter,
   History,
+  KeyRound,
+  LogIn,
   Lock,
   PackageCheck,
   Plus,
@@ -19,6 +21,7 @@ import {
   Unlock,
   X,
   XCircle,
+  Activity,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
 
@@ -40,6 +43,10 @@ type Empresa = {
   data_vencimento_assinatura: string | null;
   observacoes: string | null;
   created_at: string | null;
+  ultimo_acesso: string | null;
+  ultima_venda: string | null;
+  onboarding_concluido: boolean | null;
+  etapa_onboarding: number | null;
   modulo_fiscal: boolean | null;
   modulo_whatsapp: boolean | null;
   modulo_delivery: boolean | null;
@@ -67,6 +74,17 @@ type Historico = {
   descricao: string | null;
   usuario: string | null;
   created_at: string | null;
+};
+
+type UsuarioAdmin = {
+  id: string;
+  empresa_id: string | null;
+  nome: string | null;
+  email: string | null;
+  usuario: string | null;
+  perfil: string | null;
+  ativo: boolean | null;
+  ultimo_acesso: string | null;
 };
 
 type FormEmpresa = {
@@ -123,6 +141,7 @@ export default function AdminEmpresasPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [historico, setHistorico] = useState<Historico[]>([]);
+  const [usuariosAdmin, setUsuariosAdmin] = useState<UsuarioAdmin[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [busca, setBusca] = useState("");
@@ -226,6 +245,55 @@ export default function AdminEmpresasPage() {
     ].filter(Boolean).length;
   }
 
+  function formatarDataHora(data: string | null) {
+    if (!data) return "-";
+    return new Date(data).toLocaleString("pt-BR");
+  }
+
+  function diasDesde(data: string | null) {
+    if (!data) return 9999;
+
+    const origem = new Date(data);
+    const agora = new Date();
+    const diferenca = agora.getTime() - origem.getTime();
+
+    return Math.floor(diferenca / (1000 * 60 * 60 * 24));
+  }
+
+  function onboardingTexto(empresa: Empresa) {
+    if (empresa.onboarding_concluido) return "Concluído";
+    const etapa = Number(empresa.etapa_onboarding || 0);
+    if (etapa > 0) return `Etapa ${etapa}/5`;
+    return "Não iniciado";
+  }
+
+  function saudeEmpresa(empresa: Empresa) {
+    const status = statusReal(empresa);
+    const diasSemAcesso = diasDesde(empresa.ultimo_acesso);
+
+    if (status === "Bloqueado" || status === "Vencido" || diasSemAcesso > 30) {
+      return "Crítica";
+    }
+
+    if (!empresa.onboarding_concluido || status === "Vencendo" || diasSemAcesso > 15 || !empresa.ultima_venda) {
+      return "Atenção";
+    }
+
+    return "Saudável";
+  }
+
+  function usuariosDaEmpresa(empresaId: string) {
+    return usuariosAdmin.filter((usuario) => usuario.empresa_id === empresaId);
+  }
+
+  function adminPrincipal(empresaId: string) {
+    return (
+      usuariosDaEmpresa(empresaId).find((usuario) =>
+        String(usuario.perfil || "").toLowerCase().includes("admin")
+      ) || usuariosDaEmpresa(empresaId)[0]
+    );
+  }
+
   async function registrarHistorico(
     empresaId: string,
     acao: string,
@@ -249,7 +317,7 @@ export default function AdminEmpresasPage() {
     const { data: empresasData, error: empresasError } = await supabase
       .from("empresas")
       .select(
-        "id,nome_fantasia,razao_social,cnpj,email,telefone,celular,cidade,estado,ativo,plano,valor_mensal,status_assinatura,data_inicio_assinatura,data_vencimento_assinatura,observacoes,created_at,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
+        "id,nome_fantasia,razao_social,cnpj,email,telefone,celular,cidade,estado,ativo,plano,valor_mensal,status_assinatura,data_inicio_assinatura,data_vencimento_assinatura,observacoes,created_at,ultimo_acesso,ultima_venda,onboarding_concluido,etapa_onboarding,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
       )
       .order("created_at", { ascending: false });
 
@@ -270,6 +338,13 @@ export default function AdminEmpresasPage() {
       .order("valor_mensal", { ascending: true });
 
     setPlanos((planosData || []) as Plano[]);
+
+    const { data: usuariosData } = await supabase
+      .from("usuarios")
+      .select("id,empresa_id,nome,email,usuario,perfil,ativo,ultimo_acesso")
+      .order("nome", { ascending: true });
+
+    setUsuariosAdmin((usuariosData || []) as UsuarioAdmin[]);
     setCarregando(false);
   }
 
@@ -304,6 +379,10 @@ export default function AdminEmpresasPage() {
   ).length;
   const empresasVencidas = empresas.filter((empresa) => estaVencida(empresa)).length;
   const empresasVencendo = empresas.filter((empresa) => venceEmBreve(empresa)).length;
+  const onboardingConcluido = empresas.filter((empresa) => empresa.onboarding_concluido).length;
+  const onboardingPendente = empresas.filter((empresa) => !empresa.onboarding_concluido).length;
+  const semAcesso7Dias = empresas.filter((empresa) => diasDesde(empresa.ultimo_acesso) > 7).length;
+  const semAcesso30Dias = empresas.filter((empresa) => diasDesde(empresa.ultimo_acesso) > 30).length;
   const receitaMensal = empresas
     .filter((empresa) => empresa.ativo !== false && !estaVencida(empresa))
     .reduce((total, empresa) => total + Number(empresa.valor_mensal || 0), 0);
@@ -543,6 +622,92 @@ export default function AdminEmpresasPage() {
     await carregarDados();
   }
 
+  async function resetarSenhaAdmin(empresa: Empresa) {
+    const admin = adminPrincipal(empresa.id);
+
+    if (!admin) {
+      alert("Nenhum usuário administrador encontrado para esta empresa.");
+      return;
+    }
+
+    const novaSenha = `TH@${new Date().getFullYear()}${Math.floor(1000 + Math.random() * 9000)}`;
+
+    if (!confirm(`Resetar senha do administrador ${admin.nome || admin.email || admin.usuario}?\n\nNova senha: ${novaSenha}`)) return;
+
+    const { error } = await supabase
+      .from("usuarios")
+      .update({
+        senha: novaSenha,
+        resetar_senha_proximo_login: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", admin.id);
+
+    if (error) {
+      alert("Erro ao resetar senha: " + error.message);
+      return;
+    }
+
+    await registrarHistorico(
+      empresa.id,
+      "Senha resetada",
+      `Senha do administrador ${admin.nome || admin.email || admin.usuario} foi resetada pelo Super Admin.`
+    );
+
+    alert(`Senha resetada com sucesso!\n\nLogin: ${admin.email || admin.usuario}\nNova senha: ${novaSenha}`);
+    await carregarDados();
+  }
+
+  async function entrarComoCliente(empresa: Empresa) {
+    const admin = adminPrincipal(empresa.id);
+
+    if (!admin) {
+      alert("Nenhum usuário administrador encontrado para esta empresa.");
+      return;
+    }
+
+    if (!confirm(`Entrar no sistema como ${nomeEmpresa(empresa)}?`)) return;
+
+    const usuarioSessao = {
+      id: admin.id,
+      nome: admin.nome || admin.email || admin.usuario || "Administrador",
+      email: admin.email || "",
+      usuario: admin.usuario || "",
+      perfil: admin.perfil || "Admin",
+      empresa_id: empresa.id,
+      empresa_nome: nomeEmpresa(empresa),
+      plano: empresa.plano || "Básico",
+      acesso_suporte: true,
+      super_admin_impersonando: true,
+    };
+
+    const empresaSessao = {
+      id: empresa.id,
+      empresa_id: empresa.id,
+      nome: nomeEmpresa(empresa),
+      nome_fantasia: empresa.nome_fantasia || nomeEmpresa(empresa),
+      razao_social: empresa.razao_social || nomeEmpresa(empresa),
+      plano: empresa.plano || "Básico",
+      ativo: empresa.ativo !== false,
+      status_assinatura: empresa.status_assinatura || "Ativo",
+    };
+
+    sessionStorage.setItem("th_usuario", JSON.stringify(usuarioSessao));
+    sessionStorage.setItem("th_empresa", JSON.stringify(empresaSessao));
+    localStorage.setItem("th_usuario", JSON.stringify(usuarioSessao));
+    localStorage.setItem("th_empresa", JSON.stringify(empresaSessao));
+    localStorage.setItem("empresa_id", empresa.id);
+    localStorage.setItem("th_empresa_id", empresa.id);
+
+    await registrarHistorico(
+      empresa.id,
+      "Acesso suporte",
+      "Super Admin entrou no ambiente da empresa para suporte/implantação."
+    );
+
+    window.location.href = "/dashboard";
+  }
+
   async function abrirHistorico(empresa: Empresa) {
     setEmpresaHistorico(empresa);
     setModalHistorico(true);
@@ -600,13 +765,20 @@ export default function AdminEmpresasPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
+      <section className="grid grid-cols-2 xl:grid-cols-6 gap-4 mb-4">
         <Card titulo="Total" valor={`${totalEmpresas}`} detalhe="Empresas cadastradas" cor="text-blue-700" icone={<Building2 size={22} />} />
         <Card titulo="Ativas" valor={`${empresasAtivas}`} detalhe="Clientes liberados" cor="text-green-700" icone={<CheckCircle2 size={22} />} />
         <Card titulo="Teste" valor={`${empresasTeste}`} detalhe="Período experimental" cor="text-cyan-700" icone={<Clock size={22} />} />
         <Card titulo="Bloqueadas" valor={`${empresasBloqueadas}`} detalhe="Acesso suspenso" cor="text-red-700" icone={<XCircle size={22} />} />
         <Card titulo="Vencendo" valor={`${empresasVencendo}`} detalhe="Próximos 7 dias" cor="text-orange-700" icone={<ShieldAlert size={22} />} />
         <Card titulo="MRR" valor={moeda(receitaMensal)} detalhe="Receita mensal" cor="text-purple-700" icone={<CircleDollarSign size={22} />} />
+      </section>
+
+      <section className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <Card titulo="Onboarding OK" valor={`${onboardingConcluido}`} detalhe="Implantação concluída" cor="text-green-700" icone={<Activity size={22} />} />
+        <Card titulo="Onboarding pendente" valor={`${onboardingPendente}`} detalhe="Aguardando implantação" cor="text-orange-700" icone={<ShieldAlert size={22} />} />
+        <Card titulo="Sem acesso 7 dias" valor={`${semAcesso7Dias}`} detalhe="Baixo engajamento" cor="text-yellow-700" icone={<Clock size={22} />} />
+        <Card titulo="Sem acesso 30 dias" valor={`${semAcesso30Dias}`} detalhe="Risco de churn" cor="text-red-700" icone={<XCircle size={22} />} />
       </section>
 
       <section className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-4 lg:p-5 mb-6">
@@ -669,12 +841,13 @@ export default function AdminEmpresasPage() {
             <thead>
               <tr className="bg-blue-700 text-white">
                 <th className="p-4 text-left">Empresa</th>
-                <th className="p-4 text-left">Contato</th>
                 <th className="p-4 text-left">Plano</th>
-                <th className="p-4 text-left">Mensalidade</th>
-                <th className="p-4 text-left">Vencimento</th>
                 <th className="p-4 text-left">Status</th>
-                <th className="p-4 text-left">Módulos</th>
+                <th className="p-4 text-left">Onboarding</th>
+                <th className="p-4 text-left">Último Acesso</th>
+                <th className="p-4 text-left">Última Venda</th>
+                <th className="p-4 text-left">Mensalidade</th>
+                <th className="p-4 text-left">Saúde</th>
                 <th className="p-4 text-left">Ações</th>
               </tr>
             </thead>
@@ -682,7 +855,7 @@ export default function AdminEmpresasPage() {
             <tbody>
               {carregando && (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                  <td colSpan={9} className="p-8 text-center text-slate-500">
                     Carregando empresas...
                   </td>
                 </tr>
@@ -698,17 +871,46 @@ export default function AdminEmpresasPage() {
                     </td>
 
                     <td className="p-4">
-                      <p className="font-bold text-slate-800">{empresa.email || "-"}</p>
-                      <p className="text-xs text-slate-500">{empresa.telefone || empresa.celular || "-"}</p>
-                      <p className="text-xs text-slate-500">
-                        {[empresa.cidade, empresa.estado].filter(Boolean).join(" / ") || "-"}
+                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-black">
+                        {empresa.plano || "Básico"}
+                      </span>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {quantidadeModulos(empresa)} módulo(s)
                       </p>
                     </td>
 
                     <td className="p-4">
-                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-black">
-                        {empresa.plano || "Básico"}
-                      </span>
+                      <StatusBadge status={statusReal(empresa)} />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Vence: {formatarData(empresa.data_vencimento_assinatura)}
+                      </p>
+                    </td>
+
+                    <td className="p-4">
+                      <OnboardingBadge texto={onboardingTexto(empresa)} concluido={empresa.onboarding_concluido === true} />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Etapa {Number(empresa.etapa_onboarding || 0)}/5
+                      </p>
+                    </td>
+
+                    <td className="p-4">
+                      <p className="font-bold text-slate-800">
+                        {formatarDataHora(empresa.ultimo_acesso)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {diasDesde(empresa.ultimo_acesso) >= 9999
+                          ? "Nunca acessou"
+                          : `${diasDesde(empresa.ultimo_acesso)} dia(s)`}
+                      </p>
+                    </td>
+
+                    <td className="p-4">
+                      <p className="font-bold text-slate-800">
+                        {formatarDataHora(empresa.ultima_venda)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {empresa.ultima_venda ? "Venda registrada" : "Sem venda"}
+                      </p>
                     </td>
 
                     <td className="p-4 font-black text-purple-700">
@@ -716,27 +918,19 @@ export default function AdminEmpresasPage() {
                     </td>
 
                     <td className="p-4">
-                      <p className="font-bold text-slate-800">
-                        {formatarData(empresa.data_vencimento_assinatura)}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Início: {formatarData(empresa.data_inicio_assinatura)}
-                      </p>
-                    </td>
-
-                    <td className="p-4">
-                      <StatusBadge status={statusReal(empresa)} />
-                    </td>
-
-                    <td className="p-4">
-                      <span className="bg-slate-100 text-slate-800 px-3 py-1 rounded-full font-black inline-flex items-center gap-2">
-                        <PackageCheck size={15} />
-                        {quantidadeModulos(empresa)}
-                      </span>
+                      <SaudeBadge saude={saudeEmpresa(empresa)} />
                     </td>
 
                     <td className="p-4">
                       <div className="flex flex-wrap gap-2">
+                        <BotaoAcao cor="green" titulo="Entrar como cliente" onClick={() => entrarComoCliente(empresa)}>
+                          <LogIn size={17} />
+                        </BotaoAcao>
+
+                        <BotaoAcao cor="purple" titulo="Resetar senha Admin" onClick={() => resetarSenhaAdmin(empresa)}>
+                          <KeyRound size={17} />
+                        </BotaoAcao>
+
                         <BotaoAcao cor="slate" titulo="Visualizar" onClick={() => setVisualizando(empresa)}>
                           <Eye size={17} />
                         </BotaoAcao>
@@ -767,7 +961,7 @@ export default function AdminEmpresasPage() {
 
               {!carregando && empresasFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                  <td colSpan={9} className="p-8 text-center text-slate-500">
                     Nenhuma empresa encontrada.
                   </td>
                 </tr>
@@ -932,6 +1126,8 @@ export default function AdminEmpresasPage() {
           quantidadeModulos={quantidadeModulos}
           moeda={moeda}
           formatarData={formatarData}
+          formatarDataHora={formatarDataHora}
+          saudeEmpresa={saudeEmpresa}
           onClose={() => setVisualizando(null)}
           onEditar={() => {
             const empresa = visualizando;
@@ -1111,6 +1307,8 @@ function ModalVisualizacao({
   quantidadeModulos,
   moeda,
   formatarData,
+  formatarDataHora,
+  saudeEmpresa,
   onClose,
   onEditar,
 }: {
@@ -1120,6 +1318,8 @@ function ModalVisualizacao({
   quantidadeModulos: (empresa: Empresa) => number;
   moeda: (valor: number) => string;
   formatarData: (data: string | null) => string;
+  formatarDataHora: (data: string | null) => string;
+  saudeEmpresa: (empresa: Empresa) => string;
   onClose: () => void;
   onEditar: () => void;
 }) {
@@ -1151,6 +1351,10 @@ function ModalVisualizacao({
           <Info label="Vencimento" value={formatarData(empresa.data_vencimento_assinatura)} />
           <Info label="Módulos contratados" value={`${quantidadeModulos(empresa)} módulo(s)`} />
           <Info label="Criada em" value={empresa.created_at ? new Date(empresa.created_at).toLocaleString("pt-BR") : "-"} />
+          <Info label="Onboarding" value={empresa.onboarding_concluido ? "Concluído" : `Etapa ${Number(empresa.etapa_onboarding || 0)}/5`} />
+          <Info label="Último acesso" value={formatarDataHora(empresa.ultimo_acesso)} />
+          <Info label="Última venda" value={formatarDataHora(empresa.ultima_venda)} />
+          <Info label="Saúde" value={saudeEmpresa(empresa)} />
           <Info label="Observações" value={empresa.observacoes || "-"} />
         </div>
 
@@ -1171,6 +1375,43 @@ function ModalVisualizacao({
         </div>
       </div>
     </div>
+  );
+}
+
+function SaudeBadge({ saude }: { saude: string }) {
+  const classe =
+    saude === "Saudável"
+      ? "bg-green-100 text-green-700"
+      : saude === "Atenção"
+      ? "bg-yellow-100 text-yellow-700"
+      : "bg-red-100 text-red-700";
+
+  const simbolo = saude === "Saudável" ? "🟢" : saude === "Atenção" ? "🟡" : "🔴";
+
+  return (
+    <span className={`px-3 py-1 rounded-full text-xs font-black ${classe}`}>
+      {simbolo} {saude}
+    </span>
+  );
+}
+
+function OnboardingBadge({
+  texto,
+  concluido,
+}: {
+  texto: string;
+  concluido: boolean;
+}) {
+  return (
+    <span
+      className={`px-3 py-1 rounded-full text-xs font-black ${
+        concluido
+          ? "bg-green-100 text-green-700"
+          : "bg-orange-100 text-orange-700"
+      }`}
+    >
+      {concluido ? "✅" : "⚠️"} {texto}
+    </span>
   );
 }
 
