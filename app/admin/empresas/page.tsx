@@ -459,7 +459,7 @@ export default function AdminEmpresasPage() {
 
     setSalvando(true);
 
-    const dados = {
+    const dadosCadastrais = {
       nome_fantasia: form.nome_fantasia.trim(),
       razao_social: form.razao_social.trim(),
       cnpj: form.cnpj.trim(),
@@ -468,29 +468,35 @@ export default function AdminEmpresasPage() {
       celular: form.celular.trim(),
       cidade: form.cidade.trim(),
       estado: form.estado.trim().toUpperCase(),
-      plano: form.plano,
-      valor_mensal: Number(String(form.valor_mensal).replace(",", ".") || 0),
-      status_assinatura: form.status_assinatura,
-      data_inicio_assinatura: form.data_inicio_assinatura || null,
-      data_vencimento_assinatura: form.data_vencimento_assinatura || null,
-      ativo: form.ativo,
       observacoes: form.observacoes.trim() || null,
-      modulo_fiscal: form.modulo_fiscal,
-      modulo_whatsapp: form.modulo_whatsapp,
-      modulo_delivery: form.modulo_delivery,
-      modulo_crm: form.modulo_crm,
-      modulo_relatorios_premium: form.modulo_relatorios_premium,
-      modulo_multiloja: form.modulo_multiloja,
       updated_at: new Date().toISOString(),
+    };
+
+    const dadosNovaEmpresa = {
+      ...dadosCadastrais,
+      plano: "Básico",
+      valor_mensal: 0,
+      status_assinatura: "Teste",
+      data_inicio_assinatura: hojeISO(),
+      data_vencimento_assinatura: adicionarDias(7),
+      ativo: true,
+      onboarding_concluido: false,
+      etapa_onboarding: 0,
+      modulo_fiscal: false,
+      modulo_whatsapp: false,
+      modulo_delivery: false,
+      modulo_crm: false,
+      modulo_relatorios_premium: false,
+      modulo_multiloja: false,
     };
 
     let resultado;
     let empresaId = form.id;
 
     if (form.id) {
-      resultado = await supabase.from("empresas").update(dados).eq("id", form.id);
+      resultado = await supabase.from("empresas").update(dadosCadastrais).eq("id", form.id);
     } else {
-      resultado = await supabase.from("empresas").insert([dados]).select("id").single();
+      resultado = await supabase.from("empresas").insert([dadosNovaEmpresa]).select("id").single();
     }
 
     setSalvando(false);
@@ -506,7 +512,7 @@ export default function AdminEmpresasPage() {
       await registrarHistorico(
         empresaId,
         form.id ? "Empresa atualizada" : "Empresa criada",
-        `${form.id ? "Atualização" : "Cadastro"} realizado no Super Admin. Plano: ${form.plano}.`
+        form.id ? "Dados cadastrais atualizados no Super Admin." : "Empresa cadastrada e enviada para provisionamento/onboarding inicial."
       );
 
       if (!form.id) {
@@ -980,7 +986,7 @@ export default function AdminEmpresasPage() {
                   {form.id ? "Editar Empresa SaaS" : "Nova Empresa SaaS"}
                 </h2>
                 <p className="text-slate-500">
-                  Dados cadastrais, assinatura, plano e módulos contratados.
+                  Dados cadastrais da empresa. A assinatura e os módulos serão liberados depois no menu Assinaturas.
                 </p>
               </div>
 
@@ -1011,80 +1017,13 @@ export default function AdminEmpresasPage() {
                 </div>
               </div>
 
-              <div>
-                <h3 className="font-black text-slate-900 mb-3">Assinatura</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  <label className="block">
-                    <span className="text-sm font-black text-slate-800">Plano</span>
-                    <select
-                      value={form.plano}
-                      onChange={(e) => aplicarPlano(e.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-black outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
-                    >
-                      {planos.map((plano) => (
-                        <option key={plano.id}>{plano.nome}</option>
-                      ))}
-                      {planos.length === 0 && (
-                        <>
-                          <option>Básico</option>
-                          <option>Profissional</option>
-                          <option>Premium</option>
-                          <option>Enterprise</option>
-                        </>
-                      )}
-                    </select>
-                  </label>
-
-                  <Input label="Valor mensal" value={form.valor_mensal} onChange={(v) => alterarCampo("valor_mensal", v)} />
-
-                  <label className="block">
-                    <span className="text-sm font-black text-slate-800">Status</span>
-                    <select
-                      value={form.status_assinatura}
-                      onChange={(e) => alterarCampo("status_assinatura", e.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 font-black outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600"
-                    >
-                      <option>Ativo</option>
-                      <option>Teste</option>
-                      <option>Vencido</option>
-                      <option>Bloqueado</option>
-                      <option>Cancelado</option>
-                      <option>Suspenso</option>
-                    </select>
-                  </label>
-
-                  <Input label="Início" type="date" value={form.data_inicio_assinatura} onChange={(v) => alterarCampo("data_inicio_assinatura", v)} />
-                  <Input label="Vencimento" type="date" value={form.data_vencimento_assinatura} onChange={(v) => alterarCampo("data_vencimento_assinatura", v)} />
-                </div>
-
-                <label className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-200 p-4 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.ativo}
-                    onChange={(e) => alterarCampo("ativo", e.target.checked)}
-                    className="h-5 w-5"
-                  />
-                  <div>
-                    <p className="font-black text-slate-900">Empresa ativa</p>
-                    <p className="text-sm text-slate-500">
-                      Se desmarcar, o cliente fica bloqueado no sistema.
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              <div>
-                <h3 className="font-black text-slate-900 mb-3">Módulos adicionais</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  <CheckModulo label="Fiscal" checked={form.modulo_fiscal} onChange={(v) => alterarCampo("modulo_fiscal", v)} />
-                  <CheckModulo label="WhatsApp" checked={form.modulo_whatsapp} onChange={(v) => alterarCampo("modulo_whatsapp", v)} />
-                  <CheckModulo label="Delivery" checked={form.modulo_delivery} onChange={(v) => alterarCampo("modulo_delivery", v)} />
-                  <CheckModulo label="CRM" checked={form.modulo_crm} onChange={(v) => alterarCampo("modulo_crm", v)} />
-                  <CheckModulo label="Relatórios Premium" checked={form.modulo_relatorios_premium} onChange={(v) => alterarCampo("modulo_relatorios_premium", v)} />
-                  <CheckModulo label="Multiloja" checked={form.modulo_multiloja} onChange={(v) => alterarCampo("modulo_multiloja", v)} />
-                </div>
+              <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5">
+                <h3 className="font-black text-blue-950 mb-2">Provisionamento inicial</h3>
+                <p className="text-sm text-blue-800 leading-relaxed">
+                  Ao salvar, a empresa será criada e provisionada para fazer o primeiro acesso.
+                  O cliente será direcionado para o onboarding inicial. A assinatura, mensalidade,
+                  vencimento e módulos contratados serão liberados depois no menu Assinaturas SaaS.
+                </p>
               </div>
 
               <label className="block">
@@ -1111,7 +1050,7 @@ export default function AdminEmpresasPage() {
                 disabled={salvando}
                 className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black disabled:opacity-60"
               >
-                {salvando ? "Salvando..." : "Salvar Empresa"}
+                {salvando ? "Salvando..." : form.id ? "Salvar Alterações" : "Cadastrar e Provisionar"}
               </button>
             </div>
           </div>

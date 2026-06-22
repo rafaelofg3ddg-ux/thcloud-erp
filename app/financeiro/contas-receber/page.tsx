@@ -46,11 +46,28 @@ type ContaReceber = {
   created_at?: string | null;
 };
 
+type CreditoCliente = {
+  id: string;
+  empresa_id: string | null;
+  cliente_id: string | null;
+  venda_id: string | null;
+  devolucao_id: string | null;
+  origem: string | null;
+  tipo: string | null;
+  valor: number;
+  saldo_apos: number;
+  descricao: string | null;
+  usuario: string | null;
+  created_at: string | null;
+};
+
 export default function ContasReceberPage() {
   const [contas, setContas] = useState<ContaReceber[]>([]);
+  const [creditos, setCreditos] = useState<CreditoCliente[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendas, setVendas] = useState<Venda[]>([]);
 
+  const [visualizacao, setVisualizacao] = useState<"contas" | "creditos">("contas");
   const [pesquisa, setPesquisa] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroPeriodo, setFiltroPeriodo] = useState("todos");
@@ -71,6 +88,39 @@ export default function ContasReceberPage() {
     }
 
     return empresaId;
+  }
+
+  function operadorAtual() {
+    try {
+      const usuarioStorage =
+        sessionStorage.getItem("th_usuario") ||
+        localStorage.getItem("th_usuario");
+
+      if (!usuarioStorage) return "Sistema";
+
+      const usuario = JSON.parse(usuarioStorage);
+      return usuario.nome || usuario.email || usuario.usuario || "Sistema";
+    } catch {
+      return "Sistema";
+    }
+  }
+
+  async function registrarAuditoria(acao: string, detalhe: string) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    try {
+      await supabase.from("auditoria_saas").insert([
+        {
+          empresa_id: empresaId,
+          usuario: operadorAtual(),
+          acao,
+          descricao: detalhe,
+        },
+      ]);
+    } catch {
+      // Não trava a tela se auditoria ainda não existir.
+    }
   }
 
   function converterNumero(valor: string | number) {
@@ -127,6 +177,18 @@ export default function ContasReceberPage() {
     if (matchNumero?.[1]) return formatarNumero(Number(matchNumero[1]));
 
     return conta.venda_id ? conta.venda_id.slice(0, 8) : "-";
+  }
+
+  function numeroVendaCredito(credito: CreditoCliente) {
+    const venda = vendaPorId(credito.venda_id);
+
+    if (venda?.numero_venda) return formatarNumero(venda.numero_venda);
+
+    const texto = String(credito.descricao || "");
+    const matchNumero = texto.match(/Venda nº\s*(\d+)/i);
+    if (matchNumero?.[1]) return formatarNumero(Number(matchNumero[1]));
+
+    return credito.venda_id ? credito.venda_id.slice(0, 8) : "-";
   }
 
   function parcelaTexto(conta: ContaReceber) {
@@ -231,9 +293,11 @@ export default function ContasReceberPage() {
     const contasReq = await supabase
       .from("contas_receber")
       .select(
-        "id,empresa_id,cliente_id,venda_id,descricao,valor,vencimento,status,numero_parcela,total_parcelas,valor_recebido,forma_pagamento,data_recebimento,observacao_recebimento"
+        "id,empresa_id,cliente_id,venda_id,descricao,valor,vencimento,status,numero_parcela,total_parcelas,valor_recebido,forma_pagamento,data_recebimento,observacao_recebimento,created_at"
       )
       .eq("empresa_id", empresaId)
+      .neq("status", "credito")
+      .gte("valor", 0)
       .order("vencimento", { ascending: true });
 
     if (contasReq.error) {
@@ -242,11 +306,25 @@ export default function ContasReceberPage() {
       return;
     }
 
-    const listaContas = contasReq.data || [];
+    const listaContas = (contasReq.data || []) as ContaReceber[];
     setContas(listaContas);
 
+    const creditosReq = await supabase
+      .from("creditos_cliente")
+      .select(
+        "id,empresa_id,cliente_id,venda_id,devolucao_id,origem,tipo,valor,saldo_apos,descricao,usuario,created_at"
+      )
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false });
+
+    const listaCreditos = creditosReq.error ? [] : ((creditosReq.data || []) as CreditoCliente[]);
+    setCreditos(listaCreditos);
+
     const vendaIds = Array.from(
-      new Set(listaContas.map((conta) => conta.venda_id).filter(Boolean))
+      new Set([
+        ...listaContas.map((conta) => conta.venda_id).filter(Boolean),
+        ...listaCreditos.map((credito) => credito.venda_id).filter(Boolean),
+      ])
     ) as string[];
 
     if (vendaIds.length > 0) {
@@ -258,6 +336,8 @@ export default function ContasReceberPage() {
 
       if (!vendasReq.error) {
         setVendas(vendasReq.data || []);
+      } else {
+        setVendas([]);
       }
     } else {
       setVendas([]);
@@ -323,6 +403,11 @@ export default function ContasReceberPage() {
       return;
     }
 
+    await registrarAuditoria(
+      "CONTA_RECEBIDA",
+      `Recebimento registrado | Cliente: ${clienteNome(contaSelecionada.cliente_id)} | Venda: ${numeroVenda(contaSelecionada)} | Valor: ${formatarMoeda(valor)} | Forma: ${formaPagamento}`
+    );
+
     alert("Parcela recebida com sucesso!");
     fecharModal();
     carregarDados();
@@ -377,6 +462,29 @@ export default function ContasReceberPage() {
     });
   }, [contas, clientes, vendas, pesquisa, filtroStatus, filtroPeriodo]);
 
+  const creditosFiltrados = useMemo(() => {
+    const texto = pesquisa.toLowerCase().trim();
+
+    return creditos.filter((credito) => {
+      const cliente = clienteNome(credito.cliente_id).toLowerCase();
+      const documento = String(clientePorId(credito.cliente_id)?.cpf_cnpj || "").toLowerCase();
+      const descricao = String(credito.descricao || "").toLowerCase();
+      const origem = String(credito.origem || "").toLowerCase();
+      const tipo = String(credito.tipo || "").toLowerCase();
+      const venda = numeroVendaCredito(credito).toLowerCase();
+
+      return (
+        !texto ||
+        cliente.includes(texto) ||
+        documento.includes(texto) ||
+        descricao.includes(texto) ||
+        origem.includes(texto) ||
+        tipo.includes(texto) ||
+        venda.includes(texto)
+      );
+    });
+  }, [creditos, clientes, vendas, pesquisa]);
+
   const totalAberto = contas
     .filter((conta) => !estaPaga(conta) && !estaVencida(conta))
     .reduce((total, conta) => total + Number(conta.valor || 0), 0);
@@ -389,6 +497,16 @@ export default function ContasReceberPage() {
     .filter((conta) => estaPaga(conta))
     .reduce((total, conta) => total + Number(conta.valor_recebido || conta.valor || 0), 0);
 
+  const totalCreditosEntradas = creditos
+    .filter((credito) => credito.tipo === "entrada" || credito.tipo === "ajuste")
+    .reduce((total, credito) => total + Number(credito.valor || 0), 0);
+
+  const totalCreditosUsados = creditos
+    .filter((credito) => credito.tipo === "saida" || credito.tipo === "uso")
+    .reduce((total, credito) => total + Number(credito.valor || 0), 0);
+
+  const saldoCreditos = totalCreditosEntradas - totalCreditosUsados;
+
   useEffect(() => {
     carregarDados();
   }, []);
@@ -399,14 +517,16 @@ export default function ContasReceberPage() {
         <p className="text-blue-100 font-bold">THCloud ERP</p>
         <h1 className="text-3xl lg:text-4xl font-black mt-2">Contas a Receber</h1>
         <p className="text-blue-100 mt-2 max-w-4xl">
-          Controle parcelas do crediário, vendas a prazo, vencimentos, recebimentos e cobrança por WhatsApp.
+          Controle parcelas do crediário, vendas a prazo, vencimentos,
+          recebimentos, créditos do cliente e cobrança por WhatsApp.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Resumo titulo="Em Aberto" valor={formatarMoeda(totalAberto)} detalhe="Parcelas dentro do prazo" icone={<Clock size={24} />} cor="text-blue-700" />
         <Resumo titulo="Vencido" valor={formatarMoeda(totalVencido)} detalhe="Parcelas em atraso" icone={<CalendarDays size={24} />} cor="text-red-700" />
         <Resumo titulo="Recebido" valor={formatarMoeda(totalPago)} detalhe="Baixas realizadas" icone={<CheckCircle size={24} />} cor="text-green-700" />
+        <Resumo titulo="Créditos Cliente" valor={formatarMoeda(saldoCreditos)} detalhe="Saldo disponível" icone={<CreditCard size={24} />} cor="text-emerald-700" />
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 p-4 shadow-sm mb-6">
@@ -452,99 +572,179 @@ export default function ContasReceberPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 lg:p-6 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-black text-slate-900">Parcelas e Títulos</h2>
-            <p className="text-slate-500">{contasFiltradas.length} parcela(s) encontrada(s)</p>
-          </div>
+      <div className="bg-white rounded-3xl border border-slate-200 p-3 shadow-sm mb-6 flex flex-col md:flex-row gap-3">
+        <button
+          onClick={() => setVisualizacao("contas")}
+          className={`flex-1 px-5 py-3 rounded-2xl font-black ${
+            visualizacao === "contas"
+              ? "bg-blue-700 text-white"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+        >
+          Contas a Receber
+        </button>
 
-          <div className="flex items-center gap-2 text-slate-500 text-sm font-bold">
-            <Filter size={18} /> Dados isolados por empresa
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px]">
-            <thead>
-              <tr className="bg-blue-700 text-white">
-                <th className="p-4 text-left">Cliente</th>
-                <th className="p-4 text-left">Venda</th>
-                <th className="p-4 text-center">Parcela</th>
-                <th className="p-4 text-left">Descrição</th>
-                <th className="p-4 text-center">Vencimento</th>
-                <th className="p-4 text-right">Valor</th>
-                <th className="p-4 text-center">Status</th>
-                <th className="p-4 text-center">Recebido em</th>
-                <th className="p-4 text-center">Ações</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {contasFiltradas.map((conta) => (
-                <tr key={conta.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="p-4">
-                    <p className="font-black text-slate-900">{clienteNome(conta.cliente_id)}</p>
-                    <p className="text-xs text-slate-500">{clientePorId(conta.cliente_id)?.cpf_cnpj || "Sem documento"}</p>
-                  </td>
-
-                  <td className="p-4 font-black text-blue-700">#{numeroVenda(conta)}</td>
-
-                  <td className="p-4 text-center">
-                    <span className="bg-slate-100 text-slate-800 px-3 py-1 rounded-full font-black text-sm">
-                      {parcelaTexto(conta)}
-                    </span>
-                  </td>
-
-                  <td className="p-4 text-slate-700">{descricaoLimpa(conta)}</td>
-
-                  <td className="p-4 text-center font-bold text-slate-800">{formatarData(conta.vencimento)}</td>
-
-                  <td className="p-4 text-right font-black text-slate-900">{formatarMoeda(conta.valor)}</td>
-
-                  <td className="p-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-black ${classeStatus(conta)}`}>
-                      {statusVisual(conta)}
-                    </span>
-                  </td>
-
-                  <td className="p-4 text-center text-slate-600">
-                    {conta.data_recebimento ? formatarDataHora(conta.data_recebimento) : "-"}
-                  </td>
-
-                  <td className="p-4">
-                    <div className="flex items-center justify-center gap-2">
-                      {!estaPaga(conta) && (
-                        <button
-                          onClick={() => abrirRecebimento(conta)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-black"
-                        >
-                          Receber
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => abrirWhatsapp(conta)}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-black flex items-center gap-2"
-                      >
-                        <MessageCircle size={16} /> WhatsApp
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {contasFiltradas.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="p-10 text-center text-slate-500">
-                    {carregando ? "Carregando..." : "Nenhuma conta encontrada."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <button
+          onClick={() => setVisualizacao("creditos")}
+          className={`flex-1 px-5 py-3 rounded-2xl font-black ${
+            visualizacao === "creditos"
+              ? "bg-emerald-700 text-white"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+        >
+          Créditos do Cliente
+        </button>
       </div>
+
+      {visualizacao === "contas" && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-5 lg:p-6 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-slate-900">Parcelas e Títulos</h2>
+              <p className="text-slate-500">{contasFiltradas.length} parcela(s) encontrada(s)</p>
+            </div>
+            <div className="flex items-center gap-2 text-slate-500 text-sm font-bold">
+              <Filter size={18} /> Dados isolados por empresa
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px]">
+              <thead>
+                <tr className="bg-blue-700 text-white">
+                  <th className="p-4 text-left">Cliente</th>
+                  <th className="p-4 text-left">Venda</th>
+                  <th className="p-4 text-center">Parcela</th>
+                  <th className="p-4 text-left">Descrição</th>
+                  <th className="p-4 text-center">Vencimento</th>
+                  <th className="p-4 text-right">Valor</th>
+                  <th className="p-4 text-center">Status</th>
+                  <th className="p-4 text-center">Recebido em</th>
+                  <th className="p-4 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contasFiltradas.map((conta) => (
+                  <tr key={conta.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="p-4">
+                      <p className="font-black text-slate-900">{clienteNome(conta.cliente_id)}</p>
+                      <p className="text-xs text-slate-500">{clientePorId(conta.cliente_id)?.cpf_cnpj || "Sem documento"}</p>
+                    </td>
+                    <td className="p-4 font-black text-blue-700">#{numeroVenda(conta)}</td>
+                    <td className="p-4 text-center">
+                      <span className="bg-slate-100 text-slate-800 px-3 py-1 rounded-full font-black text-sm">
+                        {parcelaTexto(conta)}
+                      </span>
+                    </td>
+                    <td className="p-4 text-slate-700">{descricaoLimpa(conta)}</td>
+                    <td className="p-4 text-center font-bold text-slate-800">{formatarData(conta.vencimento)}</td>
+                    <td className="p-4 text-right font-black text-slate-900">{formatarMoeda(conta.valor)}</td>
+                    <td className="p-4 text-center">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black ${classeStatus(conta)}`}>
+                        {statusVisual(conta)}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center text-slate-600">
+                      {conta.data_recebimento ? formatarDataHora(conta.data_recebimento) : "-"}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center justify-center gap-2">
+                        {!estaPaga(conta) && (
+                          <button
+                            onClick={() => abrirRecebimento(conta)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-black"
+                          >
+                            Receber
+                          </button>
+                        )}
+                        <button
+                          onClick={() => abrirWhatsapp(conta)}
+                          className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-black flex items-center gap-2"
+                        >
+                          <MessageCircle size={16} /> WhatsApp
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {contasFiltradas.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="p-10 text-center text-slate-500">
+                      {carregando ? "Carregando..." : "Nenhuma conta encontrada."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {visualizacao === "creditos" && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-5 lg:p-6 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-slate-900">Créditos do Cliente</h2>
+              <p className="text-slate-500">{creditosFiltrados.length} movimentação(ões) encontrada(s)</p>
+            </div>
+            <div className="flex items-center gap-2 text-emerald-700 text-sm font-black">
+              <CreditCard size={18} /> Saldo atual: {formatarMoeda(saldoCreditos)}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1050px]">
+              <thead>
+                <tr className="bg-emerald-700 text-white">
+                  <th className="p-4 text-left">Cliente</th>
+                  <th className="p-4 text-left">Data</th>
+                  <th className="p-4 text-left">Venda</th>
+                  <th className="p-4 text-left">Origem</th>
+                  <th className="p-4 text-left">Descrição</th>
+                  <th className="p-4 text-right">Entrada</th>
+                  <th className="p-4 text-right">Uso/Saída</th>
+                  <th className="p-4 text-right">Saldo Após</th>
+                  <th className="p-4 text-left">Usuário</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creditosFiltrados.map((credito) => {
+                  const entrada = credito.tipo === "entrada" || credito.tipo === "ajuste";
+                  const saida = credito.tipo === "saida" || credito.tipo === "uso";
+
+                  return (
+                    <tr key={credito.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="p-4">
+                        <p className="font-black text-slate-900">{clienteNome(credito.cliente_id)}</p>
+                        <p className="text-xs text-slate-500">{clientePorId(credito.cliente_id)?.cpf_cnpj || "Sem documento"}</p>
+                      </td>
+                      <td className="p-4 text-slate-700 font-bold">{formatarDataHora(credito.created_at)}</td>
+                      <td className="p-4 font-black text-blue-700">#{numeroVendaCredito(credito)}</td>
+                      <td className="p-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-black ${entrada ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                          {credito.origem || credito.tipo || "-"}
+                        </span>
+                      </td>
+                      <td className="p-4 text-slate-700">{credito.descricao || "-"}</td>
+                      <td className="p-4 text-right font-black text-emerald-700">{entrada ? formatarMoeda(Number(credito.valor || 0)) : "-"}</td>
+                      <td className="p-4 text-right font-black text-red-700">{saida ? formatarMoeda(Number(credito.valor || 0)) : "-"}</td>
+                      <td className="p-4 text-right font-black text-blue-700">{formatarMoeda(Number(credito.saldo_apos || 0))}</td>
+                      <td className="p-4 text-slate-700">{credito.usuario || "-"}</td>
+                    </tr>
+                  );
+                })}
+                {creditosFiltrados.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="p-10 text-center text-slate-500">
+                      Nenhuma movimentação de crédito encontrada.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {modalReceber && contaSelecionada && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -554,7 +754,6 @@ export default function ContasReceberPage() {
                 <h2 className="text-2xl font-black text-slate-900">Receber Parcela</h2>
                 <p className="text-slate-500">Venda #{numeroVenda(contaSelecionada)} • Parcela {parcelaTexto(contaSelecionada)}</p>
               </div>
-
               <button onClick={fecharModal} className="h-11 w-11 rounded-xl bg-slate-100 flex items-center justify-center">
                 <X size={20} />
               </button>
@@ -568,19 +767,10 @@ export default function ContasReceberPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Campo titulo="Valor recebido">
-                  <input
-                    value={valorRecebido}
-                    onChange={(e) => setValorRecebido(e.target.value)}
-                    className="input-contas text-right"
-                  />
+                  <input value={valorRecebido} onChange={(e) => setValorRecebido(e.target.value)} className="input-contas text-right" />
                 </Campo>
-
                 <Campo titulo="Forma de pagamento">
-                  <select
-                    value={formaPagamento}
-                    onChange={(e) => setFormaPagamento(e.target.value)}
-                    className="input-contas"
-                  >
+                  <select value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} className="input-contas">
                     <option value="dinheiro">Dinheiro</option>
                     <option value="pix">PIX</option>
                     <option value="debito">Débito</option>
@@ -600,10 +790,7 @@ export default function ContasReceberPage() {
                 />
               </Campo>
 
-              <button
-                onClick={confirmarRecebimento}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2"
-              >
+              <button onClick={confirmarRecebimento} className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2">
                 <CreditCard size={20} /> Confirmar Recebimento
               </button>
             </div>
@@ -662,7 +849,6 @@ function Resumo({
           <h2 className={`text-3xl font-black mt-2 ${cor}`}>{valor}</h2>
           <p className="text-sm text-slate-500 mt-2">{detalhe}</p>
         </div>
-
         <div className={`h-12 w-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center ${cor}`}>
           {icone}
         </div>

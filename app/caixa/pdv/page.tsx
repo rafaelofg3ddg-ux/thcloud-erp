@@ -199,6 +199,8 @@ export default function PdvPage() {
   const [totalCompradoCliente, setTotalCompradoCliente] = useState(0);
   const [totalAbertoCliente, setTotalAbertoCliente] = useState(0);
   const [ultimaCompraCliente, setUltimaCompraCliente] = useState("");
+  const [saldoCreditoCliente, setSaldoCreditoCliente] = useState(0);
+  const [usarCreditoCliente, setUsarCreditoCliente] = useState(false);
 
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
 
@@ -555,8 +557,21 @@ function cabecalhoEmpresaCupom() {
     return converterNumero(arredondamentoVenda);
   }
 
-  function totalFinal() {
+  function totalFinalAntesCredito() {
     return Math.max(totalFinalSemArredondamento() + valorArredondamento(), 0);
+  }
+
+  function valorCreditoUtilizado() {
+    if (!usarCreditoCliente || !clienteId) return 0;
+
+    return Math.min(
+      Number(saldoCreditoCliente || 0),
+      totalFinalAntesCredito()
+    );
+  }
+
+  function totalFinal() {
+    return Math.max(totalFinalAntesCredito() - valorCreditoUtilizado(), 0);
   }
 
   function aplicarArredondamento(tipo: "baixo" | "cima") {
@@ -597,6 +612,7 @@ function cabecalhoEmpresaCupom() {
     if (converterNumero(pagDebito) > 0) formas.push("debito");
     if (converterNumero(pagCredito) > 0) formas.push("credito");
     if (converterNumero(pagCrediario) > 0) formas.push("crediario");
+    if (valorCreditoUtilizado() > 0) formas.push("credito_cliente");
 
     return formas.length > 1 ? "misto" : formas[0] || "nao_informado";
   }
@@ -995,6 +1011,8 @@ function cabecalhoEmpresaCupom() {
       setTotalCompradoCliente(0);
       setTotalAbertoCliente(0);
       setUltimaCompraCliente("");
+      setSaldoCreditoCliente(0);
+      setUsarCreditoCliente(false);
       return;
     }
 
@@ -1027,6 +1045,23 @@ function cabecalhoEmpresaCupom() {
         .filter((conta) => conta.status !== "pago")
         .reduce((total, conta) => total + Number(conta.valor || 0), 0)
     );
+
+    try {
+      const saldoReq = await supabase.rpc("saldo_credito_cliente", {
+        p_empresa_id: empresaId,
+        p_cliente_id: idCliente,
+      });
+
+      const saldo = saldoReq.error ? 0 : Number(saldoReq.data || 0);
+      setSaldoCreditoCliente(saldo);
+
+      if (saldo <= 0) {
+        setUsarCreditoCliente(false);
+      }
+    } catch {
+      setSaldoCreditoCliente(0);
+      setUsarCreditoCliente(false);
+    }
   }
 
   async function proximoNumeroCaixa() {
@@ -1833,6 +1868,8 @@ function cabecalhoEmpresaCupom() {
     setTotalCompradoCliente(0);
     setTotalAbertoCliente(0);
     setUltimaCompraCliente("");
+    setSaldoCreditoCliente(0);
+    setUsarCreditoCliente(false);
     setOrcamentoPdv(null);
   }
 
@@ -2016,6 +2053,7 @@ function cabecalhoEmpresaCupom() {
       { forma_pagamento: "debito", valor: converterNumero(pagDebito) },
       { forma_pagamento: "credito", valor: converterNumero(pagCredito) },
       { forma_pagamento: "crediario", valor: converterNumero(pagCrediario) },
+      { forma_pagamento: "credito_cliente", valor: valorCreditoUtilizado() },
     ]
       .filter((pag) => pag.valor > 0)
       .map((pag) => ({
@@ -2032,6 +2070,57 @@ function cabecalhoEmpresaCupom() {
     if (error) {
       throw new Error(error.message);
     }
+  }
+
+  async function consumirCreditoCliente(vendaId: string, numeroVenda?: number | null) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) throw new Error("Empresa não identificada.");
+
+    const valorCredito = valorCreditoUtilizado();
+
+    if (valorCredito <= 0) return;
+
+    if (!clienteId) {
+      throw new Error("Selecione um cliente para usar crédito.");
+    }
+
+    const saldoReq = await supabase.rpc("saldo_credito_cliente", {
+      p_empresa_id: empresaId,
+      p_cliente_id: clienteId,
+    });
+
+    if (saldoReq.error) {
+      throw new Error("Erro ao consultar saldo do crédito: " + saldoReq.error.message);
+    }
+
+    const saldoAtual = Number(saldoReq.data || 0);
+
+    if (saldoAtual < valorCredito) {
+      throw new Error("Saldo de crédito insuficiente para esta venda.");
+    }
+
+    const saldoApos = Number((saldoAtual - valorCredito).toFixed(2));
+
+    const creditoReq = await supabase.from("creditos_cliente").insert([
+      {
+        empresa_id: empresaId,
+        cliente_id: clienteId,
+        venda_id: vendaId,
+        devolucao_id: null,
+        origem: "venda",
+        tipo: "saida",
+        valor: valorCredito,
+        saldo_apos: saldoApos,
+        descricao: `Crédito utilizado na venda Nº ${formatarNumeroVenda(numeroVenda)}`,
+        usuario: caixaAberto?.usuario || operadorAtual(),
+      },
+    ]);
+
+    if (creditoReq.error) {
+      throw new Error("Erro ao baixar crédito do cliente: " + creditoReq.error.message);
+    }
+
+    setSaldoCreditoCliente(saldoApos);
   }
 
   function removerAcentos(texto: string) {
@@ -2886,6 +2975,8 @@ function cabecalhoEmpresaCupom() {
           cliente_id: clienteId || null,
           caixa_id: caixaAberto.id,
           numero_venda: numeroVendaGerado,
+          valor_original: totalFinalAntesCredito(),
+          credito_utilizado: valorCreditoUtilizado(),
           valor_total: totalFinal(),
           desconto: valorDescontoTotal(),
           forma_pagamento: formaPagamentoResumo(),
@@ -2924,6 +3015,7 @@ function cabecalhoEmpresaCupom() {
 
     try {
       await salvarPagamentosVenda(vendaId);
+      await consumirCreditoCliente(vendaId, numeroVenda);
 
       for (const item of carrinho) {
         await baixarEstoque(item);
@@ -3428,6 +3520,45 @@ function cabecalhoEmpresaCupom() {
                 <p className="text-slate-700">
                   Em aberto: <strong>{formatarMoeda(totalAbertoCliente)}</strong>
                 </p>
+
+                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-black text-emerald-800">Crédito disponível</p>
+                      <p className="text-2xl font-black text-emerald-700">
+                        {formatarMoeda(saldoCreditoCliente)}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (saldoCreditoCliente <= 0) {
+                          alert("Este cliente não possui crédito disponível.");
+                          return;
+                        }
+
+                        setUsarCreditoCliente(!usarCreditoCliente);
+                      }}
+                      disabled={saldoCreditoCliente <= 0}
+                      className={`px-4 py-2 rounded-xl font-black text-white ${
+                        saldoCreditoCliente <= 0
+                          ? "bg-slate-300 cursor-not-allowed"
+                          : usarCreditoCliente
+                          ? "bg-emerald-700 hover:bg-emerald-800"
+                          : "bg-blue-700 hover:bg-blue-800"
+                      }`}
+                    >
+                      {usarCreditoCliente ? "Crédito marcado" : "Usar Crédito"}
+                    </button>
+                  </div>
+
+                  {usarCreditoCliente && (
+                    <p className="text-sm text-emerald-800 mt-2 font-bold">
+                      Será abatido nesta venda: {formatarMoeda(valorCreditoUtilizado())}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -3506,6 +3637,21 @@ function cabecalhoEmpresaCupom() {
                   <span>Taxa Entrega:</span>
                   <strong>{formatarMoeda(converterNumero(taxaEntrega))}</strong>
                 </div>
+              )}
+
+
+              {valorCreditoUtilizado() > 0 && (
+                <>
+                  <div className="flex justify-between text-slate-700">
+                    <span>Total antes do crédito:</span>
+                    <strong>{formatarMoeda(totalFinalAntesCredito())}</strong>
+                  </div>
+
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Crédito do cliente:</span>
+                    <strong>- {formatarMoeda(valorCreditoUtilizado())}</strong>
+                  </div>
+                </>
               )}
 
               <div className="flex justify-between text-slate-700">
@@ -4057,6 +4203,18 @@ function cabecalhoEmpresaCupom() {
                             <td className="p-3 text-sm text-slate-500">{obs}</td>
                           </tr>
                         ))}
+
+                        {valorCreditoUtilizado() > 0 && (
+                          <tr className="border-t border-emerald-200 bg-emerald-50">
+                            <td className="p-3 font-black text-emerald-800">Crédito do Cliente</td>
+                            <td className="p-3 text-right font-black text-emerald-700">
+                              {formatarMoeda(valorCreditoUtilizado())}
+                            </td>
+                            <td className="p-3 text-sm text-emerald-700">
+                              Abatimento automático do saldo do cliente
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -4178,6 +4336,20 @@ function cabecalhoEmpresaCupom() {
                     <span>Arredondamento:</span>
                     <strong>{formatarMoeda(valorArredondamento())}</strong>
                   </div>
+
+                  {valorCreditoUtilizado() > 0 && (
+                    <>
+                      <div className="border-t pt-2 flex justify-between text-slate-700">
+                        <span>Total antes do crédito:</span>
+                        <strong>{formatarMoeda(totalFinalAntesCredito())}</strong>
+                      </div>
+
+                      <div className="flex justify-between text-emerald-700">
+                        <span>Crédito do cliente:</span>
+                        <strong>- {formatarMoeda(valorCreditoUtilizado())}</strong>
+                      </div>
+                    </>
+                  )}
 
                   <div className="border-t pt-2 flex justify-between text-slate-900">
                     <span>Total final:</span>

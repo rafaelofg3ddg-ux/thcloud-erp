@@ -20,6 +20,7 @@ type Produto = {
 
 type Venda = {
   id: string;
+  numero_venda: number | null;
   empresa_id: string;
   cliente_id: string | null;
   caixa_id: string | null;
@@ -128,6 +129,57 @@ export default function DevolucoesPage() {
     return new Date(data).toLocaleString("pt-BR");
   }
 
+  function formatarNumeroVenda(numero: number | null | undefined) {
+    if (!numero) return "-";
+    return String(numero).padStart(6, "0");
+  }
+
+  function identificacaoVenda(venda?: VendaDetalhada | null) {
+    if (!venda) return "-";
+
+    if (venda.numero_venda) {
+      return `Venda nº ${formatarNumeroVenda(venda.numero_venda)}`;
+    }
+
+    return `Venda ${venda.id}`;
+  }
+
+  async function saldoCreditoCliente(clienteId: string) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return 0;
+
+    try {
+      const { data, error } = await supabase.rpc("saldo_credito_cliente", {
+        p_empresa_id: empresaId,
+        p_cliente_id: clienteId,
+      });
+
+      if (error) return 0;
+
+      return Number(data || 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  async function registrarAuditoria(acao: string, descricao: string) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    try {
+      await supabase.from("auditoria_saas").insert([
+        {
+          empresa_id: empresaId,
+          usuario: operadorAtual(),
+          acao,
+          descricao,
+        },
+      ]);
+    } catch {
+      // Não trava a devolução se auditoria não existir.
+    }
+  }
+
   function limparSelecao() {
     setVendaSelecionada(null);
     setQuantidades({});
@@ -146,7 +198,7 @@ export default function DevolucoesPage() {
 
     let vendasQuery = supabase
       .from("vendas")
-      .select("id,empresa_id,cliente_id,caixa_id,valor_total,desconto,forma_pagamento,status,created_at")
+      .select("id,numero_venda,empresa_id,cliente_id,caixa_id,valor_total,desconto,forma_pagamento,status,created_at")
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
       .limit(100);
@@ -255,6 +307,7 @@ export default function DevolucoesPage() {
 
       return {
         ...venda,
+        numero_venda: venda.numero_venda ? Number(venda.numero_venda) : null,
         valor_total: Number(venda.valor_total || 0),
         desconto: Number(venda.desconto || 0),
         cliente_nome: cliente?.nome || "Consumidor Final",
@@ -424,7 +477,7 @@ export default function DevolucoesPage() {
     if (!autorizador) return;
 
     const confirmar = confirm(
-      `Confirmar devolução?\n\nVenda: ${vendaSelecionada.id}\nValor: ${formatarMoeda(totalDevolucao())}\nTipo: ${
+      `Confirmar devolução?\n\n${identificacaoVenda(vendaSelecionada)}\nValor: ${formatarMoeda(totalDevolucao())}\nTipo: ${
         tipoDevolucao === "estorno"
           ? "Estorno dinheiro"
           : tipoDevolucao === "credito"
@@ -494,7 +547,7 @@ export default function DevolucoesPage() {
             custo_unitario: 0,
             nota_fiscal: null,
             fornecedor_id: null,
-            observacao: `Devolução ${devolucaoId} | Venda ${vendaSelecionada.id} | ${motivoFinal()}`,
+            observacao: `Devolução ${devolucaoId} | ${identificacaoVenda(vendaSelecionada)} | ${motivoFinal()}`,
             usuario: autorizador.nome || operadorAtual(),
           },
         ]);
@@ -511,7 +564,7 @@ export default function DevolucoesPage() {
             empresa_id: empresaId,
             tipo: "sangria",
             valor: totalDevolucao(),
-            descricao: `Estorno devolução ${devolucaoId} venda ${vendaSelecionada.id}`,
+            descricao: `Estorno devolução ${devolucaoId} ${identificacaoVenda(vendaSelecionada)}`,
             usuario: autorizador.nome || operadorAtual(),
           },
         ]);
@@ -522,19 +575,46 @@ export default function DevolucoesPage() {
       }
 
       if (tipoDevolucao === "credito") {
-        const creditoReq = await supabase.from("contas_receber").insert([
+        if (!vendaSelecionada.cliente_id) {
+          throw new Error("Para gerar crédito, a venda precisa ter cliente cadastrado.");
+        }
+
+        const valorCredito = totalDevolucao();
+        const saldoAtual = await saldoCreditoCliente(vendaSelecionada.cliente_id);
+        const saldoApos = Number((saldoAtual + valorCredito).toFixed(2));
+        const descricaoCredito = `Crédito de devolução ${devolucaoId} - ${identificacaoVenda(vendaSelecionada)}`;
+
+        const creditoClienteReq = await supabase.from("creditos_cliente").insert([
           {
             empresa_id: empresaId,
             cliente_id: vendaSelecionada.cliente_id,
-            descricao: `Crédito devolução ${devolucaoId} venda ${vendaSelecionada.id}`,
-            valor: totalDevolucao() * -1,
+            venda_id: vendaSelecionada.id,
+            devolucao_id: devolucaoId,
+            origem: "devolucao",
+            tipo: "entrada",
+            valor: valorCredito,
+            saldo_apos: saldoApos,
+            descricao: descricaoCredito,
+          },
+        ]);
+
+        if (creditoClienteReq.error) {
+          throw new Error("Erro ao gerar crédito do cliente: " + creditoClienteReq.error.message);
+        }
+
+        const creditoFinanceiroReq = await supabase.from("contas_receber").insert([
+          {
+            empresa_id: empresaId,
+            cliente_id: vendaSelecionada.cliente_id,
+            descricao: descricaoCredito,
+            valor: valorCredito * -1,
             vencimento: new Date().toISOString().split("T")[0],
             status: "credito",
           },
         ]);
 
-        if (creditoReq.error) {
-          throw new Error(creditoReq.error.message);
+        if (creditoFinanceiroReq.error) {
+          throw new Error("Erro ao registrar crédito no financeiro: " + creditoFinanceiroReq.error.message);
         }
       }
 
@@ -556,6 +636,11 @@ export default function DevolucoesPage() {
       if (vendaUpdate.error) {
         throw new Error(vendaUpdate.error.message);
       }
+
+      await registrarAuditoria(
+        "DEVOLUCAO_REGISTRADA",
+        `${identificacaoVenda(vendaSelecionada)} | Tipo: ${tipoDevolucao} | Valor: ${formatarMoeda(totalDevolucao())} | Motivo: ${motivoFinal()}`
+      );
 
       imprimirComprovanteDevolucao(devolucaoId, itens);
 
@@ -619,7 +704,7 @@ export default function DevolucoesPage() {
           <hr />
 
           <p><strong>Devolução:</strong> ${devolucaoId}</p>
-          <p><strong>Venda:</strong> ${vendaSelecionada.id}</p>
+          <p><strong>Venda:</strong> ${identificacaoVenda(vendaSelecionada)}</p>
           <p><strong>Data:</strong> ${new Date().toLocaleString("pt-BR")}</p>
           <p><strong>Cliente:</strong> ${vendaSelecionada.cliente_nome}</p>
           <p><strong>Tipo:</strong> ${
@@ -680,6 +765,8 @@ export default function DevolucoesPage() {
 
       return (
         venda.id.toLowerCase().includes(termo) ||
+        formatarNumeroVenda(venda.numero_venda).toLowerCase().includes(termo) ||
+        String(venda.numero_venda || "").toLowerCase().includes(termo) ||
         venda.cliente_nome.toLowerCase().includes(termo) ||
         venda.cliente_cpf.toLowerCase().includes(termo) ||
         venda.cliente_telefone.toLowerCase().includes(termo) ||
@@ -761,7 +848,10 @@ export default function DevolucoesPage() {
               <tbody>
                 {vendasFiltradas.map((venda) => (
                   <tr key={venda.id} className="border-b hover:bg-slate-50 align-top">
-                    <td className="p-3 font-bold text-slate-900">{venda.id}</td>
+                    <td className="p-3 font-bold text-slate-900">
+                      <p>{venda.numero_venda ? `Venda nº ${formatarNumeroVenda(venda.numero_venda)}` : "Venda sem número"}</p>
+                      <p className="text-[11px] text-slate-400 font-medium">ID: {venda.id}</p>
+                    </td>
                     <td className="p-3 text-slate-700">{formatarData(venda.created_at)}</td>
                     <td className="p-3 text-slate-700">
                       <p className="font-bold">{venda.cliente_nome}</p>
@@ -827,7 +917,7 @@ export default function DevolucoesPage() {
           <p className="text-slate-300 font-bold">Resumo da Devolução</p>
 
           <h3 className="text-2xl font-black mt-2">
-            {vendaSelecionada ? `Venda ${vendaSelecionada.id}` : "Nenhuma venda"}
+            {vendaSelecionada ? identificacaoVenda(vendaSelecionada) : "Nenhuma venda"}
           </h3>
 
           <div className="mt-5 space-y-3">
@@ -862,7 +952,7 @@ export default function DevolucoesPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
             <div>
               <h2 className="text-2xl font-black text-slate-900">
-                Venda nº {vendaSelecionada.id}
+                {identificacaoVenda(vendaSelecionada)}
               </h2>
 
               <p className="text-slate-500">

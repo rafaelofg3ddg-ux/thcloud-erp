@@ -188,8 +188,26 @@ export default function Header() {
   const [notificacoesSaas, setNotificacoesSaas] = useState<NotificacaoSaas[]>([]);
   const [notificacoesCliente, setNotificacoesCliente] = useState<NotificacaoCliente[]>([]);
   const [carregandoNotificacoes, setCarregandoNotificacoes] = useState(false);
+  const [avisoAssinatura, setAvisoAssinatura] = useState<{
+    tipo: string;
+    titulo: string;
+    mensagem: string;
+    dias: number;
+    vencimento: string;
+  } | null>(null);
 
-  const isSuperAdmin = usuario?.perfil === "Super Admin";
+  function normalizarPerfil(perfil?: string | null) {
+    return String(perfil || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  const isSuperAdmin =
+    normalizarPerfil(usuario?.perfil) === "super admin" ||
+    normalizarPerfil(usuario?.perfil) === "superadmin" ||
+    normalizarPerfil(usuario?.perfil) === "master";
 
   function carregarSessao() {
     try {
@@ -383,6 +401,85 @@ export default function Header() {
     }
   }
 
+  async function gerarNotificacaoAssinaturaEmpresaLogada() {
+    if (isSuperAdmin) return;
+
+    const empresaId = empresaIdAtual();
+
+    if (!empresaId) {
+      setAvisoAssinatura(null);
+      return;
+    }
+
+    try {
+      await supabase.rpc("gerar_notificacao_assinatura_empresa", {
+        p_empresa_id: empresaId,
+      });
+    } catch {
+      // Se a função ainda não existir, o Header continua funcionando.
+    }
+
+    const { data: empresaAtual } = await supabase
+      .from("empresas")
+      .select("id,data_vencimento_assinatura,status_assinatura,ativo")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    if (!empresaAtual?.data_vencimento_assinatura) {
+      setAvisoAssinatura(null);
+      return;
+    }
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const vencimento = new Date(`${empresaAtual.data_vencimento_assinatura}T00:00:00`);
+    const dias = Math.floor(
+      (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    let aviso = null as {
+      tipo: string;
+      titulo: string;
+      mensagem: string;
+      dias: number;
+      vencimento: string;
+    } | null;
+
+    if (dias < 0) {
+      aviso = {
+        tipo: "vencida",
+        titulo: "Assinatura vencida",
+        mensagem:
+          "Sua assinatura do THCloud está vencida. Regularize para evitar bloqueio do sistema.",
+        dias,
+        vencimento: empresaAtual.data_vencimento_assinatura,
+      };
+    } else if (dias === 0) {
+      aviso = {
+        tipo: "hoje",
+        titulo: "Assinatura vence hoje",
+        mensagem:
+          "Sua assinatura do THCloud vence hoje. Regularize para evitar bloqueio.",
+        dias,
+        vencimento: empresaAtual.data_vencimento_assinatura,
+      };
+    } else if ([1, 3, 7, 15, 30].includes(dias)) {
+      aviso = {
+        tipo: "vencendo",
+        titulo: dias === 1 ? "Assinatura vence amanhã" : `Assinatura vence em ${dias} dias`,
+        mensagem:
+          dias === 1
+            ? "Sua assinatura do THCloud vence amanhã."
+            : `Sua assinatura do THCloud vence em ${dias} dias.`,
+        dias,
+        vencimento: empresaAtual.data_vencimento_assinatura,
+      };
+    }
+
+    setAvisoAssinatura(aviso);
+  }
+
   async function carregarNotificacoes() {
     setCarregandoNotificacoes(true);
 
@@ -407,6 +504,8 @@ export default function Header() {
         setCarregandoNotificacoes(false);
         return;
       }
+
+      await gerarNotificacaoAssinaturaEmpresaLogada();
 
       const empresaId = empresaIdAtual();
       const perfil = usuario?.perfil || "";
@@ -536,11 +635,39 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
-    if (usuario) carregarNotificacoes();
+    if (usuario) {
+      gerarNotificacaoAssinaturaEmpresaLogada();
+      carregarNotificacoes();
+    }
   }, [usuario]);
 
   return (
-    <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-5 lg:px-8 sticky top-0 z-40">
+    <>
+      {avisoAssinatura && !isSuperAdmin && (
+        <div
+          className={`sticky top-0 z-50 px-5 lg:px-8 py-3 text-white ${
+            avisoAssinatura.tipo === "vencida" || avisoAssinatura.tipo === "hoje"
+              ? "bg-red-700"
+              : "bg-orange-600"
+          }`}
+        >
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <div>
+              <p className="font-black">{avisoAssinatura.titulo}</p>
+              <p className="text-sm text-white/90">{avisoAssinatura.mensagem}</p>
+            </div>
+
+            <Link
+              href="/financeiro"
+              className="bg-white text-red-700 px-4 py-2 rounded-xl font-black text-sm text-center"
+            >
+              Regularizar Assinatura
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-5 lg:px-8 sticky top-0 z-40">
       <div className="min-w-[190px]">
         <h1 className="text-xl font-black text-slate-900">THCloud ERP</h1>
         <p className="text-sm text-slate-500 leading-tight">
@@ -863,6 +990,7 @@ export default function Header() {
           )}
         </div>
       </div>
-    </header>
+      </header>
+    </>
   );
 }

@@ -2,15 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { getEmpresaId } from "../../lib/empresa";
 
 type Grupo = {
   id: string;
+  empresa_id: string | null;
   nome: string;
+  descricao?: string | null;
+  ativo?: boolean | null;
 };
 
 type Produto = {
   id: string;
+  empresa_id: string | null;
   codigo: string | null;
   codigo_barras: string | null;
   nome: string;
@@ -57,16 +60,75 @@ export default function ProdutosPage() {
 
   const [produtoEditandoId, setProdutoEditandoId] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [carregando, setCarregando] = useState(false);
 
   function empresaAtualId() {
-    const empresaId = getEmpresaId();
+    try {
+      const empresaStorage =
+        sessionStorage.getItem("th_empresa") ||
+        localStorage.getItem("th_empresa");
 
-    if (!empresaId) {
+      if (empresaStorage) {
+        const empresa = JSON.parse(empresaStorage);
+        if (empresa.id) return empresa.id;
+        if (empresa.empresa_id) return empresa.empresa_id;
+      }
+
+      const usuarioStorage =
+        sessionStorage.getItem("th_usuario") ||
+        localStorage.getItem("th_usuario");
+
+      if (usuarioStorage) {
+        const usuario = JSON.parse(usuarioStorage);
+        if (usuario.empresa_id) return usuario.empresa_id;
+        if (usuario.empresa?.id) return usuario.empresa.id;
+      }
+
+      const empresaIdDireto =
+        sessionStorage.getItem("empresa_id") ||
+        sessionStorage.getItem("th_empresa_id") ||
+        localStorage.getItem("empresa_id") ||
+        localStorage.getItem("th_empresa_id");
+
+      if (empresaIdDireto) return empresaIdDireto;
+
+      alert("Empresa não identificada. Faça login novamente.");
+      return null;
+    } catch {
       alert("Empresa não identificada. Faça login novamente.");
       return null;
     }
+  }
 
-    return empresaId;
+  function usuarioAtual() {
+    try {
+      const usuarioStorage =
+        sessionStorage.getItem("th_usuario") ||
+        localStorage.getItem("th_usuario");
+
+      if (!usuarioStorage) return "Sistema";
+
+      const usuario = JSON.parse(usuarioStorage);
+      return usuario.nome || usuario.email || usuario.usuario || "Sistema";
+    } catch {
+      return "Sistema";
+    }
+  }
+
+  async function registrarAuditoria(acao: string, detalhe: string) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    try {
+      await supabase.from("auditoria_saas").insert([
+        {
+          empresa_id: empresaId,
+          usuario: usuarioAtual(),
+          acao,
+          descricao: detalhe,
+        },
+      ]);
+    } catch {}
   }
 
   function converterNumero(valor: string) {
@@ -90,9 +152,7 @@ export default function ProdutosPage() {
 
   function nomeDoGrupo(categoriaId: string | null) {
     if (!categoriaId) return "-";
-
     const grupo = grupos.find((item) => item.id === categoriaId);
-
     return grupo ? grupo.nome : "-";
   }
 
@@ -158,6 +218,14 @@ export default function ProdutosPage() {
   }
 
   function carregarProdutoParaEditar(produto: Produto) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return;
+
+    if (produto.empresa_id !== empresaId) {
+      alert("Este produto não pertence à empresa logada.");
+      return;
+    }
+
     setProdutoEditandoId(produto.id);
     setCodigo(produto.codigo || "");
     setCodigoBarras(produto.codigo_barras || "");
@@ -173,7 +241,6 @@ export default function ProdutosPage() {
     setFotoAtual(produto.foto_url || null);
     setFotoPreview(produto.foto_url || "");
     setFotoArquivo(null);
-
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -183,8 +250,9 @@ export default function ProdutosPage() {
 
     const { data, error } = await supabase
       .from("categorias")
-      .select("id,nome")
+      .select("id,empresa_id,nome,descricao,ativo")
       .eq("empresa_id", empresaId)
+      .eq("ativo", true)
       .order("nome", { ascending: true });
 
     if (error) {
@@ -192,27 +260,31 @@ export default function ProdutosPage() {
       return;
     }
 
-    setGrupos(data || []);
+    setGrupos((data || []) as Grupo[]);
   }
 
   async function carregarProdutos() {
     const empresaId = empresaAtualId();
     if (!empresaId) return;
 
+    setCarregando(true);
+
     const { data, error } = await supabase
       .from("produtos")
       .select(
-        "id,codigo,codigo_barras,nome,categoria_id,unidade,preco_custo,preco_venda,qtd_atual,qtd_minima,localizacao,observacoes,foto_url,ativo,created_at,updated_at"
+        "id,empresa_id,codigo,codigo_barras,nome,categoria_id,unidade,preco_custo,preco_venda,qtd_atual,qtd_minima,localizacao,observacoes,foto_url,ativo,created_at,updated_at"
       )
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
+
+    setCarregando(false);
 
     if (error) {
       alert("Erro ao carregar produtos: " + error.message);
       return;
     }
 
-    setProdutos(data || []);
+    setProdutos((data || []) as Produto[]);
   }
 
   async function enviarFotoProduto() {
@@ -249,10 +321,19 @@ export default function ProdutosPage() {
       return;
     }
 
+    const grupoDuplicado = grupos.some(
+      (grupo) => grupo.nome.trim().toLowerCase() === novoGrupo.trim().toLowerCase()
+    );
+
+    if (grupoDuplicado) {
+      alert("Já existe um grupo com esse nome nesta empresa.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("categorias")
-      .insert([{ empresa_id: empresaId, nome: novoGrupo.trim() }])
-      .select("id,nome")
+      .insert([{ empresa_id: empresaId, nome: novoGrupo.trim(), ativo: true }])
+      .select("id,empresa_id,nome,descricao,ativo")
       .single();
 
     if (error) {
@@ -260,11 +341,11 @@ export default function ProdutosPage() {
       return;
     }
 
-    alert("Grupo salvo com sucesso!");
+    await registrarAuditoria("GRUPO_CRIADO", `Grupo cadastrado pelo produto: ${novoGrupo.trim()}`);
 
+    alert("Grupo salvo com sucesso!");
     setNovoGrupo("");
     setMostrarNovoGrupo(false);
-
     await carregarGrupos();
 
     if (data) {
@@ -280,6 +361,15 @@ export default function ProdutosPage() {
 
     if (!nome.trim() || !grupoId || !precoVenda.trim()) {
       alert("Preencha nome do produto, grupo e preço de venda.");
+      return;
+    }
+
+    const grupoPertenceEmpresa = grupos.some(
+      (grupo) => grupo.id === grupoId && grupo.empresa_id === empresaId
+    );
+
+    if (!grupoPertenceEmpresa) {
+      alert("O grupo selecionado não pertence à empresa logada.");
       return;
     }
 
@@ -345,6 +435,7 @@ export default function ProdutosPage() {
           return;
         }
 
+        await registrarAuditoria("PRODUTO_ALTERADO", `Produto alterado: ${nome.trim()}`);
         alert("Produto alterado com sucesso!");
       } else {
         const { error } = await supabase.from("produtos").insert([payload]);
@@ -355,6 +446,7 @@ export default function ProdutosPage() {
           return;
         }
 
+        await registrarAuditoria("PRODUTO_CRIADO", `Produto cadastrado: ${nome.trim()}`);
         alert("Produto salvo com sucesso!");
       }
 
@@ -370,6 +462,11 @@ export default function ProdutosPage() {
   async function alterarStatusProduto(produto: Produto, ativo: boolean) {
     const empresaId = empresaAtualId();
     if (!empresaId) return;
+
+    if (produto.empresa_id !== empresaId) {
+      alert("Este produto não pertence à empresa logada.");
+      return;
+    }
 
     const confirmar = confirm(
       ativo
@@ -389,6 +486,11 @@ export default function ProdutosPage() {
       alert("Erro ao alterar status do produto: " + error.message);
       return;
     }
+
+    await registrarAuditoria(
+      ativo ? "PRODUTO_REATIVADO" : "PRODUTO_INATIVADO",
+      `${ativo ? "Produto reativado" : "Produto inativado"}: ${produto.nome}`
+    );
 
     await carregarProdutos();
   }
@@ -412,7 +514,6 @@ export default function ProdutosPage() {
       const combinaGrupo = !filtroGrupo || produto.categoria_id === filtroGrupo;
 
       let combinaStatus = true;
-
       if (filtroStatus === "ativos") combinaStatus = produto.ativo !== false;
       if (filtroStatus === "inativos") combinaStatus = produto.ativo === false;
 
@@ -422,7 +523,8 @@ export default function ProdutosPage() {
       let combinaEstoque = true;
 
       if (filtroEstoque === "baixo") {
-        combinaEstoque = produto.ativo !== false && qtdMinima > 0 && qtdAtual <= qtdMinima && qtdAtual > 0;
+        combinaEstoque =
+          produto.ativo !== false && qtdMinima > 0 && qtdAtual <= qtdMinima && qtdAtual > 0;
       }
 
       if (filtroEstoque === "sem") {
@@ -455,10 +557,12 @@ export default function ProdutosPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm mb-8">
-        <p className="text-blue-600 font-bold">Cadastros</p>
-        <h1 className="text-4xl font-black text-slate-900 mt-2">Cadastro de Produtos</h1>
+    <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 lg:p-8 shadow-sm mb-8">
+        <p className="text-blue-700 font-black">Cadastros</p>
+        <h1 className="text-3xl lg:text-4xl font-black text-slate-900 mt-2">
+          Cadastro de Produtos
+        </h1>
         <p className="text-slate-500 mt-2">
           Cadastre, pesquise, altere, inative produtos e controle preços, grupos e estoque por empresa.
         </p>
@@ -487,15 +591,12 @@ export default function ProdutosPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Código Interno
-            </label>
+          <Campo titulo="Código Interno">
             <input
               value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
+              onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ""))}
               placeholder="Opcional"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
             <button
               type="button"
@@ -504,41 +605,32 @@ export default function ProdutosPage() {
             >
               Gerar Código
             </button>
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Código de Barras
-            </label>
+          <Campo titulo="Código de Barras">
             <input
               value={codigoBarras}
               onChange={(e) => setCodigoBarras(e.target.value)}
               placeholder="Bipe ou digite o código"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Nome do Produto *
-            </label>
+          <Campo titulo="Nome do Produto *">
             <input
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               placeholder="Ex.: Arroz Tipo 1"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Grupo *
-            </label>
+          <Campo titulo="Grupo *">
             <div className="flex gap-2">
               <select
                 value={grupoId}
                 onChange={(e) => setGrupoId(e.target.value)}
-                className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium bg-white"
+                className="input bg-white"
               >
                 <option value="">Selecione o Grupo</option>
                 {grupos.map((grupo) => (
@@ -555,79 +647,61 @@ export default function ProdutosPage() {
                 +
               </button>
             </div>
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Unidade
-            </label>
+          <Campo titulo="Unidade">
             <input
               value={unidade}
               onChange={(e) => setUnidade(e.target.value.toUpperCase())}
               placeholder="UN, KG, CX"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Preço de Custo
-            </label>
+          <Campo titulo="Preço de Custo">
             <input
               value={precoCusto}
               onChange={(e) => setPrecoCusto(e.target.value)}
               placeholder="0,00"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Preço de Venda *
-            </label>
+          <Campo titulo="Preço de Venda *">
             <input
               value={precoVenda}
               onChange={(e) => setPrecoVenda(e.target.value)}
               placeholder="0,00"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Estoque Atual
-            </label>
+          <Campo titulo="Estoque Atual">
             <input
               value={estoque}
               onChange={(e) => setEstoque(e.target.value)}
               placeholder="0"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Estoque Mínimo
-            </label>
+          <Campo titulo="Estoque Mínimo">
             <input
               value={estoqueMinimo}
               onChange={(e) => setEstoqueMinimo(e.target.value)}
               placeholder="0"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
-          </div>
+          </Campo>
 
-          <div>
-            <label className="block text-sm font-black text-slate-700 mb-2">
-              Localização
-            </label>
+          <Campo titulo="Localização">
             <input
               value={localizacao}
               onChange={(e) => setLocalizacao(e.target.value)}
               placeholder="Ex.: Prateleira A1"
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
+              className="input"
             />
-          </div>
+          </Campo>
 
           <div className="border border-slate-300 rounded-2xl p-3 md:col-span-2">
             <label className="block text-sm font-black text-slate-700 mb-2">
@@ -649,7 +723,7 @@ export default function ProdutosPage() {
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
               placeholder="Descrição, detalhes, marca, sabor, embalagem, observações internas..."
-              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium min-h-24"
+              className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium min-h-24 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-700"
             />
           </div>
         </div>
@@ -657,26 +731,70 @@ export default function ProdutosPage() {
         {fotoPreview && (
           <div className="mt-5">
             <p className="text-sm font-semibold text-slate-700 mb-2">Pré-visualização</p>
-            <img src={fotoPreview} alt="Preview" className="w-40 h-40 object-cover rounded-2xl border border-slate-300" />
+            <img
+              src={fotoPreview}
+              alt="Preview"
+              className="w-40 h-40 object-cover rounded-2xl border border-slate-300"
+            />
           </div>
         )}
 
         <div className="flex flex-col md:flex-row gap-3 mt-6">
-          <button type="button" onClick={salvarProduto} disabled={salvando} className={`text-white px-6 py-3 rounded-2xl font-semibold ${salvando ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}>
-            {salvando ? "Salvando..." : produtoEditandoId ? "Salvar Alterações" : "Salvar Produto"}
+          <button
+            type="button"
+            onClick={salvarProduto}
+            disabled={salvando}
+            className={`text-white px-6 py-3 rounded-2xl font-semibold ${
+              salvando
+                ? "bg-slate-400 cursor-not-allowed"
+                : "bg-blue-700 hover:bg-blue-800"
+            }`}
+          >
+            {salvando
+              ? "Salvando..."
+              : produtoEditandoId
+              ? "Salvar Alterações"
+              : "Salvar Produto"}
           </button>
-          <button type="button" onClick={limparFormulario} className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-6 py-3 rounded-2xl font-semibold">Limpar</button>
+
+          <button
+            type="button"
+            onClick={limparFormulario}
+            className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-6 py-3 rounded-2xl font-semibold"
+          >
+            Limpar
+          </button>
         </div>
       </div>
 
       {mostrarNovoGrupo && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-md p-6 rounded-2xl shadow-xl border border-slate-200">
             <h2 className="text-2xl font-bold text-slate-900 mb-4">Novo Grupo</h2>
-            <input value={novoGrupo} onChange={(e) => setNovoGrupo(e.target.value)} placeholder="Nome do Grupo" className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium" />
+
+            <input
+              value={novoGrupo}
+              onChange={(e) => setNovoGrupo(e.target.value)}
+              placeholder="Nome do Grupo"
+              className="input"
+            />
+
             <div className="flex justify-end gap-3 mt-6">
-              <button type="button" onClick={() => setMostrarNovoGrupo(false)} className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-5 py-2 rounded-2xl font-semibold">Cancelar</button>
-              <button type="button" onClick={salvarNovoGrupo} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-2xl font-semibold">Salvar Grupo</button>
+              <button
+                type="button"
+                onClick={() => setMostrarNovoGrupo(false)}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-5 py-2 rounded-2xl font-semibold"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={salvarNovoGrupo}
+                className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-2xl font-semibold"
+              >
+                Salvar Grupo
+              </button>
             </div>
           </div>
         </div>
@@ -685,24 +803,59 @@ export default function ProdutosPage() {
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-black text-slate-900">Produtos Cadastrados</h2>
-            <p className="text-slate-500 text-sm mt-1">Pesquisa por nome, código interno, código de barras, grupo, localização e descrição.</p>
+            <h2 className="text-2xl font-black text-slate-900">
+              Produtos Cadastrados
+            </h2>
+            <p className="text-slate-500 text-sm mt-1">
+              Pesquisa por nome, código interno, código de barras, grupo, localização e descrição.
+            </p>
           </div>
-          <button type="button" onClick={carregarProdutos} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-2xl font-bold">Atualizar</button>
+
+          <button
+            type="button"
+            onClick={carregarProdutos}
+            className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-2xl font-bold"
+          >
+            {carregando ? "Atualizando..." : "Atualizar"}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5">
-          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Pesquisar produto, código, barras, descrição..." className="md:col-span-2 border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium" />
-          <select value={filtroGrupo} onChange={(e) => setFiltroGrupo(e.target.value)} className="border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium bg-white">
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Pesquisar produto, código, barras, descrição..."
+            className="md:col-span-2 input"
+          />
+
+          <select
+            value={filtroGrupo}
+            onChange={(e) => setFiltroGrupo(e.target.value)}
+            className="input bg-white"
+          >
             <option value="">Todos os grupos</option>
-            {grupos.map((grupo) => <option key={grupo.id} value={grupo.id}>{grupo.nome}</option>)}
+            {grupos.map((grupo) => (
+              <option key={grupo.id} value={grupo.id}>
+                {grupo.nome}
+              </option>
+            ))}
           </select>
-          <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium bg-white">
+
+          <select
+            value={filtroStatus}
+            onChange={(e) => setFiltroStatus(e.target.value)}
+            className="input bg-white"
+          >
             <option value="todos">Todos os status</option>
             <option value="ativos">Ativos</option>
             <option value="inativos">Inativos</option>
           </select>
-          <select value={filtroEstoque} onChange={(e) => setFiltroEstoque(e.target.value)} className="border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium bg-white">
+
+          <select
+            value={filtroEstoque}
+            onChange={(e) => setFiltroEstoque(e.target.value)}
+            className="input bg-white"
+          >
             <option value="todos">Todos os estoques</option>
             <option value="com">Com estoque</option>
             <option value="baixo">Estoque baixo</option>
@@ -718,76 +871,196 @@ export default function ProdutosPage() {
           <ResumoCard titulo="Sem estoque" valor={`${produtosSemEstoque}`} cor="text-red-700" />
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px]">
+        <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
-              <tr className="bg-blue-600 text-white">
-                <th className="p-3 text-left">Foto</th>
-                <th className="p-3 text-left">Código</th>
-                <th className="p-3 text-left">Barras</th>
+              <tr className="bg-blue-700 text-white">
                 <th className="p-3 text-left">Produto</th>
+                <th className="p-3 text-left">Códigos</th>
                 <th className="p-3 text-left">Grupo</th>
-                <th className="p-3 text-left">Un</th>
+                <th className="p-3 text-left">Unidade</th>
                 <th className="p-3 text-right">Custo</th>
                 <th className="p-3 text-right">Venda</th>
                 <th className="p-3 text-right">Estoque</th>
-                <th className="p-3 text-right">Mín.</th>
-                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-center">Status</th>
                 <th className="p-3 text-center">Ações</th>
               </tr>
             </thead>
+
             <tbody>
               {produtosFiltrados.map((produto) => {
                 const status = statusProduto(produto);
+
                 return (
-                  <tr key={produto.id} className="border-b hover:bg-blue-50/40">
+                  <tr key={produto.id} className="border-b hover:bg-slate-50 align-top">
                     <td className="p-3">
-                      <div className="w-14 h-14 bg-slate-100 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-200">
-                        {produto.foto_url ? <img src={produto.foto_url} alt={produto.nome} className="w-full h-full object-cover" /> : <span className="text-xs text-slate-500">Sem foto</span>}
+                      <div className="flex items-center gap-3">
+                        {produto.foto_url ? (
+                          <img
+                            src={produto.foto_url}
+                            alt={produto.nome}
+                            className="h-12 w-12 rounded-xl object-cover border border-slate-200"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 font-black">
+                            {produto.nome.slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+
+                        <div>
+                          <p className="font-black text-slate-900">{produto.nome}</p>
+                          <p className="text-xs text-slate-500">
+                            {produto.localizacao || "Sem localização"}
+                          </p>
+                        </div>
                       </div>
                     </td>
-                    <td className="p-3 text-slate-800 font-medium">{produto.codigo || "-"}</td>
-                    <td className="p-3 text-slate-800 font-medium">{produto.codigo_barras || "-"}</td>
-                    <td className="p-3">
-                      <p className="text-slate-900 font-black">{produto.nome}</p>
-                      <p className="text-xs text-slate-500 max-w-80 truncate">{produto.observacoes || produto.localizacao || "-"}</p>
+
+                    <td className="p-3 text-slate-700">
+                      <p>
+                        <strong>Interno:</strong> {produto.codigo || "-"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Barras: {produto.codigo_barras || "-"}
+                      </p>
                     </td>
-                    <td className="p-3 text-slate-800 font-medium">{nomeDoGrupo(produto.categoria_id)}</td>
-                    <td className="p-3 text-slate-800 font-medium">{produto.unidade || "UN"}</td>
-                    <td className="p-3 text-right text-slate-800 font-medium">{formatarMoeda(Number(produto.preco_custo || 0))}</td>
-                    <td className="p-3 text-right text-slate-800 font-medium">{formatarMoeda(Number(produto.preco_venda || 0))}</td>
-                    <td className="p-3 text-right text-slate-800 font-medium">{produto.qtd_atual}</td>
-                    <td className="p-3 text-right text-slate-800 font-medium">{produto.qtd_minima || 0}</td>
-                    <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-bold ${status.classe}`}>{status.texto}</span></td>
+
+                    <td className="p-3 text-slate-700 font-bold">
+                      {nomeDoGrupo(produto.categoria_id)}
+                    </td>
+
+                    <td className="p-3 text-slate-700">
+                      {produto.unidade || "UN"}
+                    </td>
+
+                    <td className="p-3 text-right text-slate-700">
+                      {formatarMoeda(Number(produto.preco_custo || 0))}
+                    </td>
+
+                    <td className="p-3 text-right text-green-700 font-black">
+                      {formatarMoeda(Number(produto.preco_venda || 0))}
+                    </td>
+
+                    <td className="p-3 text-right">
+                      <p className="font-black text-slate-900">
+                        {Number(produto.qtd_atual || 0)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Mín.: {Number(produto.qtd_minima || 0)}
+                      </p>
+                    </td>
+
+                    <td className="p-3 text-center">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black ${status.classe}`}>
+                        {status.texto}
+                      </span>
+                    </td>
+
                     <td className="p-3">
                       <div className="flex justify-center gap-2">
-                        <button type="button" onClick={() => carregarProdutoParaEditar(produto)} className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-xl font-bold">Alterar</button>
+                        <button
+                          onClick={() => carregarProdutoParaEditar(produto)}
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-xl font-bold"
+                        >
+                          Alterar
+                        </button>
+
                         {produto.ativo === false ? (
-                          <button type="button" onClick={() => alterarStatusProduto(produto, true)} className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-xl font-bold">Ativar</button>
+                          <button
+                            onClick={() => alterarStatusProduto(produto, true)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl font-bold"
+                          >
+                            Ativar
+                          </button>
                         ) : (
-                          <button type="button" onClick={() => alterarStatusProduto(produto, false)} className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-xl font-bold">Inativar</button>
+                          <button
+                            onClick={() => alterarStatusProduto(produto, false)}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl font-bold"
+                          >
+                            Inativar
+                          </button>
                         )}
                       </div>
                     </td>
                   </tr>
                 );
               })}
-              {produtosFiltrados.length === 0 && (
-                <tr><td colSpan={12} className="p-6 text-center text-slate-700 font-medium">Nenhum produto encontrado com os filtros informados.</td></tr>
+
+              {!carregando && produtosFiltrados.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-slate-500">
+                    Nenhum produto encontrado para esta empresa.
+                  </td>
+                </tr>
+              )}
+
+              {carregando && (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-slate-500">
+                    Carregando produtos...
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        <div className="mt-4 rounded-2xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900">
+          <strong>Segurança multiempresa:</strong> esta tela carrega somente
+          produtos e grupos vinculados à empresa logada.
+        </div>
       </div>
+
+      <style jsx global>{`
+        .input {
+          width: 100%;
+          border: 1px solid rgb(203 213 225);
+          padding: 0.75rem;
+          border-radius: 1rem;
+          color: rgb(15 23 42);
+          font-weight: 500;
+          outline: none;
+        }
+
+        .input:focus {
+          border-color: rgb(29 78 216);
+          box-shadow: 0 0 0 4px rgb(219 234 254);
+        }
+      `}</style>
     </div>
   );
 }
 
-function ResumoCard({ titulo, valor, cor }: { titulo: string; valor: string; cor: string }) {
+function Campo({
+  titulo,
+  children,
+}: {
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-black text-slate-700 mb-2">
+        {titulo}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function ResumoCard({
+  titulo,
+  valor,
+  cor,
+}: {
+  titulo: string;
+  valor: string;
+  cor: string;
+}) {
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-      <p className="text-sm text-slate-500 font-bold">{titulo}</p>
-      <p className={`text-2xl font-black ${cor}`}>{valor}</p>
+      <p className="text-sm font-bold text-slate-500">{titulo}</p>
+      <p className={`text-2xl font-black mt-1 ${cor}`}>{valor}</p>
     </div>
   );
 }

@@ -32,6 +32,7 @@ type Cliente = {
 
 type VendaCliente = {
   id: string;
+  numero_venda?: number | null;
   valor_total: number;
   created_at: string | null;
   status: string | null;
@@ -43,6 +44,16 @@ type ContaCliente = {
   status: string | null;
   vencimento: string | null;
   descricao: string | null;
+};
+
+type CreditoCliente = {
+  id: string;
+  origem: string | null;
+  tipo: string | null;
+  valor: number;
+  saldo_apos: number;
+  descricao: string | null;
+  created_at: string | null;
 };
 
 const clienteVazio = {
@@ -82,20 +93,29 @@ export default function ClientesPage() {
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [vendasCliente, setVendasCliente] = useState<VendaCliente[]>([]);
   const [contasCliente, setContasCliente] = useState<ContaCliente[]>([]);
+  const [creditosCliente, setCreditosCliente] = useState<CreditoCliente[]>([]);
+  const [saldoCreditoCliente, setSaldoCreditoCliente] = useState(0);
+  const [saldosCredito, setSaldosCredito] = useState<Record<string, number>>({});
   const [carregando, setCarregando] = useState(false);
   const [consultandoCep, setConsultandoCep] = useState(false);
   const [consultandoCnpj, setConsultandoCnpj] = useState(false);
 
   function empresaAtualId() {
     try {
-      const empresaStorage = localStorage.getItem("th_empresa");
+      const empresaStorage =
+        sessionStorage.getItem("th_empresa") ||
+        localStorage.getItem("th_empresa");
+
       if (empresaStorage) {
         const empresa = JSON.parse(empresaStorage);
         if (empresa.id) return empresa.id;
         if (empresa.empresa_id) return empresa.empresa_id;
       }
 
-      const usuarioStorage = localStorage.getItem("th_usuario");
+      const usuarioStorage =
+        sessionStorage.getItem("th_usuario") ||
+        localStorage.getItem("th_usuario");
+
       if (usuarioStorage) {
         const usuario = JSON.parse(usuarioStorage);
         if (usuario.empresa_id) return usuario.empresa_id;
@@ -103,6 +123,8 @@ export default function ClientesPage() {
       }
 
       const empresaIdDireto =
+        sessionStorage.getItem("empresa_id") ||
+        sessionStorage.getItem("th_empresa_id") ||
         localStorage.getItem("empresa_id") ||
         localStorage.getItem("th_empresa_id");
 
@@ -114,6 +136,49 @@ export default function ClientesPage() {
       alert("Empresa não identificada. Faça login novamente.");
       return null;
     }
+  }
+
+  async function carregarSaldoCreditoCliente(clienteId: string) {
+    const empresaId = empresaAtualId();
+    if (!empresaId) return 0;
+
+    try {
+      const { data, error } = await supabase.rpc("saldo_credito_cliente", {
+        p_empresa_id: empresaId,
+        p_cliente_id: clienteId,
+      });
+
+      if (error) return 0;
+      return Number(data || 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  async function carregarSaldosCreditoClientes(listaClientes: Cliente[]) {
+    const empresaId = empresaAtualId();
+    if (!empresaId || listaClientes.length === 0) {
+      setSaldosCredito({});
+      return;
+    }
+
+    const saldos: Record<string, number> = {};
+
+    await Promise.all(
+      listaClientes.map(async (cliente) => {
+        try {
+          const { data, error } = await supabase.rpc("saldo_credito_cliente", {
+            p_empresa_id: empresaId,
+            p_cliente_id: cliente.id,
+          });
+          saldos[cliente.id] = error ? 0 : Number(data || 0);
+        } catch {
+          saldos[cliente.id] = 0;
+        }
+      })
+    );
+
+    setSaldosCredito(saldos);
   }
 
   function converterNumero(valor: string) {
@@ -171,7 +236,9 @@ export default function ClientesPage() {
       return;
     }
 
-    setClientes(data || []);
+    const lista = (data || []) as Cliente[];
+    setClientes(lista);
+    await carregarSaldosCreditoClientes(lista);
     setCarregando(false);
   }
 
@@ -398,9 +465,12 @@ export default function ClientesPage() {
     setClienteSelecionado(cliente);
     setModalDetalhes(true);
 
+    const saldoCredito = await carregarSaldoCreditoCliente(cliente.id);
+    setSaldoCreditoCliente(saldoCredito);
+
     const vendasReq = await supabase
       .from("vendas")
-      .select("id,valor_total,created_at,status")
+      .select("id,numero_venda,valor_total,created_at,status")
       .eq("empresa_id", empresaId)
       .eq("cliente_id", cliente.id)
       .order("created_at", { ascending: false })
@@ -417,6 +487,16 @@ export default function ClientesPage() {
       .limit(20);
 
     setContasCliente(contasReq.data || []);
+
+    const creditosReq = await supabase
+      .from("creditos_cliente")
+      .select("id,origem,tipo,valor,saldo_apos,descricao,created_at")
+      .eq("empresa_id", empresaId)
+      .eq("cliente_id", cliente.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    setCreditosCliente((creditosReq.data || []) as CreditoCliente[]);
   }
 
   const clientesFiltrados = useMemo(() => {
@@ -497,11 +577,18 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
         <Resumo titulo="Total de Clientes" valor={`${totalClientes}`} cor="text-blue-700" />
         <Resumo titulo="Clientes Ativos" valor={`${clientesAtivos}`} cor="text-green-700" />
         <Resumo titulo="Clientes Inativos" valor={`${clientesInativos}`} cor="text-red-700" />
         <Resumo titulo="Limite Concedido" valor={formatarMoeda(limiteTotal)} cor="text-purple-700" />
+        <Resumo
+          titulo="Crédito Disponível"
+          valor={formatarMoeda(
+            Object.values(saldosCredito).reduce((total, valor) => total + Number(valor || 0), 0)
+          )}
+          cor="text-emerald-700"
+        />
       </div>
 
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 mb-8">
@@ -557,6 +644,7 @@ export default function ClientesPage() {
                 <th className="p-3 text-left">Contato</th>
                 <th className="p-3 text-left">Cidade/UF</th>
                 <th className="p-3 text-right">Limite</th>
+                <th className="p-3 text-right">Crédito</th>
                 <th className="p-3 text-center">Status</th>
                 <th className="p-3 text-center">Ações</th>
               </tr>
@@ -593,6 +681,10 @@ export default function ClientesPage() {
 
                   <td className="p-3 text-right text-purple-700 font-black">
                     {formatarMoeda(Number(cliente.limite_credito || 0))}
+                  </td>
+
+                  <td className="p-3 text-right text-emerald-700 font-black">
+                    {formatarMoeda(Number(saldosCredito[cliente.id] || 0))}
                   </td>
 
                   <td className="p-3 text-center">
@@ -640,7 +732,7 @@ export default function ClientesPage() {
 
               {clientesFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500">
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
                     Nenhum cliente encontrado.
                   </td>
                 </tr>
@@ -991,6 +1083,7 @@ export default function ClientesPage() {
                 <Resumo titulo="Total Comprado" valor={formatarMoeda(totalCompradoDetalhes)} cor="text-green-700" />
                 <Resumo titulo="Em Aberto" valor={formatarMoeda(totalAbertoDetalhes)} cor="text-red-700" />
                 <Resumo titulo="Limite Crédito" valor={formatarMoeda(Number(clienteSelecionado.limite_credito || 0))} cor="text-purple-700" />
+                <Resumo titulo="Crédito Disponível" valor={formatarMoeda(saldoCreditoCliente)} cor="text-emerald-700" />
 
                 <div className="bg-slate-900 text-white rounded-3xl p-5">
                   <p className="text-slate-300 font-bold">Contato</p>
@@ -1028,7 +1121,11 @@ export default function ClientesPage() {
                       <tbody>
                         {vendasCliente.map((venda) => (
                           <tr key={venda.id} className="border-b">
-                            <td className="p-3 text-slate-800">{venda.id}</td>
+                            <td className="p-3 text-slate-800">
+                              {venda.numero_venda
+                                ? `Venda nº ${String(venda.numero_venda).padStart(6, "0")}`
+                                : venda.id}
+                            </td>
                             <td className="p-3 text-slate-800">{formatarData(venda.created_at)}</td>
                             <td className="p-3 text-slate-800">{venda.status || "-"}</td>
                             <td className="p-3 text-right text-green-700 font-black">{formatarMoeda(Number(venda.valor_total || 0))}</td>
@@ -1077,6 +1174,58 @@ export default function ClientesPage() {
                           <tr>
                             <td colSpan={4} className="p-6 text-center text-slate-500">
                               Nenhuma conta encontrada.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+
+                <div className="border border-slate-200 rounded-3xl p-5">
+                  <h3 className="text-xl font-black text-slate-900 mb-4">
+                    Histórico de Crédito
+                  </h3>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-900 text-white">
+                          <th className="p-3 text-left">Data</th>
+                          <th className="p-3 text-left">Origem</th>
+                          <th className="p-3 text-left">Descrição</th>
+                          <th className="p-3 text-right">Valor</th>
+                          <th className="p-3 text-right">Saldo</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {creditosCliente.map((credito) => (
+                          <tr key={credito.id} className="border-b">
+                            <td className="p-3 text-slate-800">{formatarData(credito.created_at)}</td>
+                            <td className="p-3 text-slate-800">{credito.origem || "-"}</td>
+                            <td className="p-3 text-slate-800">{credito.descricao || "-"}</td>
+                            <td
+                              className={`p-3 text-right font-black ${
+                                credito.tipo === "entrada" || credito.tipo === "ajuste"
+                                  ? "text-emerald-700"
+                                  : "text-red-700"
+                              }`}
+                            >
+                              {credito.tipo === "entrada" || credito.tipo === "ajuste" ? "+" : "-"}
+                              {formatarMoeda(Number(credito.valor || 0))}
+                            </td>
+                            <td className="p-3 text-right text-blue-700 font-black">
+                              {formatarMoeda(Number(credito.saldo_apos || 0))}
+                            </td>
+                          </tr>
+                        ))}
+
+                        {creditosCliente.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="p-6 text-center text-slate-500">
+                              Nenhuma movimentação de crédito encontrada.
                             </td>
                           </tr>
                         )}

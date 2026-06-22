@@ -17,10 +17,28 @@ type UsuarioLogado = {
 
 type EmpresaStatus = {
   id: string;
+  razao_social?: string | null;
+  nome_fantasia?: string | null;
+  cnpj?: string | null;
+  cpf?: string | null;
+  tipo_pessoa?: string | null;
+  telefone?: string | null;
+  celular?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  plano?: string | null;
+  valor_mensal?: number | null;
+  data_vencimento_assinatura?: string | null;
   ativo: boolean | null;
   status_assinatura: string | null;
   onboarding_concluido: boolean | null;
   etapa_onboarding: number | null;
+  modulo_fiscal?: boolean | null;
+  modulo_whatsapp?: boolean | null;
+  modulo_delivery?: boolean | null;
+  modulo_crm?: boolean | null;
+  modulo_relatorios_premium?: boolean | null;
+  modulo_multiloja?: boolean | null;
 };
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -40,7 +58,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   function ehSuperAdmin(usuario: UsuarioLogado | null) {
     const perfil = normalizarPerfil(usuario?.perfil);
-    return perfil === "super admin" || perfil === "superadmin" || perfil === "master";
+
+    return (
+      perfil === "super admin" ||
+      perfil === "superadmin" ||
+      perfil === "master"
+    );
   }
 
   function lerUsuarioSessao(): UsuarioLogado | null {
@@ -61,6 +84,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem("th_usuario");
     sessionStorage.removeItem("th_empresa");
     sessionStorage.removeItem("th_permissoes");
+    sessionStorage.removeItem("empresa_id");
+    sessionStorage.removeItem("th_empresa_id");
 
     localStorage.removeItem("th_usuario");
     localStorage.removeItem("th_empresa");
@@ -69,12 +94,80 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("th_empresa_id");
   }
 
+  function salvarSessaoEmpresa(usuario: UsuarioLogado, empresa: EmpresaStatus) {
+    const empresaNormalizada = {
+      id: empresa.id,
+      empresa_id: empresa.id,
+      razao_social: empresa.razao_social || "",
+      nome_fantasia: empresa.nome_fantasia || "",
+      nome: empresa.nome_fantasia || empresa.razao_social || "Empresa",
+      cnpj: empresa.cnpj || "",
+      cpf: empresa.cpf || "",
+      tipo_pessoa: empresa.tipo_pessoa || "",
+      telefone: empresa.telefone || "",
+      celular: empresa.celular || "",
+      whatsapp: empresa.whatsapp || "",
+      email: empresa.email || "",
+      plano: empresa.plano || "Básico",
+      valor_mensal: Number(empresa.valor_mensal || 0),
+      data_vencimento_assinatura: empresa.data_vencimento_assinatura || null,
+      ativo: empresa.ativo !== false,
+      status_assinatura: empresa.status_assinatura || "Ativo",
+      onboarding_concluido: empresa.onboarding_concluido === true,
+      etapa_onboarding: Number(empresa.etapa_onboarding || 0),
+      modulo_fiscal: empresa.modulo_fiscal === true,
+      modulo_whatsapp: empresa.modulo_whatsapp === true,
+      modulo_delivery: empresa.modulo_delivery === true,
+      modulo_crm: empresa.modulo_crm === true,
+      modulo_relatorios_premium: empresa.modulo_relatorios_premium === true,
+      modulo_multiloja: empresa.modulo_multiloja === true,
+    };
+
+    const usuarioNormalizado = {
+      ...usuario,
+      empresa_id: empresa.id,
+      empresa_nome: empresaNormalizada.nome,
+      plano: empresaNormalizada.plano,
+      modulo_fiscal: empresaNormalizada.modulo_fiscal,
+      modulo_whatsapp: empresaNormalizada.modulo_whatsapp,
+      modulo_delivery: empresaNormalizada.modulo_delivery,
+      modulo_crm: empresaNormalizada.modulo_crm,
+      modulo_relatorios_premium: empresaNormalizada.modulo_relatorios_premium,
+      modulo_multiloja: empresaNormalizada.modulo_multiloja,
+    };
+
+    sessionStorage.setItem("th_usuario", JSON.stringify(usuarioNormalizado));
+    sessionStorage.setItem("th_empresa", JSON.stringify(empresaNormalizada));
+    sessionStorage.setItem("empresa_id", empresa.id);
+    sessionStorage.setItem("th_empresa_id", empresa.id);
+
+    localStorage.setItem("th_usuario", JSON.stringify(usuarioNormalizado));
+    localStorage.setItem("th_empresa", JSON.stringify(empresaNormalizada));
+    localStorage.setItem("empresa_id", empresa.id);
+    localStorage.setItem("th_empresa_id", empresa.id);
+  }
+
+  async function gerarNotificacaoAssinatura(empresaId: string) {
+    try {
+      await supabase.rpc("gerar_notificacao_assinatura_empresa", {
+        p_empresa_id: empresaId,
+      });
+    } catch {
+      // Não trava o sistema se a função ainda não existir no Supabase.
+    }
+  }
+
   function rotaLivre() {
     return (
       pathname === "/login" ||
+      pathname === "/bloqueado" ||
       pathname === "/onboarding" ||
       pathname?.startsWith("/onboarding")
     );
+  }
+
+  function rotaAdmin() {
+    return pathname === "/admin" || pathname?.startsWith("/admin/");
   }
 
   async function verificarAcesso() {
@@ -94,8 +187,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     if (ehSuperAdmin(usuario)) {
+      sessionStorage.setItem("th_usuario", JSON.stringify(usuario));
+      localStorage.setItem("th_usuario", JSON.stringify(usuario));
+
       setLiberado(true);
       setVerificando(false);
+      return;
+    }
+
+    if (rotaAdmin()) {
+      setLiberado(false);
+      setVerificando(false);
+      router.replace("/dashboard");
       return;
     }
 
@@ -109,7 +212,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     const { data: empresaData, error } = await supabase
       .from("empresas")
-      .select("id,ativo,status_assinatura,onboarding_concluido,etapa_onboarding")
+      .select(
+        "id,razao_social,nome_fantasia,cnpj,cpf,tipo_pessoa,telefone,celular,whatsapp,email,plano,valor_mensal,data_vencimento_assinatura,ativo,status_assinatura,onboarding_concluido,etapa_onboarding,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
+      )
       .eq("id", usuario.empresa_id)
       .maybeSingle();
 
@@ -122,6 +227,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     const empresa = empresaData as EmpresaStatus;
+
+    salvarSessaoEmpresa(usuario, empresa);
+
+    await gerarNotificacaoAssinatura(empresa.id);
 
     if (empresa.ativo === false || empresa.status_assinatura === "Bloqueado") {
       setLiberado(true);
@@ -169,9 +278,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="h-12 w-12 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto" />
+
           <p className="mt-4 font-black text-slate-900">
             Verificando ambiente...
           </p>
+
           <p className="text-sm text-slate-500 mt-1">
             Aguarde um instante.
           </p>
@@ -182,7 +293,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!liberado) return null;
 
-  if (pathname === "/onboarding" || pathname?.startsWith("/onboarding")) {
+  if (
+    pathname === "/onboarding" ||
+    pathname?.startsWith("/onboarding") ||
+    pathname === "/bloqueado"
+  ) {
     return <>{children}</>;
   }
 
