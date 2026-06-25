@@ -157,8 +157,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function rotaSiteInstitucional() {
+    return pathname === "/";
+  }
+
   function rotaLivre() {
     return (
+      pathname === "/" ||
       pathname === "/login" ||
       pathname === "/bloqueado" ||
       pathname === "/onboarding" ||
@@ -172,6 +177,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   async function verificarAcesso() {
     setVerificando(true);
+
+    if (rotaSiteInstitucional()) {
+      setLiberado(true);
+      setVerificando(false);
+      return;
+    }
 
     const usuario = lerUsuarioSessao();
 
@@ -269,7 +280,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     verificarAcesso();
   }, [pathname]);
 
-  if (pathname === "/login") {
+  if (
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname === "/onboarding" ||
+    pathname?.startsWith("/onboarding") ||
+    pathname === "/bloqueado"
+  ) {
     return <>{children}</>;
   }
 
@@ -292,14 +309,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (!liberado) return null;
-
-  if (
-    pathname === "/onboarding" ||
-    pathname?.startsWith("/onboarding") ||
-    pathname === "/bloqueado"
-  ) {
-    return <>{children}</>;
-  }
 
   return (
     <div className="th-app-shell min-h-screen bg-slate-50 flex overflow-x-hidden">

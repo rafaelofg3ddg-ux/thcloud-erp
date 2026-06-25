@@ -2810,6 +2810,148 @@ function cabecalhoEmpresaCupom() {
     manterTelaCheiaAposImpressao();
   }
 
+
+  function corpoDocumentoImpressao(html: string) {
+    const match = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const corpo = match?.[1] || html;
+
+    return corpo.replace(/<script[\s\S]*?<\/script>/gi, "");
+  }
+
+  function montarCupomRomaneioEntrega(vendaId: string, numeroVenda?: number) {
+    const corpoCupom = corpoDocumentoImpressao(montarCupom(vendaId, numeroVenda));
+    const corpoRomaneio = corpoDocumentoImpressao(montarRomaneioEntrega(vendaId));
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Venda ${formatarNumeroVenda(numeroVenda)} - Cupom e Romaneio</title>
+
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              width: 300px;
+              margin: 0 auto;
+              color: #111827;
+              font-size: 12px;
+            }
+
+            .center {
+              text-align: center;
+            }
+
+            .logo {
+              max-width: 120px;
+              max-height: 70px;
+              object-fit: contain;
+              margin-bottom: 6px;
+            }
+
+            h1 {
+              font-size: 18px;
+              margin: 4px 0;
+            }
+
+            h2 {
+              font-size: 14px;
+              margin: 8px 0 4px;
+            }
+
+            p {
+              margin: 3px 0;
+            }
+
+            hr {
+              border: none;
+              border-top: 1px dashed #111827;
+              margin: 10px 0;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            td {
+              padding: 3px 0;
+              vertical-align: top;
+            }
+
+            .total {
+              font-size: 18px;
+              font-weight: bold;
+            }
+
+            .small {
+              font-size: 11px;
+            }
+
+            .assinatura {
+              margin-top: 30px;
+              border-top: 1px solid #111827;
+              text-align: center;
+              padding-top: 4px;
+            }
+
+            .pagina-cupom {
+              page-break-after: always;
+              break-after: page;
+            }
+
+            .pagina-romaneio {
+              page-break-before: always;
+              break-before: page;
+            }
+
+            @media print {
+              body {
+                width: 80mm;
+              }
+
+              button {
+                display: none;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          <div class="pagina-cupom">
+            ${corpoCupom}
+          </div>
+
+          <div class="pagina-romaneio">
+            ${corpoRomaneio}
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+  }
+
+  function imprimirCupomRomaneioEntrega(vendaId: string, numeroVenda?: number) {
+    const janela = window.open("", "_blank", "width=420,height=700");
+
+    if (!janela) {
+      alert("O navegador bloqueou a janela de impressão. Libere pop-ups para imprimir cupom e romaneio.");
+      return;
+    }
+
+    janela.document.open();
+    janela.document.write(montarCupomRomaneioEntrega(vendaId, numeroVenda));
+    janela.document.close();
+    manterTelaCheiaAposImpressao();
+  }
+
   function montarPromissoriasCrediario(vendaId: string, numeroVenda?: number) {
     const valorCrediario = converterNumero(pagCrediario);
     const qtdParcelas = Math.max(Number(parcelas || 1), 1);
@@ -3046,12 +3188,20 @@ function cabecalhoEmpresaCupom() {
 
     alert(`Venda Nº ${formatarNumeroVenda(numeroVenda)} finalizada com sucesso!`);
 
-    if (configuracoesSistema.imprimir_cupom_automatico) {
-      imprimirCupom(vendaId, numeroVenda);
-    }
+    if (
+      ehDelivery &&
+      configuracoesSistema.imprimir_cupom_automatico &&
+      configuracoesSistema.imprimir_romaneio_delivery
+    ) {
+      imprimirCupomRomaneioEntrega(vendaId, numeroVenda);
+    } else {
+      if (configuracoesSistema.imprimir_cupom_automatico) {
+        imprimirCupom(vendaId, numeroVenda);
+      }
 
-    if (ehDelivery && configuracoesSistema.imprimir_romaneio_delivery) {
-      imprimirRomaneioEntrega(vendaId);
+      if (ehDelivery && configuracoesSistema.imprimir_romaneio_delivery) {
+        imprimirRomaneioEntrega(vendaId);
+      }
     }
 
     imprimirPromissoriasCrediario(vendaId, numeroVenda);
@@ -3490,10 +3640,10 @@ function cabecalhoEmpresaCupom() {
           )}
         </div>
 
-        <div className="xl:col-span-4 bg-white p-4 rounded-2xl shadow-lg border border-slate-200 h-full min-h-0 overflow-y-auto">
-          <h2 className="text-xl font-black text-slate-800 mb-3">Resumo da Venda</h2>
+        <div className="xl:col-span-4 bg-white p-3 rounded-2xl shadow-lg border border-slate-200 h-full min-h-0 overflow-y-auto">
+          <h2 className="text-lg font-black text-slate-800 mb-2">Resumo da Venda</h2>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex gap-2">
               <div className="w-full border border-slate-300 p-3 rounded-lg text-slate-900 bg-slate-50">
                 {clienteSelecionado()}
@@ -3509,7 +3659,7 @@ function cabecalhoEmpresaCupom() {
             </div>
 
             {clienteId && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs">
                 <p className="font-bold text-blue-800">Histórico do Cliente</p>
                 <p className="text-slate-700">
                   Última compra: <strong>{ultimaCompraCliente ? formatarData(ultimaCompraCliente) : "-"}</strong>
@@ -3521,11 +3671,11 @@ function cabecalhoEmpresaCupom() {
                   Em aberto: <strong>{formatarMoeda(totalAbertoCliente)}</strong>
                 </p>
 
-                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-black text-emerald-800">Crédito disponível</p>
-                      <p className="text-2xl font-black text-emerald-700">
+                      <p className="font-black text-emerald-800 text-xs">Crédito disponível</p>
+                      <p className="text-xl font-black text-emerald-700 leading-tight">
                         {formatarMoeda(saldoCreditoCliente)}
                       </p>
                     </div>
@@ -3541,7 +3691,7 @@ function cabecalhoEmpresaCupom() {
                         setUsarCreditoCliente(!usarCreditoCliente);
                       }}
                       disabled={saldoCreditoCliente <= 0}
-                      className={`px-4 py-2 rounded-xl font-black text-white ${
+                      className={`px-2.5 py-1 rounded-lg font-black text-xs text-white ${
                         saldoCreditoCliente <= 0
                           ? "bg-slate-300 cursor-not-allowed"
                           : usarCreditoCliente
@@ -3554,7 +3704,7 @@ function cabecalhoEmpresaCupom() {
                   </div>
 
                   {usarCreditoCliente && (
-                    <p className="text-sm text-emerald-800 mt-2 font-bold">
+                    <p className="text-xs text-emerald-800 mt-1 font-bold">
                       Será abatido nesta venda: {formatarMoeda(valorCreditoUtilizado())}
                     </p>
                   )}
@@ -3562,7 +3712,7 @@ function cabecalhoEmpresaCupom() {
               </div>
             )}
 
-            <div className="border border-orange-200 rounded-xl p-3 bg-orange-50">
+            <div className="border border-orange-200 rounded-xl p-2 bg-orange-50">
               <label className="flex items-center gap-3 font-black text-orange-900 cursor-pointer">
                 <input
                   type="checkbox"
@@ -3574,13 +3724,13 @@ function cabecalhoEmpresaCupom() {
                       preencherDeliveryComDadosCliente();
                     }
                   }}
-                  className="h-5 w-5"
+                  className="h-4 w-4"
                 />
                 Venda para Entrega / Delivery
               </label>
 
               {ehDelivery && (
-                <div className="mt-3 text-sm text-orange-800">
+                <div className="mt-2 text-xs text-orange-800">
                   <p>
                     Os dados da entrega serão solicitados em um popup antes do pagamento.
                   </p>
@@ -3591,30 +3741,14 @@ function cabecalhoEmpresaCupom() {
               )}
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-              <h3 className="font-bold text-slate-800 mb-2">Descontos</h3>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">Desconto R$</label>
-                  <input value={descontoValor} onChange={(e) => setDescontoValor(e.target.value)} className="w-full border border-slate-300 p-2 rounded-lg text-slate-900" />
-                </div>
-
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">Desconto %</label>
-                  <input value={descontoPercentual} onChange={(e) => setDescontoPercentual(e.target.value)} className="w-full border border-slate-300 p-2 rounded-lg text-slate-900" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-2">
               <p className="font-black text-blue-900">Pagamento</p>
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="text-xs text-blue-700 mt-0.5">
                 Clique em <strong>Finalizar Venda - F8</strong> para abrir a tela de pagamento.
               </p>
             </div>
 
-            <div className="border-t pt-3">
+            <div className="border-t pt-2 text-sm">
               <div className="flex justify-between text-slate-700">
                 <span>Subtotal:</span>
                 <strong>{formatarMoeda(totalBruto())}</strong>
@@ -3665,22 +3799,22 @@ function cabecalhoEmpresaCupom() {
               </div>
             </div>
 
-            <div className="bg-slate-900 text-white rounded-xl p-4">
-              <p className="text-sm text-slate-300">TOTAL DA VENDA</p>
-              <p className="text-3xl font-black">{formatarMoeda(totalFinal())}</p>
+            <div className="bg-slate-900 text-white rounded-xl p-3">
+              <p className="text-xs text-slate-300">TOTAL DA VENDA</p>
+              <p className="text-2xl font-black leading-tight">{formatarMoeda(totalFinal())}</p>
             </div>
 
             <button
               onClick={abrirFluxoFinalizacao}
               disabled={!caixaAberto}
-              className={`w-full px-6 py-3 rounded-lg font-black text-white ${
+              className={`w-full px-5 py-2.5 rounded-lg font-black text-white ${
                 !caixaAberto ? "bg-slate-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
               }`}
             >
               Finalizar Venda - F8
             </button>
 
-            <button onClick={limparVenda} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-900 px-6 py-3 rounded-lg font-black">
+            <button onClick={limparVenda} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-900 px-5 py-2.5 rounded-lg font-black">
               Limpar Venda
             </button>
 
@@ -3968,7 +4102,7 @@ function cabecalhoEmpresaCupom() {
                         preencherDeliveryComDadosCliente();
                       }
                     }}
-                    className="h-5 w-5"
+                    className="h-4 w-4"
                   />
                   Usar dados do cliente no romaneio
                 </label>
@@ -4130,10 +4264,10 @@ function cabecalhoEmpresaCupom() {
 
       {modalPagamento && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3">
-          <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl max-h-[94vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl max-h-[96vh] overflow-y-auto">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-black text-slate-900">
+                <h2 className="text-xl font-black text-slate-900">
                   Pagamento da Venda
                 </h2>
                 <p className="text-slate-500 text-sm">
@@ -4149,8 +4283,8 @@ function cabecalhoEmpresaCupom() {
               </button>
             </div>
 
-            <div className="p-5 grid grid-cols-1 xl:grid-cols-12 gap-5">
-              <div className="xl:col-span-8 space-y-4">
+            <div className="p-4 grid grid-cols-1 xl:grid-cols-12 gap-4">
+              <div className="xl:col-span-8 space-y-3">
                 {ehDelivery && (
                   <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
                     <p className="font-black text-orange-900">Venda Delivery</p>
@@ -4166,19 +4300,45 @@ function cabecalhoEmpresaCupom() {
                   </div>
                 )}
 
+                <div className="border border-slate-200 rounded-2xl p-3 bg-slate-50">
+                  <h3 className="font-black text-slate-900 mb-2">Descontos da Venda</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-black text-slate-700">Desconto R$</label>
+                      <input
+                        value={descontoValor}
+                        onChange={(e) => setDescontoValor(e.target.value)}
+                        className="w-full border border-slate-300 p-2 rounded-xl text-slate-900 font-black text-right"
+                        placeholder="0,00"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-black text-slate-700">Desconto %</label>
+                      <input
+                        value={descontoPercentual}
+                        onChange={(e) => setDescontoPercentual(e.target.value)}
+                        className="w-full border border-slate-300 p-2 rounded-xl text-slate-900 font-black text-right"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                  <div className="bg-slate-900 text-white px-4 py-3">
+                  <div className="bg-slate-900 text-white px-4 py-2">
                     <h3 className="font-black">Formas de Pagamento</h3>
-                    <p className="text-xs text-slate-300">Preencha uma ou mais formas. O sistema calcula falta e troco automaticamente.</p>
+                    <p className="text-[11px] text-slate-300">Preencha uma ou mais formas. O sistema calcula falta e troco automaticamente.</p>
                   </div>
 
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[720px]">
                       <thead>
                         <tr className="bg-slate-100 text-slate-700 text-sm">
-                          <th className="p-3 text-left">Forma</th>
-                          <th className="p-3 text-right">Valor</th>
-                          <th className="p-3 text-left">Observação</th>
+                          <th className="p-2 text-left">Forma</th>
+                          <th className="p-2 text-right">Valor</th>
+                          <th className="p-2 text-left">Observação</th>
                         </tr>
                       </thead>
 
@@ -4191,26 +4351,26 @@ function cabecalhoEmpresaCupom() {
                           ["Crediário", pagCrediario, setPagCrediario, "Venda fiado / parcelada"],
                         ].map(([label, value, setter, obs]: any) => (
                           <tr key={label} className="border-t border-slate-200">
-                            <td className="p-3 font-black text-slate-800">{label}</td>
-                            <td className="p-3">
+                            <td className="p-2 font-black text-slate-800">{label}</td>
+                            <td className="p-2">
                               <input
                                 value={value}
                                 onChange={(e) => setter(e.target.value)}
-                                className="w-full border border-slate-300 p-3 rounded-xl text-slate-900 text-right font-black"
+                                className="w-full border border-slate-300 p-2 rounded-xl text-slate-900 text-right font-black"
                                 placeholder="0,00"
                               />
                             </td>
-                            <td className="p-3 text-sm text-slate-500">{obs}</td>
+                            <td className="p-2 text-xs text-slate-500">{obs}</td>
                           </tr>
                         ))}
 
                         {valorCreditoUtilizado() > 0 && (
                           <tr className="border-t border-emerald-200 bg-emerald-50">
-                            <td className="p-3 font-black text-emerald-800">Crédito do Cliente</td>
-                            <td className="p-3 text-right font-black text-emerald-700">
+                            <td className="p-2 font-black text-emerald-800">Crédito do Cliente</td>
+                            <td className="p-2 text-right font-black text-emerald-700">
                               {formatarMoeda(valorCreditoUtilizado())}
                             </td>
-                            <td className="p-3 text-sm text-emerald-700">
+                            <td className="p-2 text-xs text-emerald-700">
                               Abatimento automático do saldo do cliente
                             </td>
                           </tr>
@@ -4220,11 +4380,11 @@ function cabecalhoEmpresaCupom() {
                   </div>
                 </div>
 
-                <div className="border border-blue-200 rounded-2xl p-4 bg-blue-50">
+                <div className="border border-blue-200 rounded-2xl p-3 bg-blue-50">
                   <div className="flex flex-col lg:flex-row lg:items-end gap-3">
                     <div className="flex-1">
                       <p className="font-black text-blue-900">Arredondamento</p>
-                      <p className="text-sm text-blue-700">
+                      <p className="text-xs text-blue-700">
                         Use para ajustar centavos para mais ou para menos. Ex.: R$ 5,50 pode virar R$ 5,00 ou R$ 6,00.
                       </p>
                     </div>
@@ -4234,7 +4394,7 @@ function cabecalhoEmpresaCupom() {
                       <input
                         value={arredondamentoVenda}
                         onChange={(e) => setArredondamentoVenda(e.target.value)}
-                        className="w-full border border-blue-300 p-3 rounded-xl text-slate-900 text-right font-black"
+                        className="w-full border border-blue-300 p-2 rounded-xl text-slate-900 text-right font-black"
                         placeholder="0,00"
                       />
                     </div>
@@ -4242,7 +4402,7 @@ function cabecalhoEmpresaCupom() {
                     <button
                       type="button"
                       onClick={() => configuracoesSistema.permitir_arredondamento_operador ? aplicarArredondamento("baixo") : alert("Arredondamento bloqueado nas Configurações Gerais.")}
-                      className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl font-black"
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded-xl font-black text-sm"
                     >
                       Arred. para Menos
                     </button>
@@ -4250,7 +4410,7 @@ function cabecalhoEmpresaCupom() {
                     <button
                       type="button"
                       onClick={() => configuracoesSistema.permitir_arredondamento_operador ? aplicarArredondamento("cima") : alert("Arredondamento bloqueado nas Configurações Gerais.")}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-black"
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl font-black text-sm"
                     >
                       Arred. para Mais
                     </button>
@@ -4258,7 +4418,7 @@ function cabecalhoEmpresaCupom() {
                     <button
                       type="button"
                       onClick={() => configuracoesSistema.permitir_arredondamento_operador ? limparArredondamento() : alert("Arredondamento bloqueado nas Configurações Gerais.")}
-                      className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-4 py-3 rounded-xl font-black"
+                      className="bg-slate-200 hover:bg-slate-300 text-slate-900 px-3 py-2 rounded-xl font-black text-sm"
                     >
                       Limpar
                     </button>
@@ -4308,13 +4468,13 @@ function cabecalhoEmpresaCupom() {
                 )}
               </div>
 
-              <div className="xl:col-span-4 space-y-4">
-                <div className="bg-slate-900 text-white rounded-2xl p-5">
-                  <p className="text-sm text-slate-300 font-bold">TOTAL DA VENDA</p>
-                  <p className="text-4xl font-black">{formatarMoeda(totalFinal())}</p>
+              <div className="xl:col-span-4 space-y-3">
+                <div className="bg-slate-900 text-white rounded-2xl p-4">
+                  <p className="text-xs text-slate-300 font-bold">TOTAL DA VENDA</p>
+                  <p className="text-3xl font-black leading-tight">{formatarMoeda(totalFinal())}</p>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-1.5 text-sm">
                   <div className="flex justify-between text-slate-700">
                     <span>Subtotal:</span>
                     <strong>{formatarMoeda(totalBruto())}</strong>
@@ -4367,9 +4527,9 @@ function cabecalhoEmpresaCupom() {
                   </div>
                 </div>
 
-                <div className="bg-green-600 text-white rounded-2xl p-5">
-                  <p className="text-sm text-green-100 font-bold">TROCO</p>
-                  <p className="text-4xl font-black">{formatarMoeda(troco())}</p>
+                <div className="bg-green-600 text-white rounded-2xl p-4">
+                  <p className="text-xs text-green-100 font-bold">TROCO</p>
+                  <p className="text-3xl font-black leading-tight">{formatarMoeda(troco())}</p>
                 </div>
 
                 <button
@@ -4378,7 +4538,7 @@ function cabecalhoEmpresaCupom() {
                     setModalPagamento(false);
                   }}
                   disabled={finalizandoVenda}
-                  className={`w-full px-6 py-4 rounded-2xl font-black text-lg text-white ${
+                  className={`w-full px-5 py-3 rounded-2xl font-black text-base text-white ${
                     finalizandoVenda
                       ? "bg-slate-400 cursor-not-allowed"
                       : "bg-green-600 hover:bg-green-700"
