@@ -354,7 +354,7 @@ export default function AdminPage() {
         </div>
       </section>
 
-      <footer className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pb-2"><div className="inline-flex items-center gap-2"><span>Última atualização: {atualizadoEm || "-"}</span><button onClick={carregarDashboard} className="text-blue-700"><RefreshCw size={14} /></button></div><span>THCloud ERP - Painel Master SaaS v1.0.0</span></footer>
+      <footer className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pb-2"><div className="inline-flex items-center gap-2"><span>Última atualização: {atualizadoEm || "-"}</span><button onClick={carregarDashboard} className="text-blue-700"><RefreshCw size={14} /></button></div><span>Th Cloud - Painel Master SaaS v1.0.0</span></footer>
     </div>
   );
 }

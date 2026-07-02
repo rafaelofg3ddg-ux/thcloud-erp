@@ -40,7 +40,7 @@ export default function RelatorioPadrao({
               </h2>
 
               <p className="text-sm text-slate-500">
-                THCloud ERP
+                Th Cloud
               </p>
             </div>
           </div>
@@ -143,7 +143,7 @@ export default function RelatorioPadrao({
 
                 <Linha
                   titulo="Sistema"
-                  valor="THCloud ERP"
+                  valor="Th Cloud"
                 />
 
                 <Linha
@@ -173,7 +173,7 @@ export default function RelatorioPadrao({
       </div>
 
       <div className="border-t p-5 text-center text-xs text-slate-500">
-        THCloud ERP • www.thcloud.com.br
+        Th Cloud • www.thcloud.com.br
       </div>
     </div>
   );

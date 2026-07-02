@@ -361,7 +361,7 @@ export default function BackupPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-8 shadow-lg mb-8 text-white">
-        <p className="text-blue-100 font-bold">THCloud ERP</p>
+        <p className="text-blue-100 font-bold">Th Cloud</p>
 
         <h1 className="text-4xl font-black mt-2">
           Backup e Restauração

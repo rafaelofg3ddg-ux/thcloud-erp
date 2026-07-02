@@ -329,7 +329,7 @@ export default function RelatorioEstoquePage() {
                 </h2>
 
                 <p className="text-sm text-slate-500 font-semibold">
-                  ERP Inteligente
+                  Gestão Inteligente
                 </p>
               </div>
             </div>
@@ -367,7 +367,7 @@ export default function RelatorioEstoquePage() {
               <table className="w-full text-sm">
                 <tbody>
                   <LinhaInfo titulo="Empresa" valor={empresaNome} />
-                  <LinhaInfo titulo="Sistema" valor="THCloud ERP" />
+                  <LinhaInfo titulo="Sistema" valor="Th Cloud" />
                   <LinhaInfo titulo="Site" valor="thcloud.com.br" />
                   <LinhaInfo titulo="Responsável" valor={usuarioNome} />
                 </tbody>
@@ -590,7 +590,7 @@ export default function RelatorioEstoquePage() {
             <div>
               <p className="font-black text-blue-800">Observação</p>
               <p className="text-sm text-slate-700 mt-1">
-                Relatório gerado automaticamente pelo sistema THCloud ERP com base nos produtos
+                Relatório gerado automaticamente pelo sistema Th Cloud com base nos produtos
                 cadastrados da empresa logada e nas quantidades atuais em estoque.
               </p>
             </div>
@@ -601,7 +601,7 @@ export default function RelatorioEstoquePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center text-xs text-slate-700">
             <div>
               <p className="font-bold text-slate-900">
-                THCloud ERP - Sistema de Gestão Empresarial
+                Th Cloud - Sistema de Gestão
               </p>
             </div>
 

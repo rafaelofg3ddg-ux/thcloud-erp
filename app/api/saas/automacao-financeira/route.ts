@@ -208,7 +208,7 @@ export async function GET(request: NextRequest) {
             .insert([
               {
                 empresa_id: empresa.id,
-                descricao: `Mensalidade THCloud ERP - ${empresa.plano || "Básico"}`,
+                descricao: `Mensalidade Th Cloud - ${empresa.plano || "Básico"}`,
                 valor: Number(empresa.valor_mensal || 0),
                 vencimento,
                 status: "Aberta",

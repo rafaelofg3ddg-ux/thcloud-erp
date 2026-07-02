@@ -64,7 +64,7 @@ type EmpresaLocal = {
 
 const configuracaoPadrao = (empresaId: string): ConfiguracoesGerais => ({
   empresa_id: empresaId,
-  nome_sistema: "THCloud ERP",
+  nome_sistema: "Th Cloud",
   tema_cor: "#1d4ed8",
   modo_compacto: false,
   permitir_estoque_negativo: false,
@@ -220,7 +220,7 @@ export default function ConfiguracoesGeraisPage() {
     return {
       id: data.id,
       empresa_id: data.empresa_id,
-      nome_sistema: data.nome_sistema || "THCloud ERP",
+      nome_sistema: data.nome_sistema || "Th Cloud",
       tema_cor: data.tema_cor || "#1d4ed8",
       modo_compacto: data.modo_compacto === true,
       permitir_estoque_negativo: data.permitir_estoque_negativo === true,
@@ -409,7 +409,7 @@ export default function ConfiguracoesGeraisPage() {
       <div className="bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-8 shadow-lg mb-8 text-white">
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
           <div>
-            <p className="text-blue-100 font-bold">THCloud ERP</p>
+            <p className="text-blue-100 font-bold">Th Cloud</p>
 
             <h1 className="text-4xl font-black mt-2">
               Configurações Gerais
@@ -537,7 +537,7 @@ export default function ConfiguracoesGeraisPage() {
                     value={config.nome_sistema}
                     onChange={(e) => atualizar("nome_sistema", e.target.value)}
                     className="input-config"
-                    placeholder="Ex.: THCloud ERP"
+                    placeholder="Ex.: Th Cloud"
                   />
                 </Campo>
 

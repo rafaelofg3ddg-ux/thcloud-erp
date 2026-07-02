@@ -53,6 +53,7 @@ type Empresa = {
   cidade: string | null;
   estado: string | null;
   segmento: string | null;
+  segmento_nome: string | null;
   onboarding_concluido: boolean | null;
   etapa_onboarding: number | null;
 };
@@ -92,6 +93,7 @@ type Formulario = {
   nova_senha: string;
   confirmar_senha: string;
   segmento: string;
+  segmento_nome: string;
 };
 
 const FORM_INICIAL: Formulario = {
@@ -120,25 +122,65 @@ const FORM_INICIAL: Formulario = {
   admin_email: "",
   nova_senha: "",
   confirmar_senha: "",
-  segmento: "Mercado",
+  segmento: "comercio_mercado",
+  segmento_nome: "Mercado",
 };
 
 const segmentos = [
-  "Mercado",
-  "Farmácia",
-  "Padaria",
-  "Restaurante",
-  "Auto Peças",
-  "Material de Construção",
-  "Distribuidora",
-  "Loja de Roupas",
-  "Conveniência",
-  "Açougue",
-  "Hortifruti",
-  "Serviços",
-  "Pessoa Física",
-  "Outros",
+  {
+    grupo: "Comércio",
+    itens: [
+      { codigo: "comercio_mercado", nome: "Mercado", icone: "🛒", descricao: "Vendas, estoque, clientes, caixa e financeiro.", recursos: ["PDV", "Estoque", "Financeiro"] },
+      { codigo: "comercio_farmacia", nome: "Farmácia", icone: "💊", descricao: "Produtos, estoque, clientes e controle comercial.", recursos: ["PDV", "Produtos", "Clientes"] },
+      { codigo: "comercio_roupas", nome: "Loja de Roupas", icone: "👕", descricao: "Vendas, estoque por produtos, clientes e caixa.", recursos: ["PDV", "Estoque", "Relatórios"] },
+      { codigo: "comercio_autopecas", nome: "Auto Peças", icone: "⚙️", descricao: "Venda de peças, estoque, fornecedores e financeiro.", recursos: ["Peças", "Estoque", "PDV"] },
+      { codigo: "comercio_material_construcao", nome: "Material de Construção", icone: "🏗️", descricao: "Produtos, estoque, vendas e controle financeiro.", recursos: ["Produtos", "Estoque", "Financeiro"] },
+      { codigo: "comercio_distribuidora", nome: "Distribuidora", icone: "📦", descricao: "Pedidos, estoque, clientes e vendas.", recursos: ["Pedidos", "Estoque", "Clientes"] },
+    ],
+  },
+  {
+    grupo: "Assistência Técnica",
+    itens: [
+      { codigo: "loja_celular", nome: "Loja de Celular / Assistência Técnica", icone: "📱", descricao: "OS com IMEI, senha, conta, garantia e checklist do aparelho.", recursos: ["IMEI", "Garantia", "OS"] },
+      { codigo: "informatica", nome: "Informática", icone: "💻", descricao: "OS para computadores, notebooks, senha, sistema e peças.", recursos: ["Equipamento", "Senha", "Peças"] },
+      { codigo: "refrigeracao", nome: "Refrigeração", icone: "❄️", descricao: "OS para ar-condicionado, BTUs, gás, voltagem e instalação.", recursos: ["BTUs", "Gás", "Instalação"] },
+      { codigo: "eletronicos", nome: "Eletrônicos", icone: "📺", descricao: "OS para TV, som, placas, número de série e diagnóstico.", recursos: ["Série", "Diagnóstico", "Garantia"] },
+    ],
+  },
+  {
+    grupo: "Oficina",
+    itens: [
+      { codigo: "oficina_mecanica", nome: "Oficina Mecânica", icone: "🚗", descricao: "OS com veículo, placa, chassi, KM, combustível e checklist.", recursos: ["Placa", "KM", "Checklist"] },
+      { codigo: "oficina_moto", nome: "Oficina de Moto", icone: "🏍️", descricao: "OS para motos, placa, KM, peças e serviços.", recursos: ["Placa", "KM", "Peças"] },
+      { codigo: "auto_eletrica", nome: "Auto Elétrica", icone: "🔋", descricao: "Serviços elétricos, bateria, alternador e diagnóstico.", recursos: ["Bateria", "Elétrica", "OS"] },
+    ],
+  },
+  {
+    grupo: "Alimentação",
+    itens: [
+      { codigo: "alimentacao_restaurante", nome: "Restaurante", icone: "🍽️", descricao: "Vendas, caixa, clientes, produtos e financeiro.", recursos: ["PDV", "Produtos", "Caixa"] },
+      { codigo: "alimentacao_padaria", nome: "Padaria", icone: "🥖", descricao: "PDV, estoque, produtos e vendas rápidas.", recursos: ["PDV", "Estoque", "Vendas"] },
+      { codigo: "alimentacao_acougue", nome: "Açougue", icone: "🥩", descricao: "Produtos, vendas, clientes e financeiro.", recursos: ["PDV", "Produtos", "Financeiro"] },
+      { codigo: "alimentacao_hortifruti", nome: "Hortifruti", icone: "🥬", descricao: "Produtos, vendas rápidas e controle comercial.", recursos: ["PDV", "Estoque", "Caixa"] },
+    ],
+  },
+  {
+    grupo: "Serviços",
+    itens: [
+      { codigo: "servicos_geral", nome: "Serviços em Geral", icone: "🧰", descricao: "OS genérica para qualquer tipo de prestação de serviço.", recursos: ["OS Geral", "Serviços", "Clientes"] },
+      { codigo: "pessoa_fisica", nome: "Pessoa Física", icone: "👤", descricao: "Controle simples para autônomos e pequenos prestadores.", recursos: ["Clientes", "Serviços", "Financeiro"] },
+      { codigo: "geral", nome: "Outros", icone: "🏢", descricao: "Configuração geral para outros segmentos.", recursos: ["Geral", "PDV", "Financeiro"] },
+    ],
+  },
 ];
+
+function obterNomeSegmento(codigo: string) {
+  for (const grupo of segmentos) {
+    const item = grupo.itens.find((segmento) => segmento.codigo === codigo);
+    if (item) return item.nome;
+  }
+  return "Geral";
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -178,7 +220,7 @@ export default function OnboardingPage() {
 
     const { data: empresaData, error: empresaError } = await supabase
       .from("empresas")
-      .select("id,tipo_pessoa,razao_social,nome_fantasia,cnpj,cpf,rg,data_nascimento,inscricao_estadual,inscricao_municipal,cnae,telefone,celular,email,cep,endereco,numero,complemento,bairro,cidade,estado,segmento,onboarding_concluido,etapa_onboarding")
+      .select("id,tipo_pessoa,razao_social,nome_fantasia,cnpj,cpf,rg,data_nascimento,inscricao_estadual,inscricao_municipal,cnae,telefone,celular,email,cep,endereco,numero,complemento,bairro,cidade,estado,segmento,segmento_nome,onboarding_concluido,etapa_onboarding")
       .eq("id", usuarioSessao.empresa_id)
       .maybeSingle();
 
@@ -226,7 +268,8 @@ export default function OnboardingPage() {
       admin_email: usuarioBd?.email || usuarioSessao.email || "",
       nova_senha: "",
       confirmar_senha: "",
-      segmento: empresaBanco.segmento || "Mercado",
+      segmento: empresaBanco.segmento || "comercio_mercado",
+      segmento_nome: empresaBanco.segmento_nome || obterNomeSegmento(empresaBanco.segmento || "comercio_mercado"),
     });
 
     const etapa = Number(empresaBanco.etapa_onboarding || 0);
@@ -247,6 +290,15 @@ export default function OnboardingPage() {
   }, []);
 
   function alterar(campo: keyof Formulario, valor: string) {
+    if (campo === "segmento") {
+      setForm((atual) => ({
+        ...atual,
+        segmento: valor,
+        segmento_nome: obterNomeSegmento(valor),
+      }));
+      return;
+    }
+
     setForm((atual) => ({ ...atual, [campo]: valor }));
   }
 
@@ -371,6 +423,7 @@ export default function OnboardingPage() {
       cidade: form.cidade.trim(),
       estado: form.estado.trim().toUpperCase(),
       segmento: form.segmento,
+      segmento_nome: form.segmento_nome || obterNomeSegmento(form.segmento),
       etapa_onboarding: proximoPasso,
       updated_at: new Date().toISOString(),
     };
@@ -429,6 +482,8 @@ export default function OnboardingPage() {
       nome_fantasia: form.nome_fantasia || form.razao_social,
       razao_social: form.razao_social || form.nome_fantasia,
       plano: "Básico",
+      segmento: form.segmento,
+      segmento_nome: form.segmento_nome || obterNomeSegmento(form.segmento),
     };
     sessionStorage.setItem("th_empresa", JSON.stringify(empresaSessaoAtualizada));
     localStorage.setItem("th_empresa", JSON.stringify(empresaSessaoAtualizada));
@@ -499,7 +554,7 @@ export default function OnboardingPage() {
                 <Rocket size={18} /> Assistente de Implantação
               </div>
               <h1 className="text-3xl lg:text-5xl font-black mt-5 tracking-[-0.04em]">
-                {passo === 0 ? "Bem-vindo ao THCloud ERP" : "Configure seu ambiente"}
+                {passo === 0 ? "Bem-vindo ao Th Cloud" : "Configure seu ambiente"}
               </h1>
               <p className="mt-3 text-blue-100 max-w-3xl">
                 {passo === 0 ? "Sua empresa foi criada com sucesso. Antes de começar, vamos ajustar as informações principais." : "Complete os passos abaixo para deixar sua empresa pronta para vender, controlar estoque e usar o financeiro."}
@@ -577,7 +632,7 @@ function TelaBoasVindas() {
         <Store size={46} />
       </div>
       <h2 className="text-3xl lg:text-4xl font-black text-slate-950">Sua empresa foi criada com sucesso</h2>
-      <p className="mt-4 text-slate-500 max-w-2xl mx-auto">Agora vamos configurar os dados principais para que o THCloud ERP fique pronto para sua operação.</p>
+      <p className="mt-4 text-slate-500 max-w-2xl mx-auto">Agora vamos configurar os dados principais para que o Th Cloud fique pronto para sua operação.</p>
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
         <MiniCard icon={<Building2 size={24} />} titulo="Dados da empresa" texto="CPF/CNPJ, contato e endereço." />
         <MiniCard icon={<Lock size={24} />} titulo="Administrador" texto="Troca de senha e acesso seguro." />
@@ -683,23 +738,87 @@ function PassoAdministrador({ form, alterar, exigirSenha, mostrarSenha, setMostr
 function PassoSegmento({ form, alterar }: { form: Formulario; alterar: (campo: keyof Formulario, valor: string) => void; }) {
   return (
     <div>
-      <TituloPasso titulo="Segmento do negócio" texto="Escolha o segmento principal para o THCloud ajustar melhor sua experiência." />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {segmentos.map((segmento) => (
-          <button key={segmento} onClick={() => alterar("segmento", segmento)} className={`rounded-2xl border p-4 text-left font-black ${form.segmento === segmento ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"}`}>{segmento}</button>
+      <TituloPasso
+        titulo="Segmento do negócio"
+        texto="Escolha o segmento principal. O TH Cloud vai ajustar a Ordem de Serviço e os campos do atendimento conforme essa escolha."
+      />
+
+      <div className="space-y-7">
+        {segmentos.map((grupo) => (
+          <div key={grupo.grupo}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-px flex-1 bg-slate-200" />
+              <p className="text-sm font-black uppercase tracking-widest text-slate-500">{grupo.grupo}</p>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {grupo.itens.map((segmento) => {
+                const selecionado = form.segmento === segmento.codigo;
+
+                return (
+                  <button
+                    key={segmento.codigo}
+                    type="button"
+                    onClick={() => alterar("segmento", segmento.codigo)}
+                    className={`rounded-3xl border p-5 text-left transition ${
+                      selecionado
+                        ? "border-blue-600 bg-blue-50 shadow-lg shadow-blue-100"
+                        : "border-slate-200 bg-white hover:bg-slate-50 hover:border-blue-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="h-14 w-14 rounded-2xl bg-slate-100 flex items-center justify-center text-3xl">
+                        {segmento.icone}
+                      </div>
+
+                      {selecionado && (
+                        <div className="h-8 w-8 rounded-full bg-blue-700 text-white flex items-center justify-center">
+                          <CheckCircle2 size={18} />
+                        </div>
+                      )}
+                    </div>
+
+                    <h3 className="mt-4 text-lg font-black text-slate-950">{segmento.nome}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">{segmento.descricao}</p>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {segmento.recursos.map((recurso) => (
+                        <span
+                          key={recurso}
+                          className={`px-3 py-1 rounded-full text-xs font-black ${
+                            selecionado ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {recurso}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ))}
+      </div>
+
+      <div className="mt-7 rounded-3xl bg-slate-950 p-5 text-white">
+        <p className="font-black">Segmento selecionado</p>
+        <p className="mt-1 text-blue-100">{form.segmento_nome || obterNomeSegmento(form.segmento)}</p>
+        <p className="mt-3 text-sm leading-6 text-slate-300">
+          Essa escolha será usada para adaptar a Ordem de Serviço. Loja de celular exibe IMEI e senha; oficina mecânica exibe placa, chassi e KM; refrigeração exibe BTUs, gás e voltagem.
+        </p>
       </div>
     </div>
   );
 }
-
 function PassoFinal({ form, salvando, concluir }: { form: Formulario; salvando: boolean; concluir: (destino: string) => void; }) {
   return (
     <div>
       <div className="text-center py-4">
         <div className="h-24 w-24 rounded-[30px] bg-green-50 text-green-700 flex items-center justify-center mx-auto mb-6"><CheckCircle2 size={48} /></div>
         <h2 className="text-3xl lg:text-4xl font-black text-slate-950">Tudo pronto para começar</h2>
-        <p className="mt-4 text-slate-500 max-w-2xl mx-auto">{form.nome_fantasia || form.razao_social || "Sua empresa"} já está configurada no THCloud ERP. Agora escolha sua primeira ação.</p>
+        <p className="mt-4 text-slate-500 max-w-2xl mx-auto">{form.nome_fantasia || form.razao_social || "Sua empresa"} já está configurada no Th Cloud. Agora escolha sua primeira ação.</p>
       </div>
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <AcaoFinal icon={<PackagePlus size={30} />} titulo="Cadastrar Primeiro Produto" texto="Comece criando seus produtos." onClick={() => concluir("/produtos")} disabled={salvando} />

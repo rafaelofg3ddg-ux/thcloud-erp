@@ -419,7 +419,7 @@ export default function RankingClientesPage() {
                 </h2>
 
                 <p className="text-sm text-slate-500 font-semibold">
-                  ERP Inteligente
+                  Gestão Inteligente
                 </p>
               </div>
             </div>
@@ -458,7 +458,7 @@ export default function RankingClientesPage() {
               <table className="w-full text-sm">
                 <tbody>
                   <LinhaInfo titulo="Empresa" valor={empresaNome} />
-                  <LinhaInfo titulo="Sistema" valor="THCloud ERP" />
+                  <LinhaInfo titulo="Sistema" valor="Th Cloud" />
                   <LinhaInfo titulo="Site" valor="thcloud.com.br" />
                   <LinhaInfo titulo="Responsável" valor={usuarioNome} />
                 </tbody>
@@ -661,7 +661,7 @@ export default function RankingClientesPage() {
             <div>
               <p className="font-black text-blue-800">Observação</p>
               <p className="text-sm text-slate-700 mt-1">
-                Relatório gerado automaticamente pelo sistema THCloud ERP com base nas
+                Relatório gerado automaticamente pelo sistema Th Cloud com base nas
                 vendas finalizadas e nos clientes vinculados às vendas da empresa
                 logada dentro do período.
               </p>
@@ -673,7 +673,7 @@ export default function RankingClientesPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center text-xs text-slate-700">
             <div>
               <p className="font-bold text-slate-900">
-                THCloud ERP - Sistema de Gestão Empresarial
+                Th Cloud - Sistema de Gestão
               </p>
             </div>
 

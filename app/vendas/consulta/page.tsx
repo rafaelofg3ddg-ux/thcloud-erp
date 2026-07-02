@@ -273,7 +273,7 @@ export default function ConsultaVendasPage() {
         </head>
         <body>
           <div class="center">
-            <h1>THCloud ERP</h1>
+            <h1>Th Cloud</h1>
             <p>Cupom Não Fiscal - Reimpressão</p>
           </div>
           <hr />

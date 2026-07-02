@@ -669,7 +669,7 @@ export default function Header() {
 
       <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-5 lg:px-8 sticky top-0 z-40">
       <div className="min-w-[190px]">
-        <h1 className="text-xl font-black text-slate-900">THCloud ERP</h1>
+        <h1 className="text-xl font-black text-slate-900">Th Cloud</h1>
         <p className="text-sm text-slate-500 leading-tight">
           {isSuperAdmin
             ? "Painel Master SaaS"

@@ -23,6 +23,7 @@ import {
   Tags,
   Truck,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
 
@@ -42,6 +43,7 @@ type UsuarioLogado = {
   modulo_crm?: boolean;
   modulo_relatorios_premium?: boolean;
   modulo_multiloja?: boolean;
+  modulo_ordem_servico?: boolean;
 };
 
 type PermissoesUsuario = Record<string, boolean>;
@@ -54,6 +56,7 @@ type ModulosEmpresa = {
   modulo_crm: boolean;
   modulo_relatorios_premium: boolean;
   modulo_multiloja: boolean;
+  modulo_ordem_servico: boolean;
 };
 
 const MODULOS_EMPRESA_PADRAO: ModulosEmpresa = {
@@ -64,6 +67,7 @@ const MODULOS_EMPRESA_PADRAO: ModulosEmpresa = {
   modulo_crm: false,
   modulo_relatorios_premium: false,
   modulo_multiloja: false,
+  modulo_ordem_servico: true,
 };
 
 export default function Sidebar() {
@@ -103,6 +107,7 @@ export default function Sidebar() {
           modulo_crm: true,
           modulo_relatorios_premium: true,
           modulo_multiloja: true,
+          modulo_ordem_servico: true,
         };
 
         setModulosEmpresa({
@@ -113,6 +118,7 @@ export default function Sidebar() {
           modulo_crm: true,
           modulo_relatorios_premium: true,
           modulo_multiloja: true,
+          modulo_ordem_servico: true,
         });
 
         sessionStorage.setItem("th_usuario", JSON.stringify(usuarioFinal));
@@ -144,7 +150,7 @@ export default function Sidebar() {
         const { data: empresaBanco } = await supabase
           .from("empresas")
           .select(
-            "id,razao_social,nome_fantasia,plano,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
+            "id,razao_social,nome_fantasia,plano,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja,modulo_ordem_servico"
           )
           .eq("id", usuarioFinal.empresa_id)
           .maybeSingle();
@@ -159,6 +165,7 @@ export default function Sidebar() {
             modulo_relatorios_premium:
               empresaBanco.modulo_relatorios_premium === true,
             modulo_multiloja: empresaBanco.modulo_multiloja === true,
+            modulo_ordem_servico: empresaBanco.modulo_ordem_servico !== false,
           };
 
           setModulosEmpresa(modulosAtualizados);
@@ -177,6 +184,7 @@ export default function Sidebar() {
             modulo_relatorios_premium:
               modulosAtualizados.modulo_relatorios_premium,
             modulo_multiloja: modulosAtualizados.modulo_multiloja,
+            modulo_ordem_servico: modulosAtualizados.modulo_ordem_servico,
           };
         }
       }
@@ -261,6 +269,11 @@ export default function Sidebar() {
     return false;
   }
 
+  function temModuloOrdemServico() {
+    if (isSuperAdmin) return true;
+    return modulosEmpresa.modulo_ordem_servico !== false;
+  }
+
   function pode(modulo: string) {
     const perfil = usuario?.perfil || "";
     const perfilNormalizado = normalizarPerfil(perfil);
@@ -280,17 +293,22 @@ export default function Sidebar() {
       return [
         "dashboard",
         "clientes",
+        "equipamentos",
+        "produto_imeis",
         "produtos",
+        "servicos",
         "grupos",
         "etiquetas",
         "fornecedores",
         "estoque",
+        "ordem_servico",
         "vendas",
         "pdv",
         "orcamentos",
         "pedidos",
         "devolucoes",
         "financeiro",
+        "ordem_servico",
         "relatorios",
       ].includes(modulo);
     }
@@ -299,6 +317,7 @@ export default function Sidebar() {
       return [
         "dashboard",
         "clientes",
+        "servicos",
         "vendas",
         "pdv",
         "orcamentos",
@@ -307,15 +326,18 @@ export default function Sidebar() {
     }
 
     if (perfilNormalizado === "financeiro") {
-      return ["dashboard", "clientes", "financeiro", "relatorios"].includes(modulo);
+      return ["dashboard", "clientes", "financeiro", "ordem_servico", "relatorios"].includes(modulo);
     }
 
     if (perfilNormalizado === "estoquista") {
       return [
         "dashboard",
         "produtos",
+        "servicos",
         "grupos",
         "etiquetas",
+        "equipamentos",
+        "produto_imeis",
         "estoque",
         "relatorios",
       ].includes(modulo);
@@ -325,10 +347,12 @@ export default function Sidebar() {
       return [
         "dashboard",
         "clientes",
+        "servicos",
         "vendas",
         "pdv",
         "orcamentos",
         "pedidos",
+        "ordem_servico",
         "relatorios",
       ].includes(modulo);
     }
@@ -403,16 +427,19 @@ export default function Sidebar() {
         </div>
 
         <div className="min-w-0">
-          <h1 className="text-[29px] leading-none font-black tracking-[-0.07em] text-white drop-shadow-md">
-            cloud
+          <h1 className="text-[22px] leading-none font-black tracking-[-0.03em] text-white drop-shadow-md">
+            TH Cloud
           </h1>
+          <p className="text-[11px] text-blue-100 font-semibold leading-tight mt-1">
+            Sistema de Gestão
+          </p>
         </div>
       </div>
     );
   }
 
   const menu = (
-    <aside className="w-[280px] bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] text-white h-screen min-h-screen shadow-2xl flex flex-col relative overflow-hidden">
+    <aside className="w-[280px] bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] text-white h-screen min-h-screen shadow-2xl flex flex-col sticky top-0 relative overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-56 bg-sky-400/10 blur-3xl rounded-full -translate-y-36" />
       <div className="absolute -right-24 top-24 h-56 w-56 bg-blue-300/20 blur-3xl rounded-full" />
       <div className="absolute -left-24 bottom-24 h-60 w-60 bg-blue-500/20 blur-3xl rounded-full" />
@@ -521,16 +548,23 @@ export default function Sidebar() {
 
         {!isSuperAdmin &&
           (pode("produtos") ||
+            pode("servicos") ||
             pode("clientes") ||
+            pode("equipamentos") ||
+            pode("produto_imeis") ||
             pode("fornecedores") ||
             pode("grupos") ||
             pode("etiquetas") ||
             pode("estoque") ||
-            pode("vendas")) && <TituloSecao>Operação</TituloSecao>}
+            ((pode("ordem_servico") && temModuloOrdemServico()) ||
+            pode("vendas"))) && <TituloSecao>Operação</TituloSecao>}
 
         {!isSuperAdmin &&
           (pode("produtos") ||
+            pode("servicos") ||
             pode("clientes") ||
+            pode("equipamentos") ||
+            pode("produto_imeis") ||
             pode("fornecedores") ||
             pode("grupos") ||
             pode("etiquetas")) && (
@@ -555,6 +589,12 @@ export default function Sidebar() {
                   {pode("produtos") && (
                     <Link href="/produtos" className={classeSubLink("/produtos")}>
                       Produtos
+                    </Link>
+                  )}
+
+                  {pode("servicos") && (
+                    <Link href="/servicos" className={classeSubLink("/servicos")}>
+                      Serviços
                     </Link>
                   )}
 
@@ -584,6 +624,18 @@ export default function Sidebar() {
                       Clientes
                     </Link>
                   )}
+
+                  {pode("equipamentos") && (
+                    <Link href="/equipamentos" className={classeSubLink("/equipamentos")}>
+                      Equipamentos
+                    </Link>
+                  )}
+
+                  {pode("produto_imeis") && (
+                    <Link href="/produto-imeis" className={classeSubLink("/produto-imeis")}>
+                      Controle de IMEI
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
@@ -609,6 +661,13 @@ export default function Sidebar() {
               </div>
             )}
           </div>
+        )}
+
+        {!isSuperAdmin && pode("ordem_servico") && temModuloOrdemServico() && (
+          <Link href="/ordem-servico" className={classeLink("/ordem-servico")}>
+            <Wrench size={21} strokeWidth={2.4} />
+            Ordem de Serviço
+          </Link>
         )}
 
         {!isSuperAdmin && pode("vendas") && (
@@ -840,7 +899,7 @@ export default function Sidebar() {
         <Menu size={24} />
       </button>
 
-      <div className="hidden lg:block sticky top-0 h-screen shrink-0">{menu}</div>
+      <div className="hidden lg:block w-[280px] shrink-0 bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] min-h-screen self-stretch">{menu}</div>
 
       {mobileAberto && (
         <div className="lg:hidden fixed inset-0 z-[100]">

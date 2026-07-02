@@ -27,7 +27,7 @@ export type ConfiguracoesSistema = {
 };
 
 export const CONFIGURACOES_PADRAO: ConfiguracoesSistema = {
-  nome_sistema: "THCloud ERP",
+  nome_sistema: "Th Cloud",
   tema_cor: "#1d4ed8",
   modo_compacto: false,
   permitir_estoque_negativo: false,

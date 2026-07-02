@@ -144,7 +144,7 @@ async function gerarBackupEmpresa({
   }
 
   return {
-    sistema: "THCloud ERP",
+    sistema: "Th Cloud",
     tipo: "backup_empresa",
     versao: "1.2",
     empresa_id: empresaId,

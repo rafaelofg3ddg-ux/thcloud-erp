@@ -138,7 +138,7 @@ export default function OrcamentosPage() {
           empresa.nome_fantasia ||
           empresa.nome ||
           usuario.empresa_nome ||
-          "THCloud ERP",
+          "Th Cloud",
         razao_social:
           empresa.razao_social ||
           usuario.empresa_razao_social ||
@@ -168,7 +168,7 @@ export default function OrcamentosPage() {
       };
     } catch {
       return {
-        nome_fantasia: "THCloud ERP",
+        nome_fantasia: "Th Cloud",
         razao_social: "",
         cnpj: "",
         telefone: "",
@@ -1017,7 +1017,7 @@ export default function OrcamentosPage() {
             </div>
 
             <div class="footer">
-              Documento gerado pelo THCloud ERP • Orçamento sem valor fiscal.
+              Documento gerado pelo Th Cloud • Orçamento sem valor fiscal.
             </div>
           </main>
         </body>
@@ -1137,7 +1137,7 @@ export default function OrcamentosPage() {
       <div className="bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-8 shadow-lg mb-8 text-white">
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
           <div>
-            <p className="text-blue-100 font-bold">THCloud ERP</p>
+            <p className="text-blue-100 font-bold">Th Cloud</p>
 
             <h1 className="text-4xl font-black mt-2">Orçamentos</h1>
 

@@ -35,7 +35,7 @@ export default function BloqueadoPage() {
 
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-8">
           <p className="font-bold text-red-700">
-            Para continuar utilizando o THCloud ERP, entre em contato com o
+            Para continuar utilizando o Th Cloud, entre em contato com o
             suporte e regularize sua assinatura.
           </p>
         </div>

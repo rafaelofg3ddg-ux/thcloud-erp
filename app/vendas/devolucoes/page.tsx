@@ -698,7 +698,7 @@ export default function DevolucoesPage() {
         <body>
           <div class="center">
             <h1>COMPROVANTE DE DEVOLUÇÃO</h1>
-            <p class="small">THCloud ERP</p>
+            <p class="small">Th Cloud</p>
           </div>
 
           <hr />

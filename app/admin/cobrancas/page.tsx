@@ -63,7 +63,7 @@ type FormCobranca = {
 const FORM_VAZIO: FormCobranca = {
   id: "",
   empresa_id: "",
-  descricao: "Mensalidade THCloud ERP",
+  descricao: "Mensalidade Th Cloud",
   valor: "0",
   vencimento: "",
   data_pagamento: "",
@@ -222,7 +222,7 @@ export default function AdminCobrancasPage() {
     setForm({
       id: cobranca.id,
       empresa_id: cobranca.empresa_id || "",
-      descricao: cobranca.descricao || "Mensalidade THCloud ERP",
+      descricao: cobranca.descricao || "Mensalidade Th Cloud",
       valor: String(cobranca.valor || 0),
       vencimento: cobranca.vencimento || hojeISO(),
       data_pagamento: cobranca.data_pagamento || "",
@@ -267,7 +267,7 @@ export default function AdminCobrancasPage() {
 
     const dados = {
       empresa_id: form.empresa_id,
-      descricao: form.descricao.trim() || "Mensalidade THCloud ERP",
+      descricao: form.descricao.trim() || "Mensalidade Th Cloud",
       valor: Number(String(form.valor).replace(",", ".") || 0),
       vencimento: form.vencimento,
       data_pagamento: form.data_pagamento || null,
@@ -356,7 +356,7 @@ export default function AdminCobrancasPage() {
 
     const registros = empresasAtivas.map((empresa) => ({
       empresa_id: empresa.id,
-      descricao: `Mensalidade THCloud ERP - ${empresa.plano || "Básico"}`,
+      descricao: `Mensalidade Th Cloud - ${empresa.plano || "Básico"}`,
       valor: Number(empresa.valor_mensal || 0),
       vencimento: empresa.data_vencimento_assinatura || hojeISO(),
       status: "Aberta",

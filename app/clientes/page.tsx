@@ -189,6 +189,31 @@ export default function ClientesPage() {
     return String(valor || "").replace(/\D/g, "");
   }
 
+  function paraMaiusculo(valor: string) {
+    return String(valor || "").toLocaleUpperCase("pt-BR");
+  }
+
+  function atualizarForm(campo: keyof typeof clienteVazio, valor: string | boolean) {
+    if (typeof valor === "boolean") {
+      setForm((atual) => ({ ...atual, [campo]: valor }));
+      return;
+    }
+
+    const camposSemMaiuscula = new Set([
+      "email",
+      "limite_credito",
+      "data_nascimento",
+      "tipo_cliente",
+    ]);
+
+    setForm((atual) => ({
+      ...atual,
+      [campo]: camposSemMaiuscula.has(String(campo))
+        ? valor
+        : paraMaiusculo(valor),
+    }));
+  }
+
   function formatarMoeda(valor: number) {
     return Number(valor || 0).toLocaleString("pt-BR", {
       style: "currency",
@@ -402,11 +427,11 @@ export default function ClientesPage() {
 
       setForm((atual) => ({
         ...atual,
-        endereco: dados.logradouro || atual.endereco,
-        bairro: dados.bairro || atual.bairro,
-        cidade: dados.localidade || atual.cidade,
-        uf: dados.uf || atual.uf,
-        complemento: atual.complemento || dados.complemento || "",
+        endereco: paraMaiusculo(dados.logradouro || atual.endereco),
+        bairro: paraMaiusculo(dados.bairro || atual.bairro),
+        cidade: paraMaiusculo(dados.localidade || atual.cidade),
+        uf: paraMaiusculo(dados.uf || atual.uf),
+        complemento: paraMaiusculo(atual.complemento || dados.complemento || ""),
       }));
     } catch {
       alert("Não foi possível consultar o CEP agora.");
@@ -438,18 +463,18 @@ export default function ClientesPage() {
       setForm((atual) => ({
         ...atual,
         tipo_cliente: "juridica",
-        razao_social: dados.razao_social || atual.razao_social,
-        nome_fantasia: dados.nome_fantasia || atual.nome_fantasia,
-        nome: dados.nome_fantasia || dados.razao_social || atual.nome,
+        razao_social: paraMaiusculo(dados.razao_social || atual.razao_social),
+        nome_fantasia: paraMaiusculo(dados.nome_fantasia || atual.nome_fantasia),
+        nome: paraMaiusculo(dados.nome_fantasia || dados.razao_social || atual.nome),
         email: dados.email || atual.email,
-        telefone: dados.ddd_telefone_1 || atual.telefone,
+        telefone: paraMaiusculo(dados.ddd_telefone_1 || atual.telefone),
         cep: dados.cep || atual.cep,
-        endereco: dados.logradouro || atual.endereco,
-        numero: dados.numero || atual.numero,
-        complemento: dados.complemento || atual.complemento,
-        bairro: dados.bairro || atual.bairro,
-        cidade: dados.municipio || atual.cidade,
-        uf: dados.uf || atual.uf,
+        endereco: paraMaiusculo(dados.logradouro || atual.endereco),
+        numero: paraMaiusculo(dados.numero || atual.numero),
+        complemento: paraMaiusculo(dados.complemento || atual.complemento),
+        bairro: paraMaiusculo(dados.bairro || atual.bairro),
+        cidade: paraMaiusculo(dados.municipio || atual.cidade),
+        uf: paraMaiusculo(dados.uf || atual.uf),
       }));
     } catch {
       alert("Não foi possível consultar o CNPJ agora.");
@@ -595,12 +620,15 @@ export default function ClientesPage() {
         <h2 className="text-2xl font-black text-slate-900 mb-5">Filtros</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <input
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Pesquisar nome, CPF/CNPJ, telefone, cidade..."
-            className="md:col-span-3 border border-slate-300 p-3 rounded-2xl text-slate-900 font-medium"
-          />
+          <div className="md:col-span-3 flex overflow-hidden rounded-2xl border border-slate-300 bg-white focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100">
+            <div className="flex w-12 items-center justify-center text-slate-500">🔍</div>
+            <input
+              value={busca}
+              onChange={(e) => setBusca(paraMaiusculo(e.target.value))}
+              placeholder="PESQUISAR NOME, CPF/CNPJ, TELEFONE, CIDADE..."
+              className="w-full p-3 font-medium text-slate-900 outline-none uppercase"
+            />
+          </div>
 
           <select
             value={filtroTipo}
@@ -773,7 +801,7 @@ export default function ClientesPage() {
                   <Campo titulo="Tipo">
                     <select
                       value={form.tipo_cliente}
-                      onChange={(e) => setForm({ ...form, tipo_cliente: e.target.value })}
+                      onChange={(e) => atualizarForm("tipo_cliente", e.target.value)}
                       className="input"
                     >
                       <option value="fisica">Pessoa Física</option>
@@ -785,7 +813,7 @@ export default function ClientesPage() {
                     <div className="flex gap-2">
                       <input
                         value={form.cpf_cnpj}
-                        onChange={(e) => setForm({ ...form, cpf_cnpj: e.target.value })}
+                        onChange={(e) => atualizarForm("cpf_cnpj", e.target.value)}
                         placeholder={form.tipo_cliente === "juridica" ? "CNPJ" : "CPF"}
                         className="input"
                       />
@@ -807,7 +835,7 @@ export default function ClientesPage() {
                       <Campo titulo="Nome completo" className="md:col-span-2">
                         <input
                           value={form.nome}
-                          onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                          onChange={(e) => atualizarForm("nome", e.target.value)}
                           placeholder="Nome completo"
                           className="input"
                         />
@@ -816,7 +844,7 @@ export default function ClientesPage() {
                       <Campo titulo="RG">
                         <input
                           value={form.rg_ie}
-                          onChange={(e) => setForm({ ...form, rg_ie: e.target.value })}
+                          onChange={(e) => atualizarForm("rg_ie", e.target.value)}
                           placeholder="RG"
                           className="input"
                         />
@@ -838,7 +866,7 @@ export default function ClientesPage() {
                       <Campo titulo="Razão Social" className="md:col-span-2">
                         <input
                           value={form.razao_social}
-                          onChange={(e) => setForm({ ...form, razao_social: e.target.value })}
+                          onChange={(e) => atualizarForm("razao_social", e.target.value)}
                           placeholder="Razão social"
                           className="input"
                         />
@@ -847,7 +875,7 @@ export default function ClientesPage() {
                       <Campo titulo="Nome Fantasia">
                         <input
                           value={form.nome_fantasia}
-                          onChange={(e) => setForm({ ...form, nome_fantasia: e.target.value })}
+                          onChange={(e) => atualizarForm("nome_fantasia", e.target.value)}
                           placeholder="Nome fantasia"
                           className="input"
                         />
@@ -856,7 +884,7 @@ export default function ClientesPage() {
                       <Campo titulo="Inscrição Estadual">
                         <input
                           value={form.inscricao_estadual}
-                          onChange={(e) => setForm({ ...form, inscricao_estadual: e.target.value })}
+                          onChange={(e) => atualizarForm("inscricao_estadual", e.target.value)}
                           placeholder="Inscrição estadual"
                           className="input"
                         />
@@ -875,7 +903,7 @@ export default function ClientesPage() {
                   <Campo titulo="WhatsApp">
                     <input
                       value={form.whatsapp}
-                      onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
+                      onChange={(e) => atualizarForm("whatsapp", e.target.value)}
                       placeholder="WhatsApp"
                       className="input"
                     />
@@ -884,7 +912,7 @@ export default function ClientesPage() {
                   <Campo titulo="Telefone">
                     <input
                       value={form.telefone}
-                      onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                      onChange={(e) => atualizarForm("telefone", e.target.value)}
                       placeholder="Telefone"
                       className="input"
                     />
@@ -893,7 +921,7 @@ export default function ClientesPage() {
                   <Campo titulo="E-mail">
                     <input
                       value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      onChange={(e) => atualizarForm("email", e.target.value)}
                       placeholder="E-mail"
                       className="input"
                     />
@@ -911,7 +939,7 @@ export default function ClientesPage() {
                     <div className="flex gap-2">
                       <input
                         value={form.cep}
-                        onChange={(e) => setForm({ ...form, cep: e.target.value })}
+                        onChange={(e) => atualizarForm("cep", e.target.value)}
                         placeholder="CEP"
                         className="input"
                       />
@@ -929,7 +957,7 @@ export default function ClientesPage() {
                   <Campo titulo="Endereço" className="md:col-span-3">
                     <input
                       value={form.endereco}
-                      onChange={(e) => setForm({ ...form, endereco: e.target.value })}
+                      onChange={(e) => atualizarForm("endereco", e.target.value)}
                       placeholder="Rua, avenida..."
                       className="input"
                     />
@@ -938,7 +966,7 @@ export default function ClientesPage() {
                   <Campo titulo="Número">
                     <input
                       value={form.numero}
-                      onChange={(e) => setForm({ ...form, numero: e.target.value })}
+                      onChange={(e) => atualizarForm("numero", e.target.value)}
                       placeholder="Nº"
                       className="input"
                     />
@@ -947,7 +975,7 @@ export default function ClientesPage() {
                   <Campo titulo="Complemento">
                     <input
                       value={form.complemento}
-                      onChange={(e) => setForm({ ...form, complemento: e.target.value })}
+                      onChange={(e) => atualizarForm("complemento", e.target.value)}
                       placeholder="Complemento"
                       className="input"
                     />
@@ -956,7 +984,7 @@ export default function ClientesPage() {
                   <Campo titulo="Bairro" className="md:col-span-2">
                     <input
                       value={form.bairro}
-                      onChange={(e) => setForm({ ...form, bairro: e.target.value })}
+                      onChange={(e) => atualizarForm("bairro", e.target.value)}
                       placeholder="Bairro"
                       className="input"
                     />
@@ -965,7 +993,7 @@ export default function ClientesPage() {
                   <Campo titulo="Cidade" className="md:col-span-3">
                     <input
                       value={form.cidade}
-                      onChange={(e) => setForm({ ...form, cidade: e.target.value })}
+                      onChange={(e) => atualizarForm("cidade", e.target.value)}
                       placeholder="Cidade"
                       className="input"
                     />
@@ -974,7 +1002,7 @@ export default function ClientesPage() {
                   <Campo titulo="UF">
                     <input
                       value={form.uf}
-                      onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase().slice(0, 2) })}
+                      onChange={(e) => atualizarForm("uf", e.target.value.slice(0, 2))}
                       placeholder="UF"
                       className="input"
                     />
@@ -991,7 +1019,7 @@ export default function ClientesPage() {
                   <Campo titulo="Limite de Crédito">
                     <input
                       value={form.limite_credito}
-                      onChange={(e) => setForm({ ...form, limite_credito: e.target.value })}
+                      onChange={(e) => atualizarForm("limite_credito", e.target.value)}
                       placeholder="0,00"
                       className="input"
                     />
@@ -1000,7 +1028,7 @@ export default function ClientesPage() {
                   <Campo titulo="Status">
                     <select
                       value={form.ativo ? "ativo" : "inativo"}
-                      onChange={(e) => setForm({ ...form, ativo: e.target.value === "ativo" })}
+                      onChange={(e) => atualizarForm("ativo", e.target.value === "ativo")}
                       className="input"
                     >
                       <option value="ativo">Ativo</option>
@@ -1011,7 +1039,7 @@ export default function ClientesPage() {
                   <Campo titulo="Observação" className="md:col-span-2">
                     <input
                       value={form.observacao}
-                      onChange={(e) => setForm({ ...form, observacao: e.target.value })}
+                      onChange={(e) => atualizarForm("observacao", e.target.value)}
                       placeholder="Observações comerciais"
                       className="input"
                     />
@@ -1039,6 +1067,7 @@ export default function ClientesPage() {
             <style jsx global>{`
               .input {
                 width: 100%;
+                text-transform: uppercase;
                 border: 1px solid rgb(203 213 225);
                 border-radius: 0.75rem;
                 padding: 0.75rem;

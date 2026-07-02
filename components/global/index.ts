@@ -1,0 +1,12 @@
+export { default as THSystemStandards } from "./THSystemStandards";
+export { default as THButton } from "./THButton";
+export { default as THModal } from "./THModal";
+export { default as THSelect } from "./THSelect";
+export { default as THSearch } from "./THSearch";
+export { default as THCard } from "./THCard";
+export { default as THPage } from "./THPage";
+export { default as THStatus } from "./THStatus";
+export { default as THLoading } from "./THLoading";
+export { default as THConfirm } from "./THConfirm";
+export { THInput, THTextarea } from "./THInput";
+export { THMoney, THDate, formatarMoeda, formatarData } from "./THFormat";

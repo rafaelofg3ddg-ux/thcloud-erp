@@ -486,7 +486,7 @@ export default function RelatorioLucratividadePage() {
                 </h2>
 
                 <p className="text-sm text-slate-500 font-semibold">
-                  ERP Inteligente
+                  Gestão Inteligente
                 </p>
               </div>
             </div>
@@ -525,7 +525,7 @@ export default function RelatorioLucratividadePage() {
               <table className="w-full text-sm">
                 <tbody>
                   <LinhaInfo titulo="Empresa" valor={empresaNome} />
-                  <LinhaInfo titulo="Sistema" valor="THCloud ERP" />
+                  <LinhaInfo titulo="Sistema" valor="Th Cloud" />
                   <LinhaInfo titulo="Site" valor="thcloud.com.br" />
                   <LinhaInfo titulo="Responsável" valor={usuarioNome} />
                 </tbody>
@@ -710,7 +710,7 @@ export default function RelatorioLucratividadePage() {
               <p className="font-black text-blue-800">Observação</p>
 
               <p className="text-sm text-slate-700 mt-1">
-                Relatório gerado automaticamente pelo THCloud ERP. O custo é calculado
+                Relatório gerado automaticamente pelo Th Cloud. O custo é calculado
                 multiplicando a quantidade vendida pelo preço de custo atual do cadastro
                 do produto da empresa logada. A receita usa o subtotal registrado no item
                 da venda.
@@ -723,7 +723,7 @@ export default function RelatorioLucratividadePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center text-xs text-slate-700">
             <div>
               <p className="font-bold text-slate-900">
-                THCloud ERP - Sistema de Gestão Empresarial
+                Th Cloud - Sistema de Gestão
               </p>
             </div>
 

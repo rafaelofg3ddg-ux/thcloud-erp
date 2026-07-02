@@ -37,6 +37,7 @@ type Empresa = {
   modulo_crm: boolean | null;
   modulo_relatorios_premium: boolean | null;
   modulo_multiloja: boolean | null;
+  modulo_ordem_servico: boolean | null;
 };
 
 type FormAssinatura = {
@@ -54,6 +55,7 @@ type FormAssinatura = {
   modulo_crm: boolean;
   modulo_relatorios_premium: boolean;
   modulo_multiloja: boolean;
+  modulo_ordem_servico: boolean;
 };
 
 const FORM_VAZIO: FormAssinatura = {
@@ -71,6 +73,7 @@ const FORM_VAZIO: FormAssinatura = {
   modulo_crm: false,
   modulo_relatorios_premium: false,
   modulo_multiloja: false,
+  modulo_ordem_servico: true,
 };
 
 export default function AdminAssinaturasPage() {
@@ -177,7 +180,7 @@ export default function AdminAssinaturasPage() {
     const { data, error } = await supabase
       .from("empresas")
       .select(
-        "id,nome_fantasia,razao_social,cnpj,email,telefone,ativo,plano,valor_mensal,status_assinatura,data_inicio_assinatura,data_vencimento_assinatura,created_at,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja"
+        "id,nome_fantasia,razao_social,cnpj,email,telefone,ativo,plano,valor_mensal,status_assinatura,data_inicio_assinatura,data_vencimento_assinatura,created_at,modulo_fiscal,modulo_whatsapp,modulo_delivery,modulo_crm,modulo_relatorios_premium,modulo_multiloja,modulo_ordem_servico"
       )
       .order("data_vencimento_assinatura", { ascending: true, nullsFirst: false });
 
@@ -243,6 +246,7 @@ export default function AdminAssinaturasPage() {
       modulo_crm: empresa.modulo_crm === true,
       modulo_relatorios_premium: empresa.modulo_relatorios_premium === true,
       modulo_multiloja: empresa.modulo_multiloja === true,
+      modulo_ordem_servico: empresa.modulo_ordem_servico !== false,
     });
 
     setModalAberto(true);
@@ -278,6 +282,7 @@ export default function AdminAssinaturasPage() {
         modulo_crm: form.modulo_crm,
         modulo_relatorios_premium: form.modulo_relatorios_premium,
         modulo_multiloja: form.modulo_multiloja,
+        modulo_ordem_servico: form.modulo_ordem_servico,
         updated_at: new Date().toISOString(),
       })
       .eq("id", form.id);
@@ -655,6 +660,7 @@ export default function AdminAssinaturasPage() {
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <CheckModulo label="Ordem de Serviço" checked={form.modulo_ordem_servico} onChange={(v) => alterarCampo("modulo_ordem_servico", v)} />
                   <CheckModulo label="Fiscal" checked={form.modulo_fiscal} onChange={(v) => alterarCampo("modulo_fiscal", v)} />
                   <CheckModulo label="WhatsApp" checked={form.modulo_whatsapp} onChange={(v) => alterarCampo("modulo_whatsapp", v)} />
                   <CheckModulo label="Delivery" checked={form.modulo_delivery} onChange={(v) => alterarCampo("modulo_delivery", v)} />

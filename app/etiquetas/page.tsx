@@ -177,9 +177,9 @@ export default function EtiquetasPage() {
   function empresaNome() {
     try {
       const empresa = JSON.parse(localStorage.getItem("th_empresa") || "{}");
-      return empresa?.nome_fantasia || empresa?.razao_social || "THCloud ERP";
+      return empresa?.nome_fantasia || empresa?.razao_social || "Th Cloud";
     } catch {
-      return "THCloud ERP";
+      return "Th Cloud";
     }
   }
 
@@ -779,7 +779,7 @@ export default function EtiquetasPage() {
       <div className="bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-8 shadow-lg mb-8 text-white">
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
           <div>
-            <p className="text-blue-100 font-bold">THCloud ERP</p>
+            <p className="text-blue-100 font-bold">Th Cloud</p>
             <h1 className="text-4xl font-black mt-2">Etiquetas de Produtos</h1>
             <p className="text-blue-100 mt-2 max-w-4xl">
               Crie modelos de etiquetas, escolha quais informações aparecem, salve configurações e imprima produtos com preço, código e barras.

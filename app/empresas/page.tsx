@@ -331,7 +331,7 @@ export default function EmpresasPage() {
   return (
     <div className="p-8 bg-slate-100 min-h-screen">
       <div className="bg-blue-800 rounded-3xl p-8 text-white mb-8 shadow-lg">
-        <p className="font-black text-blue-100">THCloud ERP</p>
+        <p className="font-black text-blue-100">Th Cloud</p>
 
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
           <div>

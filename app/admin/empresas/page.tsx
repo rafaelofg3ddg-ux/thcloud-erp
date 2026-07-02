@@ -747,7 +747,7 @@ export default function AdminEmpresasPage() {
             </h1>
 
             <p className="mt-2 text-blue-100 max-w-4xl">
-              Cadastre, edite, bloqueie, libere e acompanhe seus clientes do THCloud ERP.
+              Cadastre, edite, bloqueie, libere e acompanhe seus clientes do Th Cloud.
             </p>
           </div>
 

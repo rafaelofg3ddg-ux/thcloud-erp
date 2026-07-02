@@ -196,7 +196,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white grid grid-cols-1 lg:grid-cols-2">
+    <main data-no-uppercase="true" className="min-h-screen bg-white grid grid-cols-1 lg:grid-cols-2">
       <section className="relative hidden lg:flex min-h-screen overflow-hidden bg-slate-950">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.55),_transparent_35%),linear-gradient(135deg,_rgba(2,6,23,0.92),_rgba(8,47,73,0.78))]" />
         <div className="absolute inset-0 opacity-20"><div className="absolute left-20 top-20 h-72 w-72 rounded-full bg-blue-500 blur-3xl" /><div className="absolute bottom-16 right-24 h-80 w-80 rounded-full bg-cyan-400 blur-3xl" /></div>
@@ -235,7 +235,7 @@ export default function LoginPage() {
               <span className="mb-2 block text-sm font-black text-slate-700">Usuário</span>
               <div className="flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-600/10">
                 <UserRound size={20} className="text-slate-400" />
-                <input value={login} onChange={(e) => setLogin(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") entrar(); }} className="w-full border-0 bg-transparent font-bold text-slate-900 outline-none" placeholder="Digite seu usuário ou e-mail" autoFocus />
+                <input value={login} onChange={(e) => setLogin(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") entrar(); }} className="w-full border-0 bg-transparent font-bold text-slate-900 outline-none th-no-uppercase" placeholder="Digite seu usuário ou e-mail" autoComplete="username" inputMode="email" data-no-uppercase="true" autoFocus />
               </div>
             </label>
 
@@ -243,7 +243,7 @@ export default function LoginPage() {
               <span className="mb-2 block text-sm font-black text-slate-700">Senha</span>
               <div className="flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-600/10">
                 <Lock size={20} className="text-slate-400" />
-                <input type={mostrarSenha ? "text" : "password"} value={senha} onChange={(e) => setSenha(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") entrar(); }} className="w-full border-0 bg-transparent font-bold text-slate-900 outline-none" placeholder="Digite sua senha" />
+                <input type={mostrarSenha ? "text" : "password"} value={senha} onChange={(e) => setSenha(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") entrar(); }} className="w-full border-0 bg-transparent font-bold text-slate-900 outline-none th-no-uppercase" placeholder="Digite sua senha" autoComplete="current-password" data-no-uppercase="true" />
                 <button type="button" onClick={() => setMostrarSenha(!mostrarSenha)} className="text-slate-400 hover:text-slate-700">{mostrarSenha ? <EyeOff size={20} /> : <Eye size={20} />}</button>
               </div>
             </label>

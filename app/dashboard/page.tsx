@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
+  CalendarDays,
   CreditCard,
   Package,
   RefreshCw,
@@ -100,7 +101,8 @@ export default function DashboardPage() {
     produtosBaixo: [],
   });
 
-  const [empresaNome, setEmpresaNome] = useState("THCloud ERP");
+  const [empresaNome, setEmpresaNome] = useState("Th Cloud");
+  const [usuarioNome, setUsuarioNome] = useState("Usuário");
   const [carregando, setCarregando] = useState(false);
 
   function empresaAtualId() {
@@ -114,6 +116,7 @@ export default function DashboardPage() {
 
         if (usuario.empresa_id) return usuario.empresa_id;
         if (usuario.empresa?.id) return usuario.empresa.id;
+        if (usuario.nome) setUsuarioNome(usuario.nome);
         if (usuario.empresa_nome) setEmpresaNome(usuario.empresa_nome);
       }
 
@@ -158,6 +161,30 @@ export default function DashboardPage() {
 
   function somenteData(data: Date) {
     return data.toISOString().split("T")[0];
+  }
+
+  function hojeExtenso() {
+    const hoje = new Date();
+
+    return hoje.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  function horaAtual() {
+    return new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+
+  function nomeCurto(nome: string) {
+    const partes = String(nome || "").trim().split(" ").filter(Boolean);
+    return partes.length > 0 ? partes[0] : "Usuário";
   }
 
   function nomeDataCurta(dataIso: string) {
@@ -367,37 +394,53 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto bg-slate-50 min-h-screen px-3 py-4 lg:px-5 lg:py-5 overflow-x-hidden">
-      <div className="bg-gradient-to-r from-blue-800 to-blue-600 rounded-3xl p-4 lg:p-5 text-white shadow-lg mb-4">
+    <div className="w-full max-w-[1700px] mx-auto bg-slate-50 min-h-screen px-3 py-5 lg:px-6 lg:py-6 overflow-x-hidden">
+      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-5">
+        <div>
+          <p className="text-sm font-bold text-blue-700">Th Cloud</p>
+          <h1 className="text-2xl lg:text-3xl font-black text-slate-950 tracking-tight">
+            Bem-vindo, {nomeCurto(usuarioNome)}! 👋
+          </h1>
+          <p className="text-slate-500 mt-1">
+            Tenha um excelente dia e ótimos negócios.
+          </p>
+        </div>
+
+        <div className="text-left xl:text-right">
+          <p className="text-sm text-slate-500 flex xl:justify-end items-center gap-2">
+            <CalendarDays size={17} className="text-blue-700" />
+            Hoje é {hojeExtenso()}
+          </p>
+          <p className="text-3xl font-black text-slate-950 mt-1">{horaAtual()}</p>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 rounded-3xl p-5 lg:p-7 text-white shadow-xl shadow-blue-900/20 mb-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <p className="font-bold text-sm">{empresaNome || "THCloud ERP"}</p>
+          <div className="flex items-start gap-4">
+            <div className="hidden sm:flex h-14 w-14 rounded-3xl bg-white/15 border border-white/20 items-center justify-center shadow-lg">
+              <BarChart3 size={28} />
+            </div>
 
-            <h1 className="text-2xl lg:text-3xl font-black mt-2">
-              Dashboard Executivo
-            </h1>
+            <div>
+              <p className="font-black text-xl lg:text-2xl">
+                Visão geral do seu negócio
+              </p>
 
-            <p className="text-blue-100 mt-2 max-w-3xl text-sm lg:text-base">
-              Visão gerencial isolada por empresa com faturamento, vendas,
-              estoque, contas, clientes e indicadores estratégicos.
-            </p>
+              <p className="text-blue-100 mt-2 max-w-3xl text-sm lg:text-base">
+                Acompanhe o desempenho da sua empresa em tempo real com vendas, estoque, financeiro e indicadores estratégicos.
+              </p>
+            </div>
           </div>
 
-          <div className="text-left lg:text-right">
-            <p className="text-xs text-blue-100">Atualizado em</p>
-            <p className="text-lg lg:text-xl font-black">
-              {dados.atualizacao || "-"}
-            </p>
-
-            <button
-              onClick={carregarDashboard}
-              disabled={carregando}
-              className="mt-3 bg-white text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-2xl font-black inline-flex items-center gap-2 disabled:opacity-60 text-sm"
-            >
-              <RefreshCw size={16} className={carregando ? "animate-spin" : ""} />
-              Atualizar
-            </button>
-          </div>
+          <button
+            onClick={carregarDashboard}
+            disabled={carregando}
+            className="bg-white/10 border border-white/30 text-white hover:bg-white/20 px-5 py-3 rounded-2xl font-black inline-flex items-center gap-2 disabled:opacity-60 text-sm self-start lg:self-center"
+          >
+            <RefreshCw size={16} className={carregando ? "animate-spin" : ""} />
+            Atualizar dados
+          </button>
         </div>
       </div>
 

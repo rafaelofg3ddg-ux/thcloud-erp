@@ -116,7 +116,7 @@ export async function gerarPDFPadrao(
           <img src="${logo}" class="logo" />
 
           <div class="empresa">
-            <h1>${empresa?.razao_social || empresa?.nome_fantasia || "THCloud ERP"}</h1>
+            <h1>${empresa?.razao_social || empresa?.nome_fantasia || "Th Cloud"}</h1>
 
             <p><strong>Nome Fantasia:</strong> ${empresa?.nome_fantasia || "-"}</p>
             <p><strong>CNPJ/CPF:</strong> ${empresa?.cnpj || empresa?.cpf || "-"}</p>
@@ -166,7 +166,7 @@ export async function gerarPDFPadrao(
         </table>
 
         <div class="rodape">
-          <span>Relatório gerado automaticamente pelo THCloud ERP</span>
+          <span>Relatório gerado automaticamente pelo Th Cloud</span>
           <span>${new Date().toLocaleDateString("pt-BR")}</span>
         </div>
 

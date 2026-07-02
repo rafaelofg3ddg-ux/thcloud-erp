@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AppShell from "../components/AppShell";
+import { THSystemStandards } from "../components/global";
 
 export const metadata: Metadata = {
   title: "Th Cloud",
@@ -23,7 +24,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body>
-        <AppShell>{children}</AppShell>
+        <THSystemStandards>
+          <AppShell>{children}</AppShell>
+        </THSystemStandards>
       </body>
     </html>
   );

@@ -190,7 +190,7 @@ export default function SaidaEstoquePage() {
     setSalvando(true);
 
     /*
-      PADRÃO CORRETO DO THCloud ERP:
+      PADRÃO CORRETO DO Th Cloud:
       Esta tela NÃO altera produtos.qtd_atual diretamente.
       Ela apenas registra a movimentação de saída.
       O banco/trigger é responsável por atualizar o saldo do produto.

@@ -226,7 +226,7 @@ export default function RelatorioClientesPage() {
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
           <div>
             <p className="text-blue-100 font-bold">
-              THCloud ERP
+              Th Cloud
             </p>
 
             <h1 className="text-4xl font-black mt-2">

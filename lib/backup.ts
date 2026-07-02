@@ -7,7 +7,7 @@ export type BackupTabela = {
 };
 
 export type BackupCompleto = {
-  sistema: "THCloud ERP";
+  sistema: "Th Cloud";
   tipo: "backup_empresa";
   versao: "1.2";
   empresa_id: string;
@@ -126,8 +126,8 @@ export function lerArquivoJson(file: File): Promise<BackupCompleto> {
         const conteudo = String(reader.result || "");
         const json = JSON.parse(conteudo);
 
-        if (json?.sistema !== "THCloud ERP" || json?.tipo !== "backup_empresa") {
-          reject(new Error("Arquivo inválido. Selecione um backup gerado pelo THCloud ERP."));
+        if (json?.sistema !== "Th Cloud" || json?.tipo !== "backup_empresa") {
+          reject(new Error("Arquivo inválido. Selecione um backup gerado pelo Th Cloud."));
           return;
         }
 
@@ -192,7 +192,7 @@ export async function gerarBackupEmpresa({
   }
 
   return {
-    sistema: "THCloud ERP",
+    sistema: "Th Cloud",
     tipo: "backup_empresa",
     versao: "1.2",
     empresa_id: empresaId,
@@ -325,7 +325,7 @@ export async function baixarBackupDaNuvem({
   const texto = await data.text();
   const backup = JSON.parse(texto) as BackupCompleto;
 
-  if (backup?.sistema !== "THCloud ERP" || backup?.tipo !== "backup_empresa") {
+  if (backup?.sistema !== "Th Cloud" || backup?.tipo !== "backup_empresa") {
     throw new Error("Arquivo da nuvem inválido.");
   }
 

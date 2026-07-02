@@ -285,7 +285,7 @@ export default function RelatorioDREPage() {
               <div>
                 <h2 className="text-2xl font-black text-blue-800">THCloud</h2>
                 <p className="text-sm text-slate-500 font-semibold">
-                  ERP Inteligente
+                  Gestão Inteligente
                 </p>
               </div>
             </div>
@@ -315,7 +315,7 @@ export default function RelatorioDREPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <BoxInfo titulo="DADOS DA EMPRESA">
               <LinhaInfo titulo="Empresa" valor="TH Gestão" />
-              <LinhaInfo titulo="Sistema" valor="THCloud ERP" />
+              <LinhaInfo titulo="Sistema" valor="Th Cloud" />
               <LinhaInfo titulo="Site" valor="thcloud.com.br" />
               <LinhaInfo titulo="Responsável" valor="Administrador" />
             </BoxInfo>
@@ -491,7 +491,7 @@ function Rodape() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center text-xs text-slate-700">
         <div>
           <p className="font-bold text-slate-900">
-            THCloud ERP - Sistema de Gestão Empresarial
+            Th Cloud - Sistema de Gestão
           </p>
         </div>
         <div className="text-center">
