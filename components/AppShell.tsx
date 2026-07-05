@@ -158,13 +158,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   function rotaSiteInstitucional() {
-    return pathname === "/";
+    return pathname === "/" || pathname === "/area-cliente";
   }
 
   function rotaLivre() {
     return (
       pathname === "/" ||
       pathname === "/login" ||
+      pathname === "/area-cliente" ||
       pathname === "/bloqueado" ||
       pathname === "/onboarding" ||
       pathname?.startsWith("/onboarding")
@@ -283,6 +284,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (
     pathname === "/" ||
     pathname === "/login" ||
+    pathname === "/area-cliente" ||
     pathname === "/onboarding" ||
     pathname?.startsWith("/onboarding") ||
     pathname === "/bloqueado"

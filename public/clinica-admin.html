@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<!--
+  =========================================================
+  SUPER ADMIN — Th Clínica (visão da plataforma)
+  =========================================================
+  COMO USAR:
+  1. Dê dois cliques neste arquivo para abrir no navegador
+  2. Entre com o e-mail que você tornou super admin no SQL
+     (thclinica@thgestao.com, ou o que você configurou)
+  3. Aqui você vê e gerencia TODAS as clínicas cadastradas na
+     plataforma — planos, status de assinatura, período de teste
+
+  Este arquivo é separado do sistema.html de propósito: ali
+  dentro cada admin só vê a própria clínica; aqui é a visão de
+  "dono do negócio", olhando para todos os seus clientes.
+
+  Este arquivo já está TOTALMENTE PRONTO. Não precisa editar
+  nada — a URL e a chave do seu projeto Supabase já estão
+  preenchidas abaixo (as mesmas dos outros arquivos).
+  =========================================================
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Th Clínica — Super Admin</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23123549'/%3E%3Ctext x='32' y='40' font-family='Arial, sans-serif' font-size='22' font-weight='700' fill='white' text-anchor='middle'%3ESA%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --azul: #1B4B66; --azul-claro: #2D7A9A; --azul-escuro: #123549; --fundo: #F5F8F9;
+    --texto: #1C2B33; --texto-suave: #5A6B72; --erro: #B3432B;
+    --sucesso: #2F6F4E; --branco: #FFFFFF; --borda: #DCE4E6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--fundo); font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif; color: var(--texto); }
+
+  #tela-login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .cartao-login { background: var(--branco); width: 100%; max-width: 380px; padding: 40px 36px; border-radius: 14px; box-shadow: 0 8px 28px rgba(27, 75, 102, 0.12); border: 1px solid var(--borda); }
+  .marca { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+  .marca-icone { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #333, #666); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 13px; }
+  .marca-texto { font-size: 15px; font-weight: 600; color: var(--azul); }
+  h1 { font-size: 21px; margin: 0 0 6px 0; }
+  .subtitulo { font-size: 13.5px; color: var(--texto-suave); margin: 0 0 26px 0; }
+  label { display: block; font-size: 12.5px; font-weight: 600; color: var(--texto-suave); margin-bottom: 6px; margin-top: 16px; }
+  input, select { width: 100%; padding: 11px 13px; border: 1px solid var(--borda); border-radius: 8px; font-size: 14.5px; color: var(--texto); outline: none; background: white; }
+  input:focus, select:focus { border-color: var(--azul-claro); }
+  button { padding: 9px 16px; background: var(--azul); color: white; border: none; border-radius: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  button:hover { background: var(--azul-claro); }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .mensagem-erro { margin-top: 14px; font-size: 13px; color: var(--erro); display: none; }
+  .mensagem-sucesso { margin-top: 14px; font-size: 13px; color: var(--sucesso); display: none; }
+
+  #app { display: none; }
+  .topo { background: var(--azul-escuro); color: white; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .topo .marca-texto { color: white; font-size: 16px; }
+  .topo .marca-icone { background: rgba(255,255,255,0.15); }
+  .botao-sair { background: rgba(255,255,255,0.12); color: white; border: none; font-size: 13px; padding: 8px 14px; }
+  .botao-sair:hover { background: rgba(255,255,255,0.2); }
+
+  .conteudo { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+  .conteudo h2 { font-size: 19px; margin: 0 0 4px 0; }
+  .conteudo .descricao { font-size: 13.5px; color: var(--texto-suave); margin: 0 0 24px 0; }
+
+  .resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .cartao-resumo { background: var(--branco); border: 1px solid var(--borda); border-radius: 12px; padding: 18px 20px; }
+  .cartao-resumo .rotulo { font-size: 12px; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+  .cartao-resumo .valor { font-size: 24px; font-weight: 700; margin-top: 6px; }
+
+  .painel { background: var(--branco); border: 1px solid var(--borda); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+  .painel h3 { font-size: 15px; margin: 0 0 4px 0; }
+  .painel .painel-descricao { font-size: 13px; color: var(--texto-suave); margin: 0 0 16px 0; }
+  .grade-formulario { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px 16px; }
+  .acoes-formulario { margin-top: 18px; display: flex; align-items: center; gap: 12px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; font-size: 13.5px; border-bottom: 1px solid var(--borda); vertical-align: middle; }
+  th { color: var(--texto-suave); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .vazio { text-align: center; color: var(--texto-suave); padding: 24px; font-size: 13.5px; }
+
+  .selo-status { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .selo-trial { background: #FFF3E0; color: #B3742B; }
+  .selo-ativo { background: #E6F0EC; color: var(--sucesso); }
+  .selo-suspenso, .selo-cancelado { background: #FBEAE6; color: var(--erro); }
+
+  select.select-inline { padding: 5px 8px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+  <!-- ===================== TELA DE LOGIN ===================== -->
+  <div id="tela-login-wrap">
+    <div class="cartao-login">
+      <div class="marca">
+        <div class="marca-icone">SA</div>
+        <div class="marca-texto">Th Clínica — Super Admin</div>
+      </div>
+      <h1>Acesso restrito</h1>
+      <p class="subtitulo">Área exclusiva para administração da plataforma.</p>
+      <label for="campo-email">E-mail</label>
+      <input type="email" id="campo-email" placeholder="seu-email@exemplo.com" autocomplete="username">
+      <label for="campo-senha">Senha</label>
+      <input type="password" id="campo-senha" placeholder="Sua senha" autocomplete="current-password">
+      <button id="botao-entrar" style="width:100%; margin-top:24px;">Entrar</button>
+      <div class="mensagem-erro" id="mensagem-erro-login"></div>
+      <p style="text-align:center; margin-top:20px; font-size:11.5px; color:var(--texto-suave);">
+        Th Sistemas · <a href="mailto:thcloudsistemas@gmail.com" style="color:var(--texto-suave);">thcloudsistemas@gmail.com</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ===================== APP (SUPER ADMIN) ===================== -->
+  <div id="app">
+    <div class="topo">
+      <div class="marca">
+        <div class="marca-icone">SA</div>
+        <div class="marca-texto">Super Admin — Th Clínica</div>
+      </div>
+      <button class="botao-sair" id="botao-sair">Sair</button>
+    </div>
+
+    <div class="conteudo">
+      <h2>Visão geral da plataforma</h2>
+      <p class="descricao">Todas as clínicas cadastradas, independente de qual clínica você usa no dia a dia.</p>
+
+      <div class="resumo">
+        <div class="cartao-resumo"><div class="rotulo">Total de clínicas</div><div class="valor" id="sa-total-clinicas">—</div></div>
+        <div class="cartao-resumo"><div class="rotulo">Em teste (trial)</div><div class="valor" id="sa-total-trial">—</div></div>
+        <div class="cartao-resumo"><div class="rotulo">Ativas</div><div class="valor" id="sa-total-ativas">—</div></div>
+        <div class="cartao-resumo"><div class="rotulo">Suspensas</div><div class="valor" id="sa-total-suspensas">—</div></div>
+      </div>
+
+      <div class="painel">
+        <h3>Clínicas cadastradas</h3>
+        <table>
+          <thead><tr><th>Clínica</th><th>Criada em</th><th>Status</th><th>Trial até</th><th>Plano</th><th></th></tr></thead>
+          <tbody id="corpo-tabela-clinicas"></tbody>
+        </table>
+        <div class="vazio" id="sa-mensagem-vazia" style="display:none;">Nenhuma clínica cadastrada ainda.</div>
+      </div>
+
+      <div class="painel">
+        <h3>Planos</h3>
+        <p class="painel-descricao">Edite os planos disponíveis para as clínicas contratarem.</p>
+        <div class="grade-formulario">
+          <div><label for="pl-nome">Nome do plano</label><input type="text" id="pl-nome" placeholder="Ex: Starter"></div>
+          <div><label for="pl-limite-usuarios">Limite de usuários</label><input type="number" id="pl-limite-usuarios" placeholder="Vazio = ilimitado"></div>
+          <div><label for="pl-limite-pacientes">Limite de pacientes</label><input type="number" id="pl-limite-pacientes" placeholder="Vazio = ilimitado"></div>
+          <div><label for="pl-preco">Preço mensal (R$)</label><input type="number" id="pl-preco" step="0.01" placeholder="0,00"></div>
+        </div>
+        <div class="acoes-formulario">
+          <button id="botao-salvar-plano">Adicionar plano</button>
+          <span class="mensagem-erro" id="pl-erro-form"></span>
+        </div>
+        <table style="margin-top:20px;">
+          <thead><tr><th>Nome</th><th>Limite usuários</th><th>Limite pacientes</th><th>Preço mensal</th><th>Status</th><th></th></tr></thead>
+          <tbody id="corpo-tabela-planos"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // =========================================================
+  // CONFIGURAÇÃO DO SUPABASE (já preenchida com seu projeto)
+  // =========================================================
+  const SUPABASE_URL = "https://zoksohscxgoxifatoqgi.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpva3NvaHNjeGdveGlmYXRvcWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxMDgyMjIsImV4cCI6MjA5ODY4NDIyMn0.dlGN7qoxCEKObPp6loL8T05XpwQxDaLB-4XUwWRka4s";
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const telaLoginWrap = document.getElementById("tela-login-wrap");
+  const app = document.getElementById("app");
+  const campoEmail = document.getElementById("campo-email");
+  const campoSenha = document.getElementById("campo-senha");
+  const botaoEntrar = document.getElementById("botao-entrar");
+  const mensagemErroLogin = document.getElementById("mensagem-erro-login");
+  const botaoSair = document.getElementById("botao-sair");
+
+  let cachePlanos = [];
+
+  botaoEntrar.addEventListener("click", async () => {
+    mensagemErroLogin.style.display = "none";
+    botaoEntrar.disabled = true;
+    botaoEntrar.textContent = "Entrando...";
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email: campoEmail.value.trim(), password: campoSenha.value
+    });
+    botaoEntrar.disabled = false;
+    botaoEntrar.textContent = "Entrar";
+    if (error) {
+      mensagemErroLogin.textContent = "Não foi possível entrar: " + error.message;
+      mensagemErroLogin.style.display = "block";
+      return;
+    }
+    await entrarNoApp(data.user.id);
+  });
+
+  campoSenha.addEventListener("keydown", (evento) => { if (evento.key === "Enter") botaoEntrar.click(); });
+
+  async function entrarNoApp(userId) {
+    const { data: superAdmin, error } = await supabaseClient
+      .from("super_admins").select("id").eq("id", userId).maybeSingle();
+
+    if (error || !superAdmin) {
+      mensagemErroLogin.textContent = "Este login não tem acesso à área de super administração.";
+      mensagemErroLogin.style.display = "block";
+      await supabaseClient.auth.signOut();
+      return;
+    }
+
+    telaLoginWrap.style.display = "none";
+    app.style.display = "block";
+    await carregarClinicas();
+    await carregarPlanos();
+  }
+
+  botaoSair.addEventListener("click", async () => {
+    await supabaseClient.auth.signOut();
+    app.style.display = "none";
+    telaLoginWrap.style.display = "flex";
+    campoEmail.value = ""; campoSenha.value = "";
+  });
+
+  // ---------- CLÍNICAS ----------
+  async function carregarClinicas() {
+    const { data: clinicas, error } = await supabaseClient
+      .from("clinicas")
+      .select("id, nome, created_at, status_assinatura, trial_termina_em, plano_id")
+      .order("created_at", { ascending: false });
+
+    const corpo = document.getElementById("corpo-tabela-clinicas");
+    const vazio = document.getElementById("sa-mensagem-vazia");
+    corpo.innerHTML = "";
+
+    if (error) { vazio.textContent = "Erro ao carregar clínicas: " + error.message; vazio.style.display = "block"; return; }
+    if (!clinicas || clinicas.length === 0) { vazio.style.display = "block"; return; }
+    vazio.style.display = "none";
+
+    document.getElementById("sa-total-clinicas").textContent = clinicas.length;
+    document.getElementById("sa-total-trial").textContent = clinicas.filter(c => c.status_assinatura === "trial").length;
+    document.getElementById("sa-total-ativas").textContent = clinicas.filter(c => c.status_assinatura === "ativo").length;
+    document.getElementById("sa-total-suspensas").textContent = clinicas.filter(c => c.status_assinatura === "suspenso").length;
+
+    clinicas.forEach(c => {
+      const dataCriacao = new Date(c.created_at).toLocaleDateString("pt-BR");
+      const trialAte = c.trial_termina_em ? new Date(c.trial_termina_em + "T00:00:00").toLocaleDateString("pt-BR") : "-";
+
+      const linha = document.createElement("tr");
+      linha.innerHTML =
+        "<td>" + c.nome + "</td>" +
+        "<td>" + dataCriacao + "</td>" +
+        "<td></td>" +
+        "<td>" + trialAte + "</td>" +
+        "<td></td>" +
+        "<td></td>";
+
+      // Select de status
+      const celulaStatus = linha.children[2];
+      const selectStatus = document.createElement("select");
+      selectStatus.className = "select-inline";
+      ["trial", "ativo", "suspenso", "cancelado"].forEach(s => {
+        const o = document.createElement("option"); o.value = s; o.textContent = s; if (s === c.status_assinatura) o.selected = true;
+        selectStatus.appendChild(o);
+      });
+      celulaStatus.appendChild(selectStatus);
+
+      // Select de plano
+      const celulaPlano = linha.children[4];
+      const selectPlano = document.createElement("select");
+      selectPlano.className = "select-inline";
+      const opcaoVazia = document.createElement("option"); opcaoVazia.value = ""; opcaoVazia.textContent = "Sem plano";
+      selectPlano.appendChild(opcaoVazia);
+      cachePlanos.forEach(p => {
+        const o = document.createElement("option"); o.value = p.id; o.textContent = p.nome; if (p.id === c.plano_id) o.selected = true;
+        selectPlano.appendChild(o);
+      });
+      celulaPlano.appendChild(selectPlano);
+
+      // Botão salvar
+      const celulaAcao = linha.children[5];
+      const botaoSalvar = document.createElement("button");
+      botaoSalvar.textContent = "Salvar";
+      botaoSalvar.addEventListener("click", async () => {
+        await supabaseClient.from("clinicas").update({
+          status_assinatura: selectStatus.value,
+          plano_id: selectPlano.value || null,
+          assinatura_atualizada_em: new Date().toISOString()
+        }).eq("id", c.id);
+        await carregarClinicas();
+      });
+      celulaAcao.appendChild(botaoSalvar);
+
+      corpo.appendChild(linha);
+    });
+  }
+
+  // ---------- PLANOS ----------
+  document.getElementById("botao-salvar-plano").addEventListener("click", async () => {
+    const erro = document.getElementById("pl-erro-form");
+    erro.style.display = "none";
+
+    const nome = document.getElementById("pl-nome").value.trim();
+    if (!nome) { erro.textContent = "Digite o nome do plano."; erro.style.display = "inline"; return; }
+
+    const { error } = await supabaseClient.from("planos").insert({
+      nome: nome,
+      limite_usuarios: document.getElementById("pl-limite-usuarios").value || null,
+      limite_pacientes: document.getElementById("pl-limite-pacientes").value || null,
+      preco_mensal: document.getElementById("pl-preco").value || null
+    });
+
+    if (error) { erro.textContent = "Erro ao salvar: " + error.message; erro.style.display = "inline"; return; }
+
+    document.getElementById("pl-nome").value = "";
+    document.getElementById("pl-limite-usuarios").value = "";
+    document.getElementById("pl-limite-pacientes").value = "";
+    document.getElementById("pl-preco").value = "";
+    await carregarPlanos();
+    await carregarClinicas();
+  });
+
+  async function carregarPlanos() {
+    const { data: planos, error } = await supabaseClient.from("planos").select("*").order("preco_mensal", { ascending: true });
+    if (error) return;
+    cachePlanos = planos || [];
+
+    const corpo = document.getElementById("corpo-tabela-planos");
+    corpo.innerHTML = "";
+
+    cachePlanos.forEach(p => {
+      const linha = document.createElement("tr");
+      linha.innerHTML =
+        "<td>" + p.nome + "</td>" +
+        "<td>" + (p.limite_usuarios ?? "Ilimitado") + "</td>" +
+        "<td>" + (p.limite_pacientes ?? "Ilimitado") + "</td>" +
+        "<td>R$ " + Number(p.preco_mensal || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) + "</td>" +
+        "<td><span class='selo-status " + (p.ativo ? "selo-ativo" : "selo-cancelado") + "'>" + (p.ativo ? "ativo" : "inativo") + "</span></td>" +
+        "<td></td>";
+
+      const celula = linha.lastElementChild;
+      const botao = document.createElement("button");
+      botao.textContent = p.ativo ? "Desativar" : "Ativar";
+      botao.style.cssText = p.ativo ? "background:transparent; color:var(--erro); border:1px solid var(--borda);" : "";
+      botao.addEventListener("click", async () => {
+        await supabaseClient.from("planos").update({ ativo: !p.ativo }).eq("id", p.id);
+        await carregarPlanos();
+      });
+      celula.appendChild(botao);
+      corpo.appendChild(linha);
+    });
+  }
+
+  // ---------- SE JÁ HOUVER SESSÃO ATIVA, ENTRA DIRETO ----------
+  (async () => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) { await entrarNoApp(session.user.id); }
+  })();
+</script>
+
+</body>
+</html>

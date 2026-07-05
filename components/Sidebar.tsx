@@ -466,11 +466,21 @@ export default function Sidebar() {
               Dashboard Executivo
             </Link>
 
-            <TituloSecao>Gestão SaaS</TituloSecao>
+            <TituloSecao>Gestão</TituloSecao>
 
             <Link href="/admin/empresas" className={classeLink("/admin/empresas")}>
               <Building2 size={21} strokeWidth={2.4} />
               Empresas
+            </Link>
+
+            <Link href="/usuarios" className={classeLink("/usuarios")}>
+              <Users size={21} strokeWidth={2.4} />
+              Usuários
+            </Link>
+
+            <Link href="/admin/planos" className={classeLink("/admin/planos")}>
+              <Tags size={21} strokeWidth={2.4} />
+              Planos
             </Link>
 
             <Link href="/admin/assinaturas" className={classeLink("/admin/assinaturas")}>
@@ -478,41 +488,16 @@ export default function Sidebar() {
               Assinaturas
             </Link>
 
-            <Link href="/admin/financeiro" className={classeLink("/admin/financeiro")}>
-              <CircleDollarSign size={21} strokeWidth={2.4} />
-              Métricas SaaS
-            </Link>
+            <TituloSecao>Infraestrutura</TituloSecao>
 
-            <Link href="/admin/notificacoes" className={classeLink("/admin/notificacoes")}>
-              <Bell size={21} strokeWidth={2.4} />
-              Notificações
-            </Link>
-
-            <Link href="/onboarding" className={classeLink("/onboarding")}>
-              <Package size={21} strokeWidth={2.4} />
-              Onboarding
-            </Link>
-
-            <TituloSecao>Operação</TituloSecao>
-
-            <Link href="/admin/implantacoes" className={classeLink("/admin/implantacoes")}>
-              <Package size={21} strokeWidth={2.4} />
-              Implantação
-            </Link>
-
-            <Link href="/admin/bloqueios" className={classeLink("/admin/bloqueios")}>
-              <Lock size={21} strokeWidth={2.4} />
-              Bloqueios
-            </Link>
-
-            <Link href="/admin/empresas" className={classeLink("/admin/empresas")}>
-              <Users size={21} strokeWidth={2.4} />
-              Entrar como Cliente
-            </Link>
-
-            <Link href="/admin/empresas" className={classeLink("/admin/empresas")}>
+            <Link href="/admin/infraestrutura" className={classeLink("/admin/infraestrutura")}>
               <ShieldCheck size={21} strokeWidth={2.4} />
-              Saúde das Empresas
+              Dashboard Técnico
+            </Link>
+
+            <Link href="/admin/core" className={classeLink("/admin/core")}>
+              <Settings size={21} strokeWidth={2.4} />
+              Core do Sistema
             </Link>
 
             <Link href="/admin/auditoria" className={classeLink("/admin/auditoria")}>
@@ -520,21 +505,65 @@ export default function Sidebar() {
               Auditoria
             </Link>
 
-            <TituloSecao>Administração</TituloSecao>
-
-            <Link href="/usuarios" className={classeLink("/usuarios")}>
-              <Users size={21} strokeWidth={2.4} />
-              Usuários Admin
+            <Link href="/admin/notificacoes" className={classeLink("/admin/notificacoes")}>
+              <Bell size={21} strokeWidth={2.4} />
+              Logs e Alertas
             </Link>
 
-            <Link href="/admin/planos" className={classeLink("/admin/planos")}>
-              <Tags size={21} strokeWidth={2.4} />
-              Planos e Preços
+            <Link href="/configuracoes/backup" className={classeLink("/configuracoes/backup")}>
+              <Package size={21} strokeWidth={2.4} />
+              Backups
             </Link>
 
             <Link href="/admin/configuracoes" className={classeLink("/admin/configuracoes")}>
               <Settings size={21} strokeWidth={2.4} />
-              Configurações
+              Atualizações
+            </Link>
+
+            <TituloSecao>Plataforma</TituloSecao>
+
+            <Link href="/admin/configuracoes" className={classeLink("/admin/configuracoes")}>
+              <Settings size={21} strokeWidth={2.4} />
+              Configurações Globais
+            </Link>
+
+            <Link href="/admin/controle" className={classeLink("/admin/controle")}>
+              <ShieldCheck size={21} strokeWidth={2.4} />
+              Controle de Acesso
+            </Link>
+
+            <Link href="/onboarding" className={classeLink("/onboarding")}>
+              <Package size={21} strokeWidth={2.4} />
+              Onboarding
+            </Link>
+
+            <TituloSecao>SaaS</TituloSecao>
+
+            <Link href="/admin/financeiro" className={classeLink("/admin/financeiro")}>
+              <CircleDollarSign size={21} strokeWidth={2.4} />
+              Financeiro SaaS
+            </Link>
+
+            <Link href="/admin/cobrancas" className={classeLink("/admin/cobrancas")}>
+              <CircleDollarSign size={21} strokeWidth={2.4} />
+              Cobranças
+            </Link>
+
+            <Link href="/admin/bloqueios" className={classeLink("/admin/bloqueios")}>
+              <Lock size={21} strokeWidth={2.4} />
+              Bloqueios
+            </Link>
+
+            <TituloSecao>Sistema</TituloSecao>
+
+            <Link href="/admin/implantacoes" className={classeLink("/admin/implantacoes")}>
+              <Package size={21} strokeWidth={2.4} />
+              Implantação
+            </Link>
+
+            <Link href="/admin" className={classeLink("/admin")}>
+              <FileText size={21} strokeWidth={2.4} />
+              Changelog
             </Link>
           </>
         )}
