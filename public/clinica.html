@@ -1424,7 +1424,9 @@
   // =========================================================
   const SUPABASE_URL = "https://zoksohscxgoxifatoqgi.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpva3NvaHNjeGdveGlmYXRvcWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxMDgyMjIsImV4cCI6MjA5ODY4NDIyMn0.dlGN7qoxCEKObPp6loL8T05XpwQxDaLB-4XUwWRka4s";
-  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { flowType: "implicit" }
+  });
 
   // ---------- NOTIFICAÇÕES TOAST ----------
   function mostrarToast(mensagem, tipo) {
@@ -1708,7 +1710,13 @@
     const botao = document.getElementById("botao-criar-clinica");
     botao.disabled = true; botao.textContent = "Criando...";
 
-    const { data, error } = await supabaseClient.auth.signUp({ email, password: senha });
+    const { data, error } = await supabaseClient.auth.signUp({
+      email, password: senha,
+      options: {
+        emailRedirectTo: window.location.href.split("#")[0].split("?")[0],
+        data: { nome_clinica_pendente: nomeClinica, nome_admin_pendente: seuNome }
+      }
+    });
 
     botao.disabled = false; botao.textContent = "Criar minha clínica";
 
@@ -1866,21 +1874,32 @@
       .from("usuarios").select("clinica_id, papel, ativo, nome, avatar_url").eq("id", userId).single();
 
     // Se não achou cadastro em "usuarios", pode ser alguém que criou a
-    // clínica mas precisou confirmar o e-mail antes. Verifica se há um
-    // onboarding pendente salvo neste navegador para este mesmo e-mail.
+    // clínica mas precisou confirmar o e-mail antes. Primeiro tenta pelos
+    // dados salvos na própria conta (funciona em qualquer navegador/e-mail);
+    // se não achar, tenta pelo que ficou salvo neste navegador como reforço.
     if (error) {
-      const pendenteBruto = localStorage.getItem(CHAVE_ONBOARDING_PENDENTE);
-      if (pendenteBruto) {
-        const pendente = JSON.parse(pendenteBruto);
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (user && user.email === pendente.email) {
-          const resultado = await finalizarCriacaoDaClinica(pendente.nomeClinica, pendente.seuNome);
-          localStorage.removeItem(CHAVE_ONBOARDING_PENDENTE);
-          if (resultado.ok) {
-            const novaConsulta = await supabaseClient.from("usuarios").select("clinica_id, papel, ativo, nome, avatar_url").eq("id", userId).single();
-            perfil = novaConsulta.data;
-            error = novaConsulta.error;
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      let nomeClinicaPendente = user && user.user_metadata ? user.user_metadata.nome_clinica_pendente : null;
+      let nomeAdminPendente = user && user.user_metadata ? user.user_metadata.nome_admin_pendente : null;
+
+      if (!nomeClinicaPendente) {
+        const pendenteBruto = localStorage.getItem(CHAVE_ONBOARDING_PENDENTE);
+        if (pendenteBruto) {
+          const pendente = JSON.parse(pendenteBruto);
+          if (user && user.email === pendente.email) {
+            nomeClinicaPendente = pendente.nomeClinica;
+            nomeAdminPendente = pendente.seuNome;
           }
+        }
+      }
+
+      if (nomeClinicaPendente) {
+        const resultado = await finalizarCriacaoDaClinica(nomeClinicaPendente, nomeAdminPendente || "Administrador");
+        localStorage.removeItem(CHAVE_ONBOARDING_PENDENTE);
+        if (resultado.ok) {
+          const novaConsulta = await supabaseClient.from("usuarios").select("clinica_id, papel, ativo, nome, avatar_url").eq("id", userId).single();
+          perfil = novaConsulta.data;
+          error = novaConsulta.error;
         }
       }
     }
