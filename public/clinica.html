@@ -419,6 +419,18 @@
         <div class="mensagem-erro" id="mensagem-erro-mfa-login"></div>
       </div>
 
+      <!-- ----- FINALIZAR CADASTRO (rede de segurança, caso o navegador tenha perdido os dados do onboarding) ----- -->
+      <div id="bloco-finalizar-cadastro" style="display:none;">
+        <h1>Falta só um passo!</h1>
+        <p class="subtitulo">Seu e-mail já foi confirmado. Só precisamos do nome da sua clínica para concluir.</p>
+        <label for="fc-nome-clinica">Nome da clínica</label>
+        <input type="text" id="fc-nome-clinica" placeholder="Ex: Clínica Vida Plena">
+        <label for="fc-seu-nome">Seu nome completo</label>
+        <input type="text" id="fc-seu-nome" placeholder="Seu nome">
+        <button id="botao-finalizar-cadastro" style="width:100%; margin-top:24px;">Concluir cadastro</button>
+        <div class="mensagem-erro" id="mensagem-erro-finalizar-cadastro"></div>
+      </div>
+
     </div>
 
     <div class="login-rodape-suporte">
@@ -1755,6 +1767,45 @@
     return { ok: true };
   }
 
+  // ---------- REDE DE SEGURANÇA: FINALIZAR CADASTRO NA MÃO ----------
+  let userIdFinalizandoCadastro = null;
+
+  function mostrarBlocoFinalizarCadastro(userId) {
+    userIdFinalizandoCadastro = userId;
+    document.querySelectorAll("#tela-login-wrap .cartao-login > div").forEach(bloco => bloco.style.display = "none");
+    document.getElementById("bloco-finalizar-cadastro").style.display = "block";
+  }
+
+  document.getElementById("botao-finalizar-cadastro").addEventListener("click", async () => {
+    const erro = document.getElementById("mensagem-erro-finalizar-cadastro");
+    erro.style.display = "none";
+
+    const nomeClinica = document.getElementById("fc-nome-clinica").value.trim();
+    const seuNome = document.getElementById("fc-seu-nome").value.trim();
+
+    if (!nomeClinica || !seuNome) {
+      erro.textContent = "Preencha os dois campos.";
+      erro.style.display = "block";
+      return;
+    }
+
+    const botao = document.getElementById("botao-finalizar-cadastro");
+    botao.disabled = true; botao.textContent = "Concluindo...";
+
+    const resultado = await finalizarCriacaoDaClinica(nomeClinica, seuNome);
+
+    botao.disabled = false; botao.textContent = "Concluir cadastro";
+
+    if (!resultado.ok) {
+      erro.textContent = resultado.mensagem;
+      erro.style.display = "block";
+      return;
+    }
+
+    document.getElementById("bloco-finalizar-cadastro").style.display = "none";
+    await entrarNoApp(userIdFinalizandoCadastro);
+  });
+
   // ---------- ESQUECI MINHA SENHA ----------
   const blocoLoginNormal = document.getElementById("bloco-login-normal");
   const blocoEsqueciSenha = document.getElementById("bloco-esqueci-senha");
@@ -1905,8 +1956,9 @@
     }
 
     if (error || !perfil) {
-      mensagemErroLogin.textContent = "Login ok, mas não achei seu cadastro em usuarios" + (error ? ": " + error.message : ".");
-      mensagemErroLogin.style.display = "block";
+      // Rede de segurança: em vez de travar com um erro que a pessoa não
+      // sabe resolver sozinha, pede os dados que faltam ali mesmo
+      mostrarBlocoFinalizarCadastro(userId);
       return;
     }
 
