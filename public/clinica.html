@@ -1268,6 +1268,25 @@
           </div>
 
           <div class="painel">
+            <h3>Assinatura e pagamento</h3>
+            <p class="painel-descricao">Status da sua assinatura do Th Clínica.</p>
+            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+              <div>
+                <p style="font-size:13px; color:var(--texto-suave); margin:0;">Plano atual</p>
+                <p style="font-size:15px; font-weight:700; margin:2px 0 0 0;" id="assin-nome-plano">—</p>
+              </div>
+              <div>
+                <p style="font-size:13px; color:var(--texto-suave); margin:0;">Status</p>
+                <p style="margin:2px 0 0 0;"><span class="selo-status" id="assin-selo-status">—</span></p>
+              </div>
+              <div style="margin-left:auto;">
+                <button id="botao-assinar-mercadopago">Assinar / atualizar pagamento</button>
+              </div>
+            </div>
+            <span class="mensagem-erro" id="assin-erro" style="display:block; margin-top:12px;"></span>
+          </div>
+
+          <div class="painel">
             <h3>Sobre o sistema</h3>
             <p style="font-size:13.5px; color:var(--texto-suave);">
               <strong>Th Clínica</strong> <span style="color:var(--texto-suave); font-weight:400;">v1.0</span> — desenvolvido por <strong>Th Sistemas</strong><br>
@@ -1761,6 +1780,7 @@
     const mensagemErro = error ? error.message : (data && data.error);
     if (mensagemErro) return { ok: false, mensagem: mensagemErro };
 
+    mostrarToast("Clínica criada com sucesso! Bem-vindo(a) ao Th Clínica 🎉");
     return { ok: true };
   }
 
@@ -2143,9 +2163,18 @@
   // =========================================================
   async function carregarConfiguracoesClinica() {
     await carregarStatusMfa();
-    const { data: clinica, error } = await supabaseClient.from("clinicas").select("*").eq("id", clinicaIdAtual).single();
+    const { data: clinica, error } = await supabaseClient.from("clinicas").select("*, planos(nome, preco_mensal)").eq("id", clinicaIdAtual).single();
     const erro = document.getElementById("cfg-erro-form");
     if (error || !clinica) { erro.textContent = "Erro ao carregar configurações: " + (error ? error.message : ""); erro.style.display = "inline"; return; }
+
+    const NOMES_STATUS_ASSINATURA = { trial: "Em teste", ativo: "Ativa", suspenso: "Suspensa", cancelado: "Cancelada" };
+    document.getElementById("assin-nome-plano").textContent = clinica.planos ? clinica.planos.nome : "Sem plano definido";
+    const seloStatus = document.getElementById("assin-selo-status");
+    seloStatus.textContent = NOMES_STATUS_ASSINATURA[clinica.status_assinatura] || clinica.status_assinatura;
+    seloStatus.className = "selo-status " + (
+      clinica.status_assinatura === "ativo" ? "selo-recebido" :
+      clinica.status_assinatura === "trial" ? "selo-aguardando" : "selo-cancelado"
+    );
 
     document.getElementById("cfg-nome").value = clinica.nome || "";
     atualizarPreviewLogo(clinica.logo_url);
@@ -2459,6 +2488,26 @@
     if (fatorAtivo) await supabaseClient.auth.mfa.unenroll({ factorId: fatorAtivo.id });
 
     await carregarStatusMfa();
+  });
+
+  // =========================================================
+  // ASSINATURA (MERCADO PAGO)
+  // =========================================================
+  document.getElementById("botao-assinar-mercadopago").addEventListener("click", async () => {
+    const erro = document.getElementById("assin-erro");
+    erro.style.display = "none";
+
+    const botao = document.getElementById("botao-assinar-mercadopago");
+    botao.disabled = true; botao.textContent = "Gerando link de pagamento...";
+
+    const { data, error } = await supabaseClient.functions.invoke("swift-task", { body: {} });
+
+    botao.disabled = false; botao.textContent = "Assinar / atualizar pagamento";
+
+    const mensagemErro = error ? error.message : (data && data.error);
+    if (mensagemErro) { erro.textContent = mensagemErro; erro.style.display = "block"; return; }
+
+    window.location.href = data.init_point;
   });
 
   // =========================================================

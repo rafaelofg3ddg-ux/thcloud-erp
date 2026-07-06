@@ -131,12 +131,48 @@
       </div>
 
       <div class="painel">
-        <h3>Clínicas cadastradas</h3>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+          <div>
+            <h3 style="margin-bottom:4px;">Clínicas cadastradas</h3>
+            <p class="painel-descricao" style="margin:0;">Clique em "Detalhes" para ver uso, contato e anotações de cada clínica.</p>
+          </div>
+          <input type="text" id="sa-busca-clinica" placeholder="Buscar por nome..." style="max-width:220px;">
+        </div>
         <table>
           <thead><tr><th>Clínica</th><th>Criada em</th><th>Status</th><th>Trial até</th><th>Plano</th><th></th></tr></thead>
           <tbody id="corpo-tabela-clinicas"></tbody>
         </table>
         <div class="vazio" id="sa-mensagem-vazia" style="display:none;">Nenhuma clínica cadastrada ainda.</div>
+      </div>
+
+      <div class="painel" id="painel-detalhe-clinica" style="display:none; background:var(--fundo);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+          <h3 id="dc-nome-clinica" style="margin:0;">—</h3>
+          <button id="botao-fechar-detalhe-clinica" style="background:transparent; color:var(--texto-suave); border:1px solid var(--borda);">Fechar</button>
+        </div>
+
+        <div class="resumo" style="margin-bottom:20px;">
+          <div class="cartao-resumo"><div class="rotulo">Usuários</div><div class="valor" id="dc-total-usuarios">—</div></div>
+          <div class="cartao-resumo"><div class="rotulo">Pacientes</div><div class="valor" id="dc-total-pacientes">—</div></div>
+          <div class="cartao-resumo"><div class="rotulo">Último acesso</div><div class="valor" id="dc-ultimo-acesso" style="font-size:15px;">—</div></div>
+        </div>
+
+        <p class="painel-descricao" style="margin-top:0;">Contato do administrador</p>
+        <p style="font-size:13.5px; margin:0 0 20px 0;" id="dc-contato-admin">—</p>
+
+        <p class="painel-descricao">Período de teste</p>
+        <div style="display:flex; align-items:flex-end; gap:12px; margin-bottom:20px;">
+          <div style="flex:1;"><label for="dc-dias-estender">Estender teste por (dias)</label><input type="number" id="dc-dias-estender" placeholder="Ex: 7"></div>
+          <button id="botao-estender-trial">Estender</button>
+        </div>
+
+        <p class="painel-descricao">Anotações internas (só você vê)</p>
+        <textarea id="dc-notas" rows="3" placeholder="Ex: cliente pediu desconto, combinado pagamento via Pix todo dia 10..." style="width:100%; padding:11px 13px; border:1px solid var(--borda); border-radius:8px; font-size:13.5px; font-family:inherit; resize:vertical;"></textarea>
+        <div class="acoes-formulario">
+          <button id="botao-salvar-notas">Salvar anotação</button>
+          <button id="botao-reenviar-senha-admin" style="background:transparent; color:var(--texto-suave); border:1px solid var(--borda);">Enviar redefinição de senha pro admin</button>
+          <span class="mensagem-sucesso" id="dc-sucesso"></span>
+        </div>
       </div>
 
       <div class="painel">
@@ -222,24 +258,41 @@
   });
 
   // ---------- CLÍNICAS ----------
+  let cacheClinicas = [];
+
+  document.getElementById("sa-busca-clinica").addEventListener("input", () => renderizarTabelaClinicas());
+
   async function carregarClinicas() {
     const { data: clinicas, error } = await supabaseClient
       .from("clinicas")
-      .select("id, nome, created_at, status_assinatura, trial_termina_em, plano_id")
+      .select("id, nome, created_at, status_assinatura, trial_termina_em, plano_id, notas_internas")
       .order("created_at", { ascending: false });
+
+    if (error) {
+      const vazio = document.getElementById("sa-mensagem-vazia");
+      vazio.textContent = "Erro ao carregar clínicas: " + error.message; vazio.style.display = "block";
+      return;
+    }
+
+    cacheClinicas = clinicas || [];
+    renderizarTabelaClinicas();
+  }
+
+  function renderizarTabelaClinicas() {
+    const termoBusca = document.getElementById("sa-busca-clinica").value.trim().toLowerCase();
+    const clinicas = cacheClinicas.filter(c => !termoBusca || c.nome.toLowerCase().includes(termoBusca));
 
     const corpo = document.getElementById("corpo-tabela-clinicas");
     const vazio = document.getElementById("sa-mensagem-vazia");
     corpo.innerHTML = "";
 
-    if (error) { vazio.textContent = "Erro ao carregar clínicas: " + error.message; vazio.style.display = "block"; return; }
-    if (!clinicas || clinicas.length === 0) { vazio.style.display = "block"; return; }
-    vazio.style.display = "none";
+    document.getElementById("sa-total-clinicas").textContent = cacheClinicas.length;
+    document.getElementById("sa-total-trial").textContent = cacheClinicas.filter(c => c.status_assinatura === "trial").length;
+    document.getElementById("sa-total-ativas").textContent = cacheClinicas.filter(c => c.status_assinatura === "ativo").length;
+    document.getElementById("sa-total-suspensas").textContent = cacheClinicas.filter(c => c.status_assinatura === "suspenso").length;
 
-    document.getElementById("sa-total-clinicas").textContent = clinicas.length;
-    document.getElementById("sa-total-trial").textContent = clinicas.filter(c => c.status_assinatura === "trial").length;
-    document.getElementById("sa-total-ativas").textContent = clinicas.filter(c => c.status_assinatura === "ativo").length;
-    document.getElementById("sa-total-suspensas").textContent = clinicas.filter(c => c.status_assinatura === "suspenso").length;
+    if (clinicas.length === 0) { vazio.textContent = termoBusca ? "Nenhuma clínica encontrada." : "Nenhuma clínica cadastrada ainda."; vazio.style.display = "block"; return; }
+    vazio.style.display = "none";
 
     clinicas.forEach(c => {
       const dataCriacao = new Date(c.created_at).toLocaleDateString("pt-BR");
@@ -276,10 +329,19 @@
       });
       celulaPlano.appendChild(selectPlano);
 
-      // Botão salvar
+      // Botões de ação
       const celulaAcao = linha.children[5];
+      celulaAcao.style.whiteSpace = "nowrap";
+
+      const botaoDetalhes = document.createElement("button");
+      botaoDetalhes.textContent = "Detalhes";
+      botaoDetalhes.style.cssText = "background:transparent; color:var(--texto-suave); border:1px solid var(--borda); margin-right:6px; font-size:12px; padding:6px 10px;";
+      botaoDetalhes.addEventListener("click", () => abrirDetalheClinica(c));
+      celulaAcao.appendChild(botaoDetalhes);
+
       const botaoSalvar = document.createElement("button");
       botaoSalvar.textContent = "Salvar";
+      botaoSalvar.style.cssText = "font-size:12px; padding:6px 10px;";
       botaoSalvar.addEventListener("click", async () => {
         await supabaseClient.from("clinicas").update({
           status_assinatura: selectStatus.value,
@@ -293,6 +355,89 @@
       corpo.appendChild(linha);
     });
   }
+
+  // ---------- DETALHES DE UMA CLÍNICA ----------
+  let clinicaEmDetalheId = null;
+  let trialAtualDaClinicaEmDetalhe = null;
+
+  async function abrirDetalheClinica(clinica) {
+    clinicaEmDetalheId = clinica.id;
+    trialAtualDaClinicaEmDetalhe = clinica.trial_termina_em;
+
+    document.getElementById("dc-nome-clinica").textContent = clinica.nome;
+    document.getElementById("dc-notas").value = clinica.notas_internas || "";
+    document.getElementById("dc-dias-estender").value = "";
+    document.getElementById("dc-sucesso").style.display = "none";
+    document.getElementById("dc-total-usuarios").textContent = "…";
+    document.getElementById("dc-total-pacientes").textContent = "…";
+    document.getElementById("dc-ultimo-acesso").textContent = "…";
+    document.getElementById("dc-contato-admin").textContent = "…";
+
+    document.getElementById("painel-detalhe-clinica").style.display = "block";
+    document.getElementById("painel-detalhe-clinica").scrollIntoView({ behavior: "smooth", block: "start" });
+
+    const [{ data: usuarios }, { count: totalPacientes }] = await Promise.all([
+      supabaseClient.from("usuarios").select("nome, email, papel, ultimo_acesso").eq("clinica_id", clinica.id),
+      supabaseClient.from("pacientes").select("id", { count: "exact", head: true }).eq("clinica_id", clinica.id)
+    ]);
+
+    document.getElementById("dc-total-usuarios").textContent = usuarios ? usuarios.length : "0";
+    document.getElementById("dc-total-pacientes").textContent = totalPacientes ?? "0";
+
+    const admin = (usuarios || []).find(u => u.papel === "admin");
+    document.getElementById("dc-contato-admin").innerHTML = admin
+      ? "<strong>" + admin.nome + "</strong> — " + admin.email
+      : "Nenhum administrador encontrado";
+
+    const ultimoAcessoGeral = (usuarios || [])
+      .map(u => u.ultimo_acesso).filter(Boolean).sort().reverse()[0];
+    document.getElementById("dc-ultimo-acesso").textContent = ultimoAcessoGeral
+      ? new Date(ultimoAcessoGeral).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "Nunca acessou";
+
+    // Guarda o e-mail do admin pra usar no botão de redefinição de senha
+    document.getElementById("botao-reenviar-senha-admin").dataset.email = admin ? admin.email : "";
+  }
+
+  document.getElementById("botao-fechar-detalhe-clinica").addEventListener("click", () => {
+    document.getElementById("painel-detalhe-clinica").style.display = "none";
+  });
+
+  document.getElementById("botao-salvar-notas").addEventListener("click", async () => {
+    await supabaseClient.from("clinicas").update({ notas_internas: document.getElementById("dc-notas").value }).eq("id", clinicaEmDetalheId);
+    const sucesso = document.getElementById("dc-sucesso");
+    sucesso.textContent = "Anotação salva!";
+    sucesso.style.display = "inline";
+    await carregarClinicas();
+  });
+
+  document.getElementById("botao-estender-trial").addEventListener("click", async () => {
+    const dias = Number(document.getElementById("dc-dias-estender").value);
+    if (!dias) return;
+
+    const baseData = trialAtualDaClinicaEmDetalhe ? new Date(trialAtualDaClinicaEmDetalhe + "T00:00:00") : new Date();
+    baseData.setDate(baseData.getDate() + dias);
+    const novaData = baseData.toISOString().slice(0, 10);
+
+    await supabaseClient.from("clinicas").update({ trial_termina_em: novaData }).eq("id", clinicaEmDetalheId);
+    trialAtualDaClinicaEmDetalhe = novaData;
+
+    const sucesso = document.getElementById("dc-sucesso");
+    sucesso.textContent = "Teste estendido até " + new Date(novaData + "T00:00:00").toLocaleDateString("pt-BR") + "!";
+    sucesso.style.display = "inline";
+    document.getElementById("dc-dias-estender").value = "";
+    await carregarClinicas();
+  });
+
+  document.getElementById("botao-reenviar-senha-admin").addEventListener("click", async () => {
+    const email = document.getElementById("botao-reenviar-senha-admin").dataset.email;
+    const sucesso = document.getElementById("dc-sucesso");
+    if (!email) { sucesso.textContent = "Essa clínica não tem administrador identificado."; sucesso.style.display = "inline"; return; }
+
+    await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: "https://www.thcloud.com.br/clinica.html" });
+    sucesso.textContent = "E-mail de redefinição enviado para " + email + "!";
+    sucesso.style.display = "inline";
+  });
 
   // ---------- PLANOS ----------
   document.getElementById("botao-salvar-plano").addEventListener("click", async () => {
