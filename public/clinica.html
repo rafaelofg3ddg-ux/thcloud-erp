@@ -1751,18 +1751,15 @@
   // Cria a clínica e o usuário administrador. Usado tanto no cadastro
   // direto quanto no primeiro login após confirmação de e-mail.
   async function finalizarCriacaoDaClinica(nomeClinica, seuNome) {
-    const { data: novaClinica, error: erroClinica } = await supabaseClient
-      .from("clinicas").insert({ nome: nomeClinica }).select("id").single();
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return { ok: false, mensagem: "Sessão não encontrada. Faça login novamente." };
 
-    if (erroClinica) return { ok: false, mensagem: "Erro ao criar a clínica: " + erroClinica.message };
-
-    const { data: { user } } = await supabaseClient.auth.getUser();
-
-    const { error: erroUsuario } = await supabaseClient.from("usuarios").insert({
-      id: user.id, clinica_id: novaClinica.id, nome: seuNome, email: user.email, papel: "admin", ativo: true
+    const { data, error } = await supabaseClient.functions.invoke("hyper-function", {
+      body: { acao: "criar_clinica_onboarding", nomeClinica, seuNome }
     });
 
-    if (erroUsuario) return { ok: false, mensagem: "Erro ao criar seu usuário: " + erroUsuario.message };
+    const mensagemErro = error ? error.message : (data && data.error);
+    if (mensagemErro) return { ok: false, mensagem: mensagemErro };
 
     return { ok: true };
   }
@@ -1792,18 +1789,12 @@
     const botao = document.getElementById("botao-finalizar-cadastro");
     botao.disabled = true; botao.textContent = "Concluindo...";
 
-    // Diagnóstico temporário: mostra se existe sessão de verdade neste momento
-    const { data: sessaoAtual } = await supabaseClient.auth.getSession();
-    const infoSessao = sessaoAtual && sessaoAtual.session
-      ? "sessão presente, usuário: " + sessaoAtual.session.user.id + ", expira em: " + new Date(sessaoAtual.session.expires_at * 1000).toLocaleString("pt-BR")
-      : "SEM SESSÃO ATIVA";
-
     const resultado = await finalizarCriacaoDaClinica(nomeClinica, seuNome);
 
     botao.disabled = false; botao.textContent = "Concluir cadastro";
 
     if (!resultado.ok) {
-      erro.textContent = resultado.mensagem + " | Diagnóstico: " + infoSessao;
+      erro.textContent = resultado.mensagem;
       erro.style.display = "block";
       return;
     }
