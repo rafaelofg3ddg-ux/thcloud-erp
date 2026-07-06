@@ -1792,12 +1792,18 @@
     const botao = document.getElementById("botao-finalizar-cadastro");
     botao.disabled = true; botao.textContent = "Concluindo...";
 
+    // Diagnóstico temporário: mostra se existe sessão de verdade neste momento
+    const { data: sessaoAtual } = await supabaseClient.auth.getSession();
+    const infoSessao = sessaoAtual && sessaoAtual.session
+      ? "sessão presente, usuário: " + sessaoAtual.session.user.id + ", expira em: " + new Date(sessaoAtual.session.expires_at * 1000).toLocaleString("pt-BR")
+      : "SEM SESSÃO ATIVA";
+
     const resultado = await finalizarCriacaoDaClinica(nomeClinica, seuNome);
 
     botao.disabled = false; botao.textContent = "Concluir cadastro";
 
     if (!resultado.ok) {
-      erro.textContent = resultado.mensagem;
+      erro.textContent = resultado.mensagem + " | Diagnóstico: " + infoSessao;
       erro.style.display = "block";
       return;
     }
