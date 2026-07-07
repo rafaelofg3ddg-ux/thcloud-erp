@@ -377,6 +377,9 @@
         <input type="email" id="cc-seu-email" placeholder="voce@suaclinica.com.br">
         <label for="cc-sua-senha">Crie uma senha</label>
         <input type="password" id="cc-sua-senha" placeholder="Mínimo de 6 caracteres">
+        <label for="cc-plano">Plano</label>
+        <select id="cc-plano"><option value="">Carregando planos...</option></select>
+        <p style="font-size:12px; color:rgba(255,255,255,0.75); margin:6px 0 0 0;">Você começa com 14 dias grátis nesse plano, sem precisar cadastrar cartão agora.</p>
         <button id="botao-criar-clinica" style="width:100%; margin-top:24px;">Criar minha clínica</button>
         <div class="mensagem-erro" id="mensagem-erro-criar-clinica"></div>
         <div class="mensagem-sucesso" id="mensagem-sucesso-criar-clinica"></div>
@@ -422,11 +425,13 @@
       <!-- ----- FINALIZAR CADASTRO (rede de segurança, caso o navegador tenha perdido os dados do onboarding) ----- -->
       <div id="bloco-finalizar-cadastro" style="display:none;">
         <h1>Falta só um passo!</h1>
-        <p class="subtitulo">Seu e-mail já foi confirmado. Só precisamos do nome da sua clínica para concluir.</p>
+        <p class="subtitulo">Seu e-mail já foi confirmado. Só precisamos de mais alguns dados para concluir.</p>
         <label for="fc-nome-clinica">Nome da clínica</label>
         <input type="text" id="fc-nome-clinica" placeholder="Ex: Clínica Vida Plena">
         <label for="fc-seu-nome">Seu nome completo</label>
         <input type="text" id="fc-seu-nome" placeholder="Seu nome">
+        <label for="fc-plano">Plano</label>
+        <select id="fc-plano"><option value="">Carregando planos...</option></select>
         <button id="botao-finalizar-cadastro" style="width:100%; margin-top:24px;">Concluir cadastro</button>
         <div class="mensagem-erro" id="mensagem-erro-finalizar-cadastro"></div>
       </div>
@@ -1283,6 +1288,10 @@
                 <button id="botao-assinar-mercadopago">Assinar / atualizar pagamento</button>
               </div>
             </div>
+            <div style="margin-top:14px;">
+              <label for="assin-email-teste" style="font-size:12px;">E-mail de teste (opcional — use uma conta de teste "compradora" do Mercado Pago enquanto estiver testando)</label>
+              <input type="email" id="assin-email-teste" placeholder="test_user_xxxxx@testuser.com" style="max-width:320px;">
+            </div>
             <span class="mensagem-erro" id="assin-erro" style="display:block; margin-top:12px;"></span>
           </div>
 
@@ -1703,12 +1712,36 @@
   const blocoCriarClinica = document.getElementById("bloco-criar-clinica");
   const CHAVE_ONBOARDING_PENDENTE = "th_onboarding_pendente";
 
+  let planosCarregados = false;
+  async function carregarPlanosDisponiveis() {
+    if (planosCarregados) return;
+    const { data: planos, error } = await supabaseClient.from("planos").select("id, nome, preco_mensal").eq("ativo", true).order("preco_mensal", { ascending: true });
+
+    [document.getElementById("cc-plano"), document.getElementById("fc-plano")].forEach(select => {
+      if (!select) return;
+      select.innerHTML = "";
+      if (error || !planos || planos.length === 0) {
+        select.innerHTML = "<option value=''>Nenhum plano disponível — fale com o suporte</option>";
+        return;
+      }
+      planos.forEach(p => {
+        const preco = p.preco_mensal ? "R$ " + Number(p.preco_mensal).toFixed(2).replace(".", ",") + "/mês" : "sob consulta";
+        const o = document.createElement("option");
+        o.value = p.id; o.textContent = p.nome + " — " + preco;
+        select.appendChild(o);
+      });
+    });
+
+    if (!error) planosCarregados = true;
+  }
+
   document.getElementById("link-criar-clinica").addEventListener("click", (e) => {
     e.preventDefault();
     document.getElementById("mensagem-erro-criar-clinica").style.display = "none";
     document.getElementById("mensagem-sucesso-criar-clinica").style.display = "none";
     blocoLoginNormal.style.display = "none";
     blocoCriarClinica.style.display = "block";
+    carregarPlanosDisponiveis();
   });
 
   document.getElementById("link-voltar-login-de-criar-clinica").addEventListener("click", (e) => {
@@ -1726,9 +1759,15 @@
     const seuNome = document.getElementById("cc-seu-nome").value.trim();
     const email = document.getElementById("cc-seu-email").value.trim();
     const senha = document.getElementById("cc-sua-senha").value;
+    const planoId = document.getElementById("cc-plano").value;
 
     if (!nomeClinica || !seuNome || !email || !senha) {
       erro.textContent = "Preencha todos os campos.";
+      erro.style.display = "inline";
+      return;
+    }
+    if (!planoId) {
+      erro.textContent = "Escolha um plano para continuar.";
       erro.style.display = "inline";
       return;
     }
@@ -1745,7 +1784,7 @@
       email, password: senha,
       options: {
         emailRedirectTo: window.location.href.split("#")[0].split("?")[0],
-        data: { nome_clinica_pendente: nomeClinica, nome_admin_pendente: seuNome }
+        data: { nome_clinica_pendente: nomeClinica, nome_admin_pendente: seuNome, plano_id_pendente: planoId }
       }
     });
 
@@ -1755,13 +1794,13 @@
 
     if (data.session) {
       // E-mail já confirmado automaticamente: já dá pra criar a clínica agora
-      const sucessoFinalizacao = await finalizarCriacaoDaClinica(nomeClinica, seuNome);
+      const sucessoFinalizacao = await finalizarCriacaoDaClinica(nomeClinica, seuNome, planoId);
       if (!sucessoFinalizacao.ok) { erro.textContent = sucessoFinalizacao.mensagem; erro.style.display = "inline"; return; }
       await entrarNoApp(data.user.id);
     } else {
       // Precisa confirmar o e-mail antes: guardamos os dados para
       // finalizar a criação da clínica assim que a pessoa fizer login
-      localStorage.setItem(CHAVE_ONBOARDING_PENDENTE, JSON.stringify({ email, nomeClinica, seuNome }));
+      localStorage.setItem(CHAVE_ONBOARDING_PENDENTE, JSON.stringify({ email, nomeClinica, seuNome, planoId }));
       sucesso.textContent = "Conta criada! Verifique seu e-mail para confirmar o cadastro e depois faça login normalmente — sua clínica será criada automaticamente no primeiro acesso.";
       sucesso.style.display = "inline";
     }
@@ -1769,16 +1808,42 @@
 
   // Cria a clínica e o usuário administrador. Usado tanto no cadastro
   // direto quanto no primeiro login após confirmação de e-mail.
-  async function finalizarCriacaoDaClinica(nomeClinica, seuNome) {
+  async function finalizarCriacaoDaClinica(nomeClinica, seuNome, planoId) {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) return { ok: false, mensagem: "Sessão não encontrada. Faça login novamente." };
 
-    const { data, error } = await supabaseClient.functions.invoke("hyper-function", {
-      body: { acao: "criar_clinica_onboarding", nomeClinica, seuNome }
-    });
+    let data, error;
+    try {
+      const resultado = await supabaseClient.functions.invoke("hyper-function", {
+        body: { acao: "criar_clinica_onboarding", nomeClinica, seuNome, planoId }
+      });
+      data = resultado.data; error = resultado.error;
+    } catch (excecao) {
+      return { ok: false, mensagem: "Falha de conexão com o servidor: " + (excecao && excecao.message ? excecao.message : String(excecao)) };
+    }
 
-    const mensagemErro = error ? error.message : (data && data.error);
-    if (mensagemErro) return { ok: false, mensagem: mensagemErro };
+    let mensagemErro = null;
+    if (error) {
+      let corpoBruto = "";
+      if (error.context) {
+        try {
+          if (typeof error.context.clone === "function") {
+            corpoBruto = await error.context.clone().text();
+          } else if (typeof error.context.text === "function") {
+            corpoBruto = await error.context.text();
+          }
+        } catch (e) { /* segue com o que tiver */ }
+      }
+      if (corpoBruto) {
+        try { mensagemErro = JSON.parse(corpoBruto).error || corpoBruto; }
+        catch (e) { mensagemErro = corpoBruto; }
+      } else {
+        mensagemErro = error.message + (error.context && error.context.status ? " (status " + error.context.status + ")" : "");
+      }
+    } else if (data && data.error) {
+      mensagemErro = data.error;
+    }
+    if (mensagemErro) { console.error("Erro ao finalizar cadastro:", mensagemErro, error, data); return { ok: false, mensagem: mensagemErro }; }
 
     mostrarToast("Clínica criada com sucesso! Bem-vindo(a) ao Th Clínica 🎉");
     return { ok: true };
@@ -1791,6 +1856,7 @@
     userIdFinalizandoCadastro = userId;
     document.querySelectorAll("#tela-login-wrap .cartao-login > div").forEach(bloco => bloco.style.display = "none");
     document.getElementById("bloco-finalizar-cadastro").style.display = "block";
+    carregarPlanosDisponiveis();
   }
 
   document.getElementById("botao-finalizar-cadastro").addEventListener("click", async () => {
@@ -1799,9 +1865,15 @@
 
     const nomeClinica = document.getElementById("fc-nome-clinica").value.trim();
     const seuNome = document.getElementById("fc-seu-nome").value.trim();
+    const planoId = document.getElementById("fc-plano").value;
 
     if (!nomeClinica || !seuNome) {
       erro.textContent = "Preencha os dois campos.";
+      erro.style.display = "block";
+      return;
+    }
+    if (!planoId) {
+      erro.textContent = "Escolha um plano para continuar.";
       erro.style.display = "block";
       return;
     }
@@ -1809,7 +1881,7 @@
     const botao = document.getElementById("botao-finalizar-cadastro");
     botao.disabled = true; botao.textContent = "Concluindo...";
 
-    const resultado = await finalizarCriacaoDaClinica(nomeClinica, seuNome);
+    const resultado = await finalizarCriacaoDaClinica(nomeClinica, seuNome, planoId);
 
     botao.disabled = false; botao.textContent = "Concluir cadastro";
 
@@ -1949,6 +2021,7 @@
       const { data: { user } } = await supabaseClient.auth.getUser();
       let nomeClinicaPendente = user && user.user_metadata ? user.user_metadata.nome_clinica_pendente : null;
       let nomeAdminPendente = user && user.user_metadata ? user.user_metadata.nome_admin_pendente : null;
+      let planoIdPendente = user && user.user_metadata ? user.user_metadata.plano_id_pendente : null;
 
       if (!nomeClinicaPendente) {
         const pendenteBruto = localStorage.getItem(CHAVE_ONBOARDING_PENDENTE);
@@ -1957,12 +2030,13 @@
           if (user && user.email === pendente.email) {
             nomeClinicaPendente = pendente.nomeClinica;
             nomeAdminPendente = pendente.seuNome;
+            planoIdPendente = pendente.planoId;
           }
         }
       }
 
-      if (nomeClinicaPendente) {
-        const resultado = await finalizarCriacaoDaClinica(nomeClinicaPendente, nomeAdminPendente || "Administrador");
+      if (nomeClinicaPendente && planoIdPendente) {
+        const resultado = await finalizarCriacaoDaClinica(nomeClinicaPendente, nomeAdminPendente || "Administrador", planoIdPendente);
         localStorage.removeItem(CHAVE_ONBOARDING_PENDENTE);
         if (resultado.ok) {
           const novaConsulta = await supabaseClient.from("usuarios").select("clinica_id, papel, ativo, nome, avatar_url").eq("id", userId).single();
@@ -2500,11 +2574,25 @@
     const botao = document.getElementById("botao-assinar-mercadopago");
     botao.disabled = true; botao.textContent = "Gerando link de pagamento...";
 
-    const { data, error } = await supabaseClient.functions.invoke("swift-task", { body: {} });
+    const emailTeste = document.getElementById("assin-email-teste").value.trim();
+    const { data, error } = await supabaseClient.functions.invoke("swift-task", { body: { email_teste: emailTeste || null } });
 
     botao.disabled = false; botao.textContent = "Assinar / atualizar pagamento";
 
-    const mensagemErro = error ? error.message : (data && data.error);
+    let mensagemErro = null;
+    if (error) {
+      // O supabase-js só devolve uma mensagem genérica por padrão; o motivo
+      // de verdade vem dentro da resposta da própria função
+      if (error.context && typeof error.context.json === "function") {
+        try { const corpoErro = await error.context.json(); mensagemErro = corpoErro.error || error.message; }
+        catch (e) { mensagemErro = error.message; }
+      } else {
+        mensagemErro = error.message;
+      }
+    } else if (data && data.error) {
+      mensagemErro = data.error;
+    }
+
     if (mensagemErro) { erro.textContent = mensagemErro; erro.style.display = "block"; return; }
 
     window.location.href = data.init_point;
@@ -5370,6 +5458,16 @@
   (async () => {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) { await entrarNoApp(session.user.id); }
+
+    // Se a pessoa acabou de voltar do pagamento do Mercado Pago, confere
+    // o status na hora, sem esperar o aviso automático
+    const parametros = new URLSearchParams(window.location.search);
+    if (session && parametros.has("preapproval_id")) {
+      await supabaseClient.functions.invoke("swift-task", { body: { acao: "sincronizar_status_assinatura" } });
+      await carregarConfiguracoesClinica();
+      window.history.replaceState({}, "", window.location.pathname);
+      mostrarToast("Status da assinatura atualizado!");
+    }
   })();
 </script>
 
