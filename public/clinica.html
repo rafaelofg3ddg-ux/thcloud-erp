@@ -1288,10 +1288,6 @@
                 <button id="botao-assinar-mercadopago">Assinar / atualizar pagamento</button>
               </div>
             </div>
-            <div style="margin-top:14px;">
-              <label for="assin-email-teste" style="font-size:12px;">E-mail de teste (opcional — use uma conta de teste "compradora" do Mercado Pago enquanto estiver testando)</label>
-              <input type="email" id="assin-email-teste" placeholder="test_user_xxxxx@testuser.com" style="max-width:320px;">
-            </div>
             <span class="mensagem-erro" id="assin-erro" style="display:block; margin-top:12px;"></span>
           </div>
 
@@ -2574,8 +2570,7 @@
     const botao = document.getElementById("botao-assinar-mercadopago");
     botao.disabled = true; botao.textContent = "Gerando link de pagamento...";
 
-    const emailTeste = document.getElementById("assin-email-teste").value.trim();
-    const { data, error } = await supabaseClient.functions.invoke("swift-task", { body: { email_teste: emailTeste || null } });
+    const { data, error } = await supabaseClient.functions.invoke("swift-task", { body: {} });
 
     botao.disabled = false; botao.textContent = "Assinar / atualizar pagamento";
 
