@@ -49,7 +49,7 @@ export default function AreaClientePage() {
 
           {/* TH CLINICA */}
           <a
-            href="/clinica.html"
+            href="/clinica"
             className="group relative overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-teal-100"
           >
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-500 shadow-lg shadow-teal-500/30">

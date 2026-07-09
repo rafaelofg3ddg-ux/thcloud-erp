@@ -464,6 +464,8 @@
     await carregarClinicas();
   });
 
+  let planoEmEdicaoId = null;
+
   async function carregarPlanos() {
     const { data: planos, error } = await supabaseClient.from("planos").select("*").order("preco_mensal", { ascending: true });
     if (error) return;
@@ -474,6 +476,52 @@
 
     cachePlanos.forEach(p => {
       const linha = document.createElement("tr");
+
+      if (p.id === planoEmEdicaoId) {
+        linha.innerHTML =
+          "<td><input type='text' id='pl-edit-nome' value=\"" + p.nome.replace(/"/g, "&quot;") + "\" style='width:100%;'></td>" +
+          "<td><input type='number' id='pl-edit-limite-usuarios' value=\"" + (p.limite_usuarios ?? "") + "\" placeholder='Ilimitado' style='width:100%;'></td>" +
+          "<td><input type='number' id='pl-edit-limite-pacientes' value=\"" + (p.limite_pacientes ?? "") + "\" placeholder='Ilimitado' style='width:100%;'></td>" +
+          "<td><input type='number' step='0.01' id='pl-edit-preco' value=\"" + (p.preco_mensal ?? "") + "\" style='width:100%;'></td>" +
+          "<td><span class='selo-status " + (p.ativo ? "selo-ativo" : "selo-cancelado") + "'>" + (p.ativo ? "ativo" : "inativo") + "</span></td>" +
+          "<td></td>";
+
+        const celula = linha.lastElementChild;
+        celula.style.whiteSpace = "nowrap";
+
+        const botaoSalvar = document.createElement("button");
+        botaoSalvar.textContent = "Salvar";
+        botaoSalvar.style.cssText = "font-size:12px; padding:6px 10px; margin-right:6px;";
+        botaoSalvar.addEventListener("click", async () => {
+          const nome = document.getElementById("pl-edit-nome").value.trim();
+          const limiteUsuarios = document.getElementById("pl-edit-limite-usuarios").value;
+          const limitePacientes = document.getElementById("pl-edit-limite-pacientes").value;
+          const preco = document.getElementById("pl-edit-preco").value;
+
+          if (!nome) return;
+
+          await supabaseClient.from("planos").update({
+            nome,
+            limite_usuarios: limiteUsuarios === "" ? null : Number(limiteUsuarios),
+            limite_pacientes: limitePacientes === "" ? null : Number(limitePacientes),
+            preco_mensal: preco === "" ? null : Number(preco),
+          }).eq("id", p.id);
+
+          planoEmEdicaoId = null;
+          await carregarPlanos();
+        });
+        celula.appendChild(botaoSalvar);
+
+        const botaoCancelar = document.createElement("button");
+        botaoCancelar.textContent = "Cancelar";
+        botaoCancelar.style.cssText = "background:transparent; color:var(--texto-suave); border:1px solid var(--borda); font-size:12px; padding:6px 10px;";
+        botaoCancelar.addEventListener("click", () => { planoEmEdicaoId = null; carregarPlanos(); });
+        celula.appendChild(botaoCancelar);
+
+        corpo.appendChild(linha);
+        return;
+      }
+
       linha.innerHTML =
         "<td>" + p.nome + "</td>" +
         "<td>" + (p.limite_usuarios ?? "Ilimitado") + "</td>" +
@@ -483,9 +531,17 @@
         "<td></td>";
 
       const celula = linha.lastElementChild;
+      celula.style.whiteSpace = "nowrap";
+
+      const botaoEditar = document.createElement("button");
+      botaoEditar.textContent = "Editar";
+      botaoEditar.style.cssText = "font-size:12px; padding:6px 10px; margin-right:6px;";
+      botaoEditar.addEventListener("click", () => { planoEmEdicaoId = p.id; carregarPlanos(); });
+      celula.appendChild(botaoEditar);
+
       const botao = document.createElement("button");
       botao.textContent = p.ativo ? "Desativar" : "Ativar";
-      botao.style.cssText = p.ativo ? "background:transparent; color:var(--erro); border:1px solid var(--borda);" : "";
+      botao.style.cssText = (p.ativo ? "background:transparent; color:var(--erro); border:1px solid var(--borda);" : "") + " font-size:12px; padding:6px 10px;";
       botao.addEventListener("click", async () => {
         await supabaseClient.from("planos").update({ ativo: !p.ativo }).eq("id", p.id);
         await carregarPlanos();
