@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { getEmpresaId, salvarEmpresaStorage } from "../../lib/empresa";
+import { formatarData } from "../../components/global/THFormat";
 
 type Empresa = {
   id: string;
@@ -96,11 +97,6 @@ export default function EmpresasPage() {
       ...atual,
       [campo]: valor,
     }));
-  }
-
-  function formatarData(data?: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
   }
 
   function documentoEmpresa(empresa: Empresa | null) {

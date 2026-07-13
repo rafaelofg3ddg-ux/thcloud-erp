@@ -103,37 +103,18 @@ export default function AjusteEstoquePage() {
 
     const login = loginGerente.trim().toLowerCase();
 
-    const porEmail = await supabase
-      .from("usuarios")
-      .select("id,nome,email,perfil,ativo")
-      .eq("empresa_id", empresaId)
-      .eq("email", login)
-      .eq("senha", senhaGerente)
-      .maybeSingle();
+    const { data: usuarios, error } = await supabase.rpc("verificar_login", {
+      p_login: login,
+      p_senha: senhaGerente,
+      p_empresa_id: empresaId,
+    });
 
-    if (porEmail.error) {
-      alert("Erro ao validar gerente: " + porEmail.error.message);
+    if (error) {
+      alert("Erro ao validar gerente: " + error.message);
       return null;
     }
 
-    let usuario: UsuarioAutorizado | null = porEmail.data as UsuarioAutorizado | null;
-
-    if (!usuario) {
-      const porNome = await supabase
-        .from("usuarios")
-        .select("id,nome,email,perfil,ativo")
-        .eq("empresa_id", empresaId)
-        .ilike("nome", login)
-        .eq("senha", senhaGerente)
-        .maybeSingle();
-
-      if (porNome.error) {
-        alert("Erro ao validar gerente: " + porNome.error.message);
-        return null;
-      }
-
-      usuario = porNome.data as UsuarioAutorizado | null;
-    }
+    const usuario = (usuarios && usuarios[0]) as UsuarioAutorizado | null;
 
     if (!usuario) {
       alert("Usuário ou senha inválidos.");

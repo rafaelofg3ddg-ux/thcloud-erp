@@ -443,11 +443,17 @@ export default function OnboardingPage() {
     };
 
     if (passo === 3 && form.nova_senha.trim()) {
-      atualizarUsuario.senha = form.nova_senha.trim();
       atualizarUsuario.resetar_senha_proximo_login = false;
     }
 
     await supabase.from("usuarios").update(atualizarUsuario).eq("id", usuario.id);
+
+    if (passo === 3 && form.nova_senha.trim()) {
+      await supabase.rpc("definir_senha", {
+        p_usuario_id: usuario.id,
+        p_senha_nova: form.nova_senha.trim(),
+      });
+    }
 
     const { data: onboardingExistente } = await supabase.from("onboarding_empresas").select("id").eq("empresa_id", empresa.id).maybeSingle();
 

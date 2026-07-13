@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import { getEmpresaId } from "../../../lib/empresa";
+import { formatarData, formatarMoeda } from "../../../components/global/THFormat";
 
 type Cliente = {
   id: string;
@@ -79,18 +80,6 @@ export default function ConsultaVendasPage() {
     }
 
     return empresaId;
-  }
-
-  function formatarMoeda(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
   }
 
   function formatarNumeroVenda(numero: number | null | undefined) {

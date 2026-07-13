@@ -13,6 +13,7 @@ import {
   Settings,
   Trash2,
 } from "lucide-react";
+import { formatarMoeda } from "../../components/global/THFormat";
 
 type Produto = {
   id: string;
@@ -181,13 +182,6 @@ export default function EtiquetasPage() {
     } catch {
       return "Th Cloud";
     }
-  }
-
-  function formatarMoeda(valor: number | null | undefined) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
   }
 
   function converterNumero(valor: string) {

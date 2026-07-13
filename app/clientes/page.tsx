@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { formatarData, formatarMoeda } from "../../components/global/THFormat";
 
 type Cliente = {
   id: string;
@@ -212,18 +213,6 @@ export default function ClientesPage() {
         ? valor
         : paraMaiusculo(valor),
     }));
-  }
-
-  function formatarMoeda(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleDateString("pt-BR");
   }
 
   function formatarDocumento(valor: string | null) {

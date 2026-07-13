@@ -106,38 +106,18 @@ export default function LoginPage() {
     const loginLimpo = login.trim().toLowerCase();
 
     try {
-      let usuarioReq = await supabase
-        .from("usuarios")
-        .select("id,nome,email,usuario,perfil,empresa_id,ativo")
-        .eq("email", loginLimpo)
-        .eq("senha", senha)
-        .maybeSingle();
+      const { data: usuarios, error: erroLogin } = await supabase.rpc("verificar_login", {
+        p_login: loginLimpo,
+        p_senha: senha,
+      });
 
-      if (!usuarioReq.data) {
-        usuarioReq = await supabase
-          .from("usuarios")
-          .select("id,nome,email,usuario,perfil,empresa_id,ativo")
-          .eq("usuario", loginLimpo)
-          .eq("senha", senha)
-          .maybeSingle();
-      }
-
-      if (!usuarioReq.data) {
-        usuarioReq = await supabase
-          .from("usuarios")
-          .select("id,nome,email,usuario,perfil,empresa_id,ativo")
-          .ilike("nome", loginLimpo)
-          .eq("senha", senha)
-          .maybeSingle();
-      }
-
-      if (usuarioReq.error) {
-        alert("Erro ao acessar: " + usuarioReq.error.message);
+      if (erroLogin) {
+        alert("Erro ao acessar: " + erroLogin.message);
         setCarregando(false);
         return;
       }
 
-      const usuario = usuarioReq.data as UsuarioLogin | null;
+      const usuario = (usuarios && usuarios[0]) as UsuarioLogin | null;
 
       if (!usuario) {
         alert("Usuário ou senha inválidos.");

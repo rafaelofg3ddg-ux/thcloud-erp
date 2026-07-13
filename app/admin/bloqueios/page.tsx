@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
   CalendarClock,
   CheckCircle2,
-  Clock,
   Filter,
   Lock,
   RefreshCw,
@@ -15,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
+import { formatarData } from "../../../components/global/THFormat";
 
 type Empresa = {
   id: string;
@@ -63,11 +62,6 @@ export default function AdminBloqueiosPage() {
       style: "currency",
       currency: "BRL",
     });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
   }
 
   function diasAtraso(empresa: Empresa) {

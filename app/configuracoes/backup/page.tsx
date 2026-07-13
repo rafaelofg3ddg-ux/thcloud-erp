@@ -14,7 +14,6 @@ import {
   History,
   Save,
   RefreshCcw,
-  ShieldCheck,
   Upload,
 } from "lucide-react";
 import {
@@ -31,6 +30,7 @@ import {
   type BackupCompleto,
   type BackupConfiguracao,
 } from "../../../lib/backup";
+import { formatarData } from "../../../components/global/THFormat";
 
 type EmpresaLocal = {
   nome: string;
@@ -339,11 +339,6 @@ export default function BackupPage() {
       alert(error.message || "Erro ao baixar backup.");
       setStatus("");
     }
-  }
-
-  function formatarData(data: string) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
   }
 
   function formatarTamanho(bytes: number) {

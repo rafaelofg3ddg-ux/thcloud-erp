@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "../../lib/supabase";
+import { formatarMoeda } from "../../components/global/THFormat";
+import { Smartphone, Plus } from "lucide-react";
+import { useProdutoImeis } from "../produto-imeis/hooks/useProdutoImeis";
+import { TabelaIMEIs } from "../produto-imeis/components/TabelaIMEIs";
+import { ModalNovoIMEI } from "../produto-imeis/components/ModalNovoIMEI";
+import { ModalHistoricoIMEI } from "../produto-imeis/components/ModalHistoricoIMEI";
 
 type Grupo = {
   id: string;
@@ -74,6 +80,7 @@ const abas = [
   "Embalagens",
   "Preços",
   "Estoque",
+  "IMEIs",
   "Fiscal",
   "Avançado",
 ] as const;
@@ -141,6 +148,10 @@ export default function ProdutosPage() {
   const [carregando, setCarregando] = useState(false);
   const [avisoCodigos, setAvisoCodigos] = useState("");
 
+  // Módulo de IMEI, agora vivendo dentro do próprio cadastro de produto —
+  // fica escopado automaticamente pro produto que está sendo editado.
+  const imeiHook = useProdutoImeis(produtoEditandoId || undefined);
+
   function empresaAtualId() {
     try {
       const empresaStorage =
@@ -206,10 +217,6 @@ export default function ProdutosPage() {
   function numeroParaInput(valor: number | null | undefined) {
     if (valor === null || valor === undefined) return "";
     return String(valor).replace(".", ",");
-  }
-
-  function formatarMoeda(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   }
 
   function gerarCodigoAleatorio() {
@@ -1093,6 +1100,55 @@ export default function ProdutosPage() {
                 </Secao>
               )}
 
+              {abaAtiva === "IMEIs" && (
+                <Secao
+                  titulo="Controle de IMEI / Série"
+                  descricao="Cada unidade física desse produto (com o próprio IMEI/número de série), com histórico e status individual."
+                >
+                  {!produtoEditandoId ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-amber-800 font-bold">
+                      Salve o produto primeiro (na aba “Principal”) para poder cadastrar os IMEIs dele.
+                    </div>
+                  ) : !controlarImei ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-amber-800 font-bold">
+                      Ative a opção “Controlar IMEI / Série” na aba “Estoque” para gerenciar os IMEIs deste produto.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                          <p className="text-xs font-black text-slate-500 uppercase">Disponíveis</p>
+                          <p className="text-2xl font-black text-green-700 mt-1">{imeiHook.totalDisponivel}</p>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                          <p className="text-xs font-black text-slate-500 uppercase">Vendidos</p>
+                          <p className="text-2xl font-black text-blue-700 mt-1">{imeiHook.totalVendido}</p>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                          <p className="text-xs font-black text-slate-500 uppercase">Reservados</p>
+                          <p className="text-2xl font-black text-yellow-700 mt-1">{imeiHook.totalReservado}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-slate-500 font-bold">
+                          <Smartphone size={18} /> {imeiHook.imeis.length} unidade(s) cadastrada(s)
+                        </div>
+                        <button
+                          type="button"
+                          onClick={imeiHook.abrirNovo}
+                          className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-xl font-black flex items-center gap-2"
+                        >
+                          <Plus size={16} /> Novo IMEI
+                        </button>
+                      </div>
+
+                      <TabelaIMEIs imei={imeiHook} />
+                    </div>
+                  )}
+                </Secao>
+              )}
+
               {abaAtiva === "Fiscal" && (
                 <Secao titulo="Fiscal" descricao="Campos fiscais básicos para futuras emissões e relatórios.">
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -1134,6 +1190,9 @@ export default function ProdutosPage() {
         </div>
       )}
 
+      {imeiHook.modalAberto && <ModalNovoIMEI imei={imeiHook} />}
+      {imeiHook.modalHistoricoAberto && <ModalHistoricoIMEI imei={imeiHook} />}
+
       <style jsx global>{`
         .input { width: 100%; border: 1px solid rgb(203 213 225); padding: 0.75rem; border-radius: 1rem; color: rgb(15 23 42); font-weight: 500; outline: none; }
         .input:focus { border-color: rgb(29 78 216); box-shadow: 0 0 0 4px rgb(219 234 254); }
@@ -1143,6 +1202,8 @@ export default function ProdutosPage() {
         .btn-primary:hover { background: rgb(30 64 175); }
         .btn-secondary { background: rgb(226 232 240); color: rgb(15 23 42); padding: 0.75rem 1.25rem; border-radius: 1rem; font-weight: 800; }
         .btn-secondary:hover { background: rgb(203 213 225); }
+        .input-imei { width: 100%; border: 1px solid rgb(203 213 225); border-radius: 1rem; padding: 0.75rem 1rem; color: rgb(15 23 42); background: white; font-weight: 700; outline: none; }
+        .input-imei:focus { border-color: rgb(37 99 235); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12); }
       `}</style>
     </div>
   );

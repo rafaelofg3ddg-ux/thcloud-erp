@@ -17,6 +17,7 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react";
+import { formatarData, formatarMoeda } from "../../../components/global/THFormat";
 
 type Caixa = {
   id: string;
@@ -108,21 +109,9 @@ export default function RelatorioCaixasPage() {
     }
   }
 
-  function formatarMoeda(valor: number | null | undefined) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
   function formatarDataHora(data: string | null | undefined) {
     if (!data) return "-";
     return new Date(data).toLocaleString("pt-BR");
-  }
-
-  function formatarData(data: string | null | undefined) {
-    if (!data) return "-";
-    return new Date(data).toLocaleDateString("pt-BR");
   }
 
   function formatarHora(data: string | null | undefined) {

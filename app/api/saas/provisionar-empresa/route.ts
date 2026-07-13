@@ -61,14 +61,16 @@ export async function POST(request: NextRequest) {
       .or(`usuario.eq.${usuarioAdmin},email.eq.${emailAdmin || usuarioAdmin}`)
       .maybeSingle();
 
+    let idUsuarioAdmin: string;
+
     if (usuarioExistente?.id) {
+      idUsuarioAdmin = usuarioExistente.id;
       await supabase
         .from("usuarios")
         .update({
           nome: nomeAdmin,
           email: emailAdmin || usuarioAdmin,
           usuario: usuarioAdmin,
-          senha: senhaAdmin,
           perfil: "Admin",
           empresa_id: empresaId,
           ativo: true,
@@ -76,26 +78,43 @@ export async function POST(request: NextRequest) {
         })
         .eq("id", usuarioExistente.id);
     } else {
-      const { error: erroUsuario } = await supabase.from("usuarios").insert([
-        {
-          nome: nomeAdmin,
-          email: emailAdmin || usuarioAdmin,
-          usuario: usuarioAdmin,
-          senha: senhaAdmin,
-          perfil: "Admin",
-          empresa_id: empresaId,
-          ativo: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ]);
+      const { data: novoUsuario, error: erroUsuario } = await supabase
+        .from("usuarios")
+        .insert([
+          {
+            nome: nomeAdmin,
+            email: emailAdmin || usuarioAdmin,
+            usuario: usuarioAdmin,
+            perfil: "Admin",
+            empresa_id: empresaId,
+            ativo: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
+        .select("id")
+        .single();
 
-      if (erroUsuario) {
+      if (erroUsuario || !novoUsuario) {
         return NextResponse.json(
-          { ok: false, erro: erroUsuario.message },
+          { ok: false, erro: erroUsuario?.message || "Erro ao criar usuário." },
           { status: 500 }
         );
       }
+
+      idUsuarioAdmin = novoUsuario.id;
+    }
+
+    const { error: erroSenha } = await supabase.rpc("definir_senha", {
+      p_usuario_id: idUsuarioAdmin,
+      p_senha_nova: senhaAdmin,
+    });
+
+    if (erroSenha) {
+      return NextResponse.json(
+        { ok: false, erro: erroSenha.message },
+        { status: 500 }
+      );
     }
 
     await supabase

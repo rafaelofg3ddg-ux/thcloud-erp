@@ -5,14 +5,11 @@ import { supabase } from "../../lib/supabase";
 import { getEmpresaId } from "../../lib/empresa";
 import {
   AlertTriangle,
-  Bell,
   CheckCircle,
   CreditCard,
   DatabaseBackup,
-  FileText,
   MessageCircle,
   MonitorCog,
-  Palette,
   Printer,
   RefreshCcw,
   Save,
@@ -20,7 +17,6 @@ import {
   ShieldCheck,
   ShoppingCart,
   SlidersHorizontal,
-  Store,
   Wallet,
 } from "lucide-react";
 

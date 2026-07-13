@@ -70,6 +70,43 @@ const MODULOS_EMPRESA_PADRAO: ModulosEmpresa = {
   modulo_ordem_servico: true,
 };
 
+// Definidos fora do Sidebar (e não dentro dele) de propósito: assim o React
+// não precisa recriar e remontar esses pedaços da tela toda vez que o
+// Sidebar renderiza de novo — evita piscar e melhora a performance.
+function TituloSecao({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-3 mt-4 mb-2 text-[11px] font-black uppercase tracking-[0.12em] text-blue-200/90">
+      {children}
+    </p>
+  );
+}
+
+function LogoTopo() {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="h-12 w-12 rounded-full bg-white/10 shadow-xl shadow-blue-950/30 flex items-center justify-center border border-white/20 overflow-hidden">
+        <img
+          src="/logo-thcloud-original.png"
+          alt="THCloud"
+          className="h-12 w-12 object-cover"
+          onError={(e) => {
+            e.currentTarget.src = "/logo-thcloud-transparente.png";
+          }}
+        />
+      </div>
+
+      <div className="min-w-0">
+        <h1 className="text-[22px] leading-none font-black tracking-[-0.03em] text-white drop-shadow-md">
+          TH Cloud
+        </h1>
+        <p className="text-[11px] text-blue-100 font-semibold leading-tight mt-1">
+          Sistema de Gestão
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -404,40 +441,6 @@ export default function Sidebar() {
     }`;
   }
 
-  function TituloSecao({ children }: { children: React.ReactNode }) {
-    return (
-      <p className="px-3 mt-4 mb-2 text-[11px] font-black uppercase tracking-[0.12em] text-blue-200/90">
-        {children}
-      </p>
-    );
-  }
-
-  function LogoTopo() {
-    return (
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="h-12 w-12 rounded-full bg-white/10 shadow-xl shadow-blue-950/30 flex items-center justify-center border border-white/20 overflow-hidden">
-          <img
-            src="/logo-thcloud-original.png"
-            alt="THCloud"
-            className="h-12 w-12 object-cover"
-            onError={(e) => {
-              e.currentTarget.src = "/logo-thcloud-transparente.png";
-            }}
-          />
-        </div>
-
-        <div className="min-w-0">
-          <h1 className="text-[22px] leading-none font-black tracking-[-0.03em] text-white drop-shadow-md">
-            TH Cloud
-          </h1>
-          <p className="text-[11px] text-blue-100 font-semibold leading-tight mt-1">
-            Sistema de Gestão
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const menu = (
     <aside className="w-[280px] bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] text-white h-screen min-h-screen shadow-2xl flex flex-col sticky top-0 relative overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-56 bg-sky-400/10 blur-3xl rounded-full -translate-y-36" />
@@ -659,12 +662,6 @@ export default function Sidebar() {
                       Equipamentos
                     </Link>
                   )}
-
-                  {pode("produto_imeis") && (
-                    <Link href="/produto-imeis" className={classeSubLink("/produto-imeis")}>
-                      Controle de IMEI
-                    </Link>
-                  )}
                 </div>
               )}
             </div>
@@ -767,6 +764,7 @@ export default function Sidebar() {
                 <Link href="/relatorios/contas-pagar" className={classeSubLink("/relatorios/contas-pagar")}>Contas a Pagar</Link>
                 <Link href="/relatorios/produtos" className={classeSubLink("/relatorios/produtos")}>Produtos</Link>
                 <Link href="/relatorios/estoque" className={classeSubLink("/relatorios/estoque")}>Estoque</Link>
+                <Link href="/relatorios/imeis" className={classeSubLink("/relatorios/imeis")}>IMEI / Celulares</Link>
                 <Link href="/relatorios/clientes" className={classeSubLink("/relatorios/clientes")}>Clientes</Link>
                 <Link href="/relatorios/produtos-mais-vendidos" className={classeSubLink("/relatorios/produtos-mais-vendidos")}>Produtos Mais Vendidos</Link>
                 <Link href="/relatorios/ranking-clientes" className={classeSubLink("/relatorios/ranking-clientes")}>Ranking de Clientes</Link>

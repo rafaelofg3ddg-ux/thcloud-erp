@@ -6,6 +6,7 @@ import { supabase } from "../../../../lib/supabase";
 import InfraCard from "../../../../components/infrastructure/InfraCard";
 import InfraPageHeader from "../../../../components/infrastructure/InfraPageHeader";
 import InfraStatusBadge from "../../../../components/infrastructure/InfraStatusBadge";
+import { formatarData } from "../../../../components/global/THFormat";
 
 type LogEvento = {
   id: string;
@@ -29,11 +30,6 @@ export default function InfraLogsPage() {
     if (normalizado.includes("alerta") || normalizado.includes("atenção") || normalizado.includes("atencao")) return "atencao";
     if (normalizado.includes("login") || normalizado.includes("venda") || normalizado.includes("os")) return "ok";
     return "info";
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
   }
 
   async function carregarLogs() {

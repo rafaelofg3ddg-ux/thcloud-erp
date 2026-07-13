@@ -14,6 +14,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { formatarData, formatarMoeda } from "../../../components/global/THFormat";
 
 type Cliente = {
   id: string;
@@ -125,18 +126,6 @@ export default function ContasReceberPage() {
 
   function converterNumero(valor: string | number) {
     return Number(String(valor || "0").replace(",", "."));
-  }
-
-  function formatarMoeda(valor: number | null | undefined) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
-  function formatarData(data: string | null | undefined) {
-    if (!data) return "-";
-    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
   }
 
   function formatarDataHora(data: string | null | undefined) {

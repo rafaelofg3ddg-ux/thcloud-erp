@@ -13,7 +13,6 @@ import {
   KeyRound,
   LogIn,
   Lock,
-  PackageCheck,
   Plus,
   RefreshCw,
   Search,
@@ -24,6 +23,7 @@ import {
   Activity,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
+import { formatarData } from "../../../components/global/THFormat";
 
 type Empresa = {
   id: string;
@@ -168,11 +168,6 @@ export default function AdminEmpresasPage() {
       style: "currency",
       currency: "BRL",
     });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
   }
 
   function nomeEmpresa(empresa: Empresa) {
@@ -640,10 +635,19 @@ export default function AdminEmpresasPage() {
 
     if (!confirm(`Resetar senha do administrador ${admin.nome || admin.email || admin.usuario}?\n\nNova senha: ${novaSenha}`)) return;
 
+    const { error: erroSenha } = await supabase.rpc("definir_senha", {
+      p_usuario_id: admin.id,
+      p_senha_nova: novaSenha,
+    });
+
+    if (erroSenha) {
+      alert("Erro ao resetar senha: " + erroSenha.message);
+      return;
+    }
+
     const { error } = await supabase
       .from("usuarios")
       .update({
-        senha: novaSenha,
         resetar_senha_proximo_login: true,
         updated_at: new Date().toISOString(),
       })

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { getEmpresaId } from "../../../lib/empresa";
 import {
-  Calendar,
   CheckCircle,
   Edit,
   FileText,
@@ -16,6 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { formatarData, formatarMoeda } from "../../../components/global/THFormat";
 
 type Produto = {
   id: string;
@@ -180,20 +180,8 @@ export default function OrcamentosPage() {
     }
   }
 
-  function formatarMoeda(valor: number | null | undefined) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
   function converterNumero(valor: string | number) {
     return Number(String(valor || "0").replace(",", "."));
-  }
-
-  function formatarData(data: string | null | undefined) {
-    if (!data) return "-";
-    return new Date(data).toLocaleDateString("pt-BR");
   }
 
   function formatarDataHora(data: string | null | undefined) {

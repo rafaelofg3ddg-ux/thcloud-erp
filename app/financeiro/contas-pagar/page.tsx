@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { getEmpresaId } from "../../../lib/empresa";
+import { formatarData } from "../../../components/global/THFormat";
 
 type Fornecedor = {
   id: string;
@@ -63,11 +64,6 @@ export default function ContasPagarPage() {
 
   function converterNumero(valor: string) {
     return Number(String(valor || "0").replace(",", "."));
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
   }
 
   function nomeFornecedor(id: string | null) {

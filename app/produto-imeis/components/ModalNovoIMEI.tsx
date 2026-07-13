@@ -131,7 +131,7 @@ export function ModalNovoIMEI({ imei }: { imei: ProdutoImeisHook }) {
           <div className="max-h-[55vh] overflow-y-auto border border-slate-200 rounded-2xl overflow-hidden mt-4">
             {produtosFiltrados.map((produto) => (
               <button key={produto.id} type="button" onClick={() => selecionarProduto(produto)} className="w-full text-left p-4 hover:bg-blue-50 border-b border-slate-100 flex items-center justify-between gap-4">
-                <div><p className="font-black text-slate-900 uppercase">{produto.codigo ? `${produto.codigo} - ` : ""}{produto.nome}</p><p className="text-xs text-slate-500 mt-1">Estoque: {Number(produto.qtd_atual || 0)} • {produto.controla_imei ? "Controla IMEI" : ""}</p></div>
+                <div><p className="font-black text-slate-900 uppercase">{produto.codigo ? `${produto.codigo} - ` : ""}{produto.nome}</p><p className="text-xs text-slate-500 mt-1">Estoque: {Number(produto.qtd_atual || 0)} • {produto.controlar_imei ? "Controla IMEI" : ""}</p></div>
                 <b className="text-blue-700">{imei.dinheiro(produto.preco_venda)}</b>
               </button>
             ))}

@@ -11,7 +11,7 @@ export type Produto = {
   nome: string;
   preco_venda: number | null;
   qtd_atual: number | null;
-  controla_imei?: boolean | null;
+  controlar_imei?: boolean | null;
 };
 
 export type Cliente = {
@@ -67,7 +67,7 @@ export const statusOpcoes = [
   { codigo: "cancelado", nome: "Cancelado" },
 ];
 
-export function useProdutoImeis() {
+export function useProdutoImeis(produtoIdFixo?: string) {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [imeis, setImeis] = useState<ProdutoImei[]>([]);
@@ -178,10 +178,18 @@ export function useProdutoImeis() {
 
     setCarregando(true);
 
+    let consultaImeis = supabase
+      .from("produto_imeis")
+      .select("*, produtos:produto_id(id,codigo,codigo_barras,nome,preco_venda,qtd_atual,controlar_imei), clientes:cliente_id(id,nome,cpf_cnpj,whatsapp)")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false });
+
+    if (produtoIdFixo) consultaImeis = consultaImeis.eq("produto_id", produtoIdFixo);
+
     const [prodReq, cliReq, imeiReq] = await Promise.all([
       supabase
         .from("produtos")
-        .select("id,codigo,codigo_barras,nome,preco_venda,qtd_atual,controla_imei")
+        .select("id,codigo,codigo_barras,nome,preco_venda,qtd_atual,controlar_imei")
         .eq("empresa_id", empresaId)
         .eq("ativo", true)
         .order("nome"),
@@ -190,11 +198,7 @@ export function useProdutoImeis() {
         .select("id,nome,cpf_cnpj,whatsapp")
         .eq("empresa_id", empresaId)
         .order("nome"),
-      supabase
-        .from("produto_imeis")
-        .select("*, produtos:produto_id(id,codigo,codigo_barras,nome,preco_venda,qtd_atual,controla_imei), clientes:cliente_id(id,nome,cpf_cnpj,whatsapp)")
-        .eq("empresa_id", empresaId)
-        .order("created_at", { ascending: false }),
+      consultaImeis,
     ]);
 
     if (prodReq.error) alert("Erro ao carregar produtos: " + prodReq.error.message);
@@ -210,6 +214,10 @@ export function useProdutoImeis() {
 
   function abrirNovo() {
     limparFormulario();
+    if (produtoIdFixo) {
+      setProdutoId(produtoIdFixo);
+      setProdutoBusca(produtos.find((p) => p.id === produtoIdFixo)?.nome || "");
+    }
     setModalAberto(true);
   }
 
@@ -260,7 +268,7 @@ export function useProdutoImeis() {
 
     await supabase
       .from("produtos")
-      .update({ controla_imei: true })
+      .update({ controlar_imei: true })
       .eq("empresa_id", empresaId)
       .eq("id", idProduto);
   }
@@ -528,7 +536,7 @@ export function useProdutoImeis() {
 
   useEffect(() => {
     carregarDados();
-  }, []);
+  }, [produtoIdFixo]);
 
   return {
     produtos,

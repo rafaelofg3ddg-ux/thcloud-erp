@@ -15,7 +15,6 @@ import {
   Search,
   ShieldCheck,
   Unlock,
-  UserCog,
   Users,
   X,
 } from "lucide-react";
@@ -337,10 +336,19 @@ export default function AdminControlePage() {
 
     if (!novaSenha.trim()) return;
 
+    const { error: erroSenha } = await supabase.rpc("definir_senha", {
+      p_usuario_id: admin.id,
+      p_senha_nova: novaSenha.trim(),
+    });
+
+    if (erroSenha) {
+      alert("Erro ao resetar senha: " + erroSenha.message);
+      return;
+    }
+
     const { error } = await supabase
       .from("usuarios")
       .update({
-        senha: novaSenha.trim(),
         resetar_senha_proximo_login: true,
         updated_at: new Date().toISOString(),
       })

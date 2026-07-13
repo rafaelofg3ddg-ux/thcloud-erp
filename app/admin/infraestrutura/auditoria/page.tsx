@@ -6,6 +6,7 @@ import { supabase } from "../../../../lib/supabase";
 import InfraCard from "../../../../components/infrastructure/InfraCard";
 import InfraPageHeader from "../../../../components/infrastructure/InfraPageHeader";
 import InfraStatusBadge from "../../../../components/infrastructure/InfraStatusBadge";
+import { formatarData } from "../../../../components/global/THFormat";
 
 type AuditoriaEvento = {
   id: string;
@@ -44,11 +45,6 @@ export default function InfraAuditoriaPage() {
     data.setDate(data.getDate() - dias);
     data.setHours(0, 0, 0, 0);
     return data;
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
   }
 
   function nomeEmpresa(empresaId: string | null) {

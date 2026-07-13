@@ -19,6 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
+import { formatarData } from "../../../components/global/THFormat";
 
 type Empresa = {
   id: string;
@@ -96,11 +97,6 @@ export default function AdminFinanceiroPage() {
 
   function percentual(valor: number) {
     return `${Number(valor || 0).toFixed(1).replace(".", ",")}%`;
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
   }
 
   function nomeEmpresa(empresa?: Empresa | null) {

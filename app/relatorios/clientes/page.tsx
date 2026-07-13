@@ -13,6 +13,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
+import { formatarData, formatarMoeda } from "../../../components/global/THFormat";
 
 type Cliente = {
   id: string;
@@ -90,18 +91,6 @@ export default function RelatorioClientesPage() {
     }
 
     return valor;
-  }
-
-  function formatarMoeda(valor: number | null | undefined) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleDateString("pt-BR");
   }
 
   function enderecoCliente(cliente: Cliente) {

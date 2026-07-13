@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Edit, Loader2, Plus, RefreshCcw, Trash2, Wrench } from "lucide-react";
+import { CheckCircle2, Edit, Loader2, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { getEmpresaId } from "../../lib/empresa";
 import {

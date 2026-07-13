@@ -14,6 +14,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { formatarMoeda } from "../../components/global/THFormat";
 
 type Venda = {
   id: string;
@@ -139,13 +140,6 @@ export default function DashboardPage() {
     } catch {
       return null;
     }
-  }
-
-  function formatarMoeda(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
   }
 
   function dataHojeInicio() {

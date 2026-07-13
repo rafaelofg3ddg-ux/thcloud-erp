@@ -172,7 +172,7 @@ export default function UsuariosPage() {
     setEditandoId(usuario.id);
     setNome(usuario.nome || "");
     setEmail(usuario.email || "");
-    setSenha(usuario.senha || "");
+    setSenha("");
     setPerfil(usuario.perfil || "Operador de Caixa");
     setAtivo(usuario.ativo !== false);
 
@@ -203,8 +203,13 @@ export default function UsuariosPage() {
     const empresaId = empresaAtualId();
     if (!empresaId) return;
 
-    if (!nome.trim() || !email.trim() || !senha.trim()) {
-      alert("Preencha nome, e-mail/login e senha.");
+    if (!nome.trim() || !email.trim()) {
+      alert("Preencha nome e e-mail/login.");
+      return;
+    }
+
+    if (!editandoId && !senha.trim()) {
+      alert("Defina uma senha para o novo usuário.");
       return;
     }
 
@@ -212,7 +217,6 @@ export default function UsuariosPage() {
       empresa_id: empresaId,
       nome: nome.trim(),
       email: email.trim().toLowerCase(),
-      senha: senha.trim(),
       perfil,
       ativo,
       ...permissoes,
@@ -225,13 +229,35 @@ export default function UsuariosPage() {
         alert("Erro ao atualizar usuário: " + error.message);
         return;
       }
+
+      if (senha.trim()) {
+        const { error: erroSenha } = await supabase.rpc("definir_senha", {
+          p_usuario_id: editandoId,
+          p_senha_nova: senha.trim(),
+        });
+        if (erroSenha) {
+          alert("Usuário atualizado, mas houve erro ao trocar a senha: " + erroSenha.message);
+          return;
+        }
+      }
+
       alert("Usuário atualizado com sucesso!");
     } else {
-      const { error } = await supabase.from("usuarios").insert([registro]);
+      const { data: novoUsuario, error } = await supabase.from("usuarios").insert([registro]).select("id").single();
       if (error) {
         alert("Erro ao cadastrar usuário: " + error.message);
         return;
       }
+
+      const { error: erroSenha } = await supabase.rpc("definir_senha", {
+        p_usuario_id: novoUsuario.id,
+        p_senha_nova: senha.trim(),
+      });
+      if (erroSenha) {
+        alert("Usuário criado, mas houve erro ao definir a senha: " + erroSenha.message);
+        return;
+      }
+
       alert("Usuário cadastrado com sucesso!");
     }
 
@@ -384,8 +410,8 @@ export default function UsuariosPage() {
                   <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@empresa.com" className="input" />
                 </Campo>
 
-                <Campo titulo="Senha">
-                  <input value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha de acesso" className="input" />
+                <Campo titulo={editandoId ? "Nova senha (deixe em branco para manter a atual)" : "Senha"}>
+                  <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder={editandoId ? "Deixe em branco para não alterar" : "Senha de acesso"} className="input" autoComplete="new-password" />
                 </Campo>
 
                 <Campo titulo="Grupo / Perfil">

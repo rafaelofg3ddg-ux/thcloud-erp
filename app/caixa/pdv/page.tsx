@@ -12,6 +12,7 @@ import {
 import SelecionarImeiProdutoPDV, {
   type ImeiDisponivelPDV,
 } from "./components/SelecionarImeiProdutoPDV";
+import { formatarData, formatarMoeda } from "../../../components/global/THFormat";
 
 type Produto = {
   id: string;
@@ -21,7 +22,7 @@ type Produto = {
   preco_venda: number;
   qtd_atual: number;
   foto_url: string | null;
-  controla_imei?: boolean | null;
+  controlar_imei?: boolean | null;
 };
 
 type ProdutoCodigoPdv = {
@@ -133,7 +134,7 @@ type ItemCarrinho = {
   quantidade: number;
   valor_unitario: number;
   subtotal: number;
-  controla_imei?: boolean | null;
+  controlar_imei?: boolean | null;
   produto_imei_id?: string | null;
   imei?: string | null;
   imei_2?: string | null;
@@ -185,6 +186,28 @@ type OrdemServicoPdv = {
   }[];
 };
 
+// Componente isolado só pro relógio do cabeçalho. Fica de fora do
+// PdvPage de propósito: assim, o "tic-tac" de 1 em 1 segundo só
+// re-renderiza esse pedacinho pequeno da tela, e não o PDV inteiro
+// (que é enorme) — isso evita que a tela toda fique recalculando sem
+// parar, o que podia atrapalhar quem estivesse digitando em algum
+// campo (motivo de devolução, observações, etc.) bem nesse instante.
+function RelogioPdv() {
+  const [agora, setAgora] = useState(new Date());
+
+  useEffect(() => {
+    const relogio = window.setInterval(() => setAgora(new Date()), 1000);
+    return () => window.clearInterval(relogio);
+  }, []);
+
+  return (
+    <div className="text-right hidden md:block">
+      <p className="text-xs text-slate-500 font-bold">{agora.toLocaleDateString("pt-BR")}</p>
+      <p className="text-2xl font-black text-slate-900 leading-none">{agora.toLocaleTimeString("pt-BR")}</p>
+    </div>
+  );
+}
+
 export default function PdvPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [produtoCodigos, setProdutoCodigos] = useState<ProdutoCodigoPdv[]>([]);
@@ -205,7 +228,8 @@ export default function PdvPage() {
   const [modalHistoricoCaixa, setModalHistoricoCaixa] = useState(false);
   const [modalDevolucao, setModalDevolucao] = useState(false);
   const [modoTelaCheia, setModoTelaCheia] = useState(false);
-  const [dataHoraAtual, setDataHoraAtual] = useState(new Date());
+  // (relógio foi isolado no componente RelogioPdv, mais abaixo, pra não
+  // forçar o PDV inteiro a recalcular a cada segundo)
   const produtoInputRef = useRef<HTMLInputElement | null>(null);
 
   const [vendasDetalhadas, setVendasDetalhadas] = useState<VendaDetalhada[]>(
@@ -217,7 +241,11 @@ export default function PdvPage() {
   const [tipoDevolucao, setTipoDevolucao] = useState<"estorno" | "credito">(
     "estorno",
   );
-  const [motivoDevolucao, setMotivoDevolucao] = useState("");
+  // O campo de motivo da devolução usa uma referência direta (não é mais
+  // "controlado" pelo React a cada letra digitada) — isso evita qualquer
+  // interferência de autopreenchimento/gerenciador de senha do navegador
+  // no meio da digitação. O texto só é lido na hora de confirmar.
+  const motivoDevolucaoRef = useRef<HTMLTextAreaElement>(null);
   const [processandoDevolucao, setProcessandoDevolucao] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
@@ -257,7 +285,6 @@ export default function PdvPage() {
   const [chavePix, setChavePix] = useState("");
   const [nomeRecebedorPix, setNomeRecebedorPix] = useState("TH GESTAO");
   const [cidadePix, setCidadePix] = useState("SAO PAULO");
-  const [pixConfirmado, setPixConfirmado] = useState(false);
   const [pagDebito, setPagDebito] = useState("0");
   const [pagCredito, setPagCredito] = useState("0");
   const [pagCrediario, setPagCrediario] = useState("0");
@@ -355,18 +382,6 @@ export default function PdvPage() {
     if (config.cidade_pix) setCidadePix(config.cidade_pix);
   }
 
-  function formatarCnpj(cnpj: string) {
-    const numeros = String(cnpj || "").replace(/\D/g, "");
-
-    if (numeros.length !== 14) {
-      return cnpj || "";
-    }
-
-    return numeros.replace(
-      /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
-      "$1.$2.$3/$4-$5",
-    );
-  }
 
   function enderecoEmpresaFormatado(dados: any) {
     if (dados.endereco) return dados.endereco;
@@ -545,52 +560,30 @@ export default function PdvPage() {
 
     const loginLimpo = loginOperacao.trim().toLowerCase();
 
-    const consultaEmail = await supabase
-      .from("usuarios")
-      .select("id,nome,email,perfil,ativo,empresa_id")
-      .eq("empresa_id", empresaId)
-      .eq("email", loginLimpo)
-      .eq("senha", senhaOperacao)
-      .maybeSingle();
+    const { data: usuarios, error } = await supabase.rpc("verificar_login", {
+      p_login: loginLimpo,
+      p_senha: senhaOperacao,
+      p_empresa_id: empresaId,
+    });
 
-    if (consultaEmail.error) {
-      alert("Erro ao validar usuário: " + consultaEmail.error.message);
+    if (error) {
+      alert("Erro ao validar usuário: " + error.message);
       return null;
     }
 
-    if (consultaEmail.data) {
-      if (consultaEmail.data.ativo === false) {
-        alert("Usuário inativo.");
-        return null;
-      }
+    const usuario = usuarios && usuarios[0];
 
-      return consultaEmail.data;
-    }
-
-    const consultaNome = await supabase
-      .from("usuarios")
-      .select("id,nome,email,perfil,ativo,empresa_id")
-      .eq("empresa_id", empresaId)
-      .ilike("nome", loginLimpo)
-      .eq("senha", senhaOperacao)
-      .maybeSingle();
-
-    if (consultaNome.error) {
-      alert("Erro ao validar usuário: " + consultaNome.error.message);
-      return null;
-    }
-
-    if (!consultaNome.data) {
+    if (!usuario) {
       alert("Usuário ou senha inválidos para esta empresa.");
       return null;
     }
 
-    if (consultaNome.data.ativo === false) {
+    if (usuario.ativo === false) {
       alert("Usuário inativo.");
       return null;
     }
 
-    return consultaNome.data;
+    return usuario;
   }
 
   function limparAutorizacaoOperacao() {
@@ -618,18 +611,6 @@ export default function PdvPage() {
 
   function converterNumero(valor: string) {
     return Number(String(valor || "0").replace(",", "."));
-  }
-
-  function formatarMoeda(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
   }
 
   function formatarNumeroVenda(numero: number | null | undefined) {
@@ -814,7 +795,7 @@ export default function PdvPage() {
         quantidade: Number(item.quantidade || 0),
         valor_unitario: Number(item.valor_unitario || 0),
         subtotal: Number(item.subtotal || 0),
-        controla_imei: false,
+        controlar_imei: false,
         produto_imei_id: null,
         imei: null,
         imei_2: null,
@@ -869,7 +850,7 @@ export default function PdvPage() {
           quantidade: Number(item.quantidade || 0),
           valor_unitario: Number(item.valor_unitario || 0),
           subtotal: Number(item.subtotal || 0),
-          controla_imei: false,
+          controlar_imei: false,
           produto_imei_id: null,
           imei: null,
           imei_2: null,
@@ -1018,7 +999,7 @@ export default function PdvPage() {
     const produtosReq = await supabase
       .from("produtos")
       .select(
-        "id,codigo,codigo_barras,nome,preco_venda,qtd_atual,foto_url,controla_imei",
+        "id,codigo,codigo_barras,nome,preco_venda,qtd_atual,foto_url,controlar_imei",
       )
       .eq("empresa_id", empresaId)
       .eq("ativo", true)
@@ -1446,7 +1427,7 @@ export default function PdvPage() {
 
     setVendaDevolucao(venda);
     setTipoDevolucao("estorno");
-    setMotivoDevolucao("");
+    if (motivoDevolucaoRef.current) motivoDevolucaoRef.current.value = "";
     setLoginOperacao("");
     setSenhaOperacao("");
     setModalDevolucao(true);
@@ -1478,7 +1459,9 @@ export default function PdvPage() {
       return;
     }
 
-    if (!motivoDevolucao.trim()) {
+    const motivoDevolucao = (motivoDevolucaoRef.current?.value || "").trim();
+
+    if (!motivoDevolucao) {
       alert("Informe o motivo da devolução.");
       return;
     }
@@ -1529,7 +1512,7 @@ export default function PdvPage() {
               empresa_id: empresaId,
               tipo: "sangria",
               valor: totalVendaDevolucao(),
-              descricao: `Estorno devolução venda ${vendaDevolucao.id} - ${motivoDevolucao}`,
+              descricao: `Estorno devolução venda Nº ${formatarNumeroVenda(vendaDevolucao.numero_venda)} - ${motivoDevolucao}`,
               usuario: usuarioAutorizado.nome || operadorAtual(),
             },
           ]);
@@ -1571,7 +1554,7 @@ export default function PdvPage() {
 
       setModalDevolucao(false);
       setVendaDevolucao(null);
-      setMotivoDevolucao("");
+      if (motivoDevolucaoRef.current) motivoDevolucaoRef.current.value = "";
       limparAutorizacaoOperacao();
 
       await carregarDados();
@@ -2035,7 +2018,7 @@ export default function PdvPage() {
         quantidade: 1,
         valor_unitario: Number(produto.preco_venda),
         subtotal: Number(produto.preco_venda),
-        controla_imei: true,
+        controlar_imei: true,
         produto_imei_id: imeiSelecionado.id,
         imei: imeiSelecionado.imei,
         imei_2: imeiSelecionado.imei_2,
@@ -2070,7 +2053,7 @@ export default function PdvPage() {
       return;
     }
 
-    if (produto.controla_imei === true) {
+    if (produto.controlar_imei === true) {
       carregarImeisDisponiveisProduto(produto);
       return;
     }
@@ -2121,7 +2104,7 @@ export default function PdvPage() {
           quantidade: quantidadeAdicionar,
           valor_unitario: valorUnitario,
           subtotal: quantidadeAdicionar * valorUnitario,
-          controla_imei: false,
+          controlar_imei: false,
           produto_imei_id: null,
           imei: null,
           imei_2: null,
@@ -2230,7 +2213,7 @@ export default function PdvPage() {
     );
     if (!itemCarrinho) return;
 
-    if (itemCarrinho.controla_imei || itemCarrinho.produto_imei_id) {
+    if (itemCarrinho.controlar_imei || itemCarrinho.produto_imei_id) {
       if (qtd !== 1) {
         alert(
           "Produto com controle de IMEI deve ser vendido com quantidade 1 por aparelho.",
@@ -2301,25 +2284,76 @@ export default function PdvPage() {
     limparVenda();
   }
 
-  function emitirCupomNaoFiscal() {
-    if (carrinho.length === 0) {
-      alert("Adicione produtos ao carrinho para emitir um cupom.");
+  async function emitirNfce() {
+    const empresaId = getEmpresaId();
+    if (!empresaId) return;
+
+    const { data: empresaFiscal } = await supabase
+      .from("empresas")
+      .select("modulo_fiscal, fiscal_configurado")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    if (!empresaFiscal?.modulo_fiscal) {
+      alert(
+        "O módulo fiscal ainda não está habilitado para a sua empresa. Fale com o suporte para contratar.",
+      );
       return;
     }
 
-    imprimirCupom("PRE-VENDA");
-  }
+    if (!empresaFiscal?.fiscal_configurado) {
+      alert(
+        "O módulo fiscal está habilitado, mas a configuração ainda não foi concluída. Acesse Fiscal, no menu, para completar.",
+      );
+      return;
+    }
 
-  function emitirNfce() {
     alert(
-      "Módulo NFC-e será integrado na etapa fiscal. No momento o sistema emite cupom não fiscal.",
+      "Toda venda finalizada já gera automaticamente um registro de NFC-e pendente, visível em Fiscal → Documentos emitidos. A emissão de verdade acontece assim que um provedor de emissão for conectado.",
     );
   }
 
-  function abrirRelatoriosCaixa() {
-    alert(
-      "Relatório de fechamento de caixa será criado no próximo passo. Por enquanto use Fechar Caixa para conferência.",
-    );
+  // Roda automaticamente logo após uma venda ser finalizada. Não emite a
+  // NFC-e de verdade ainda (isso depende de conectar um provedor de
+  // emissão fiscal), mas já deixa o registro pronto, na fila, pra quando
+  // essa integração existir — sem travar nem atrasar a venda.
+  async function registrarDocumentoFiscalPendente(
+    vendaId: string,
+    valorTotalVenda: number,
+  ) {
+    const empresaId = getEmpresaId();
+    if (!empresaId) return;
+
+    const { data: empresaFiscal } = await supabase
+      .from("empresas")
+      .select("modulo_fiscal, fiscal_configurado, ambiente_fiscal, serie_nfce, proximo_numero_nfce, provedor_fiscal")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    if (!empresaFiscal?.modulo_fiscal || !empresaFiscal?.fiscal_configurado) {
+      return;
+    }
+
+    const numeroDocumento = empresaFiscal.proximo_numero_nfce || 1;
+
+    const { error } = await supabase.from("documentos_fiscais").insert({
+      empresa_id: empresaId,
+      venda_id: vendaId,
+      tipo: "nfce",
+      status: "pendente",
+      numero: numeroDocumento,
+      serie: empresaFiscal.serie_nfce || 1,
+      ambiente: empresaFiscal.ambiente_fiscal || "homologacao",
+      valor_total: valorTotalVenda,
+      provedor: empresaFiscal.provedor_fiscal || null,
+    });
+
+    if (!error) {
+      await supabase
+        .from("empresas")
+        .update({ proximo_numero_nfce: numeroDocumento + 1 })
+        .eq("id", empresaId);
+    }
   }
 
   function limparVenda() {
@@ -2331,7 +2365,6 @@ export default function PdvPage() {
     setDescontoPercentual("0");
     setPagDinheiro("0");
     setPagPix("0");
-    setPixConfirmado(false);
     setPagDebito("0");
     setPagCredito("0");
     setPagCrediario("0");
@@ -2407,12 +2440,6 @@ export default function PdvPage() {
     setNovoClienteDocumento("");
     setNovoClienteWhatsapp("");
     setModalNovoCliente(false);
-  }
-
-  function gerarVencimento(base: string, meses: number) {
-    const data = new Date(base + "T00:00:00");
-    data.setMonth(data.getMonth() + meses);
-    return data.toISOString().split("T")[0];
   }
 
   function gerarVencimentoPorDias(base: string, parcelaIndex: number) {
@@ -2645,81 +2672,6 @@ export default function PdvPage() {
     }
 
     setSaldoCreditoCliente(saldoApos);
-  }
-
-  function removerAcentos(texto: string) {
-    return String(texto || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^A-Za-z0-9 ]/g, "")
-      .toUpperCase();
-  }
-
-  function campoPix(id: string, valor: string) {
-    const tamanho = String(valor.length).padStart(2, "0");
-    return `${id}${tamanho}${valor}`;
-  }
-
-  function crc16(payload: string) {
-    let polinomio = 0x1021;
-    let resultado = 0xffff;
-
-    for (let offset = 0; offset < payload.length; offset++) {
-      resultado ^= payload.charCodeAt(offset) << 8;
-
-      for (let bitwise = 0; bitwise < 8; bitwise++) {
-        if ((resultado <<= 1) & 0x10000) {
-          resultado ^= polinomio;
-        }
-
-        resultado &= 0xffff;
-      }
-    }
-
-    return resultado.toString(16).toUpperCase().padStart(4, "0");
-  }
-
-  function gerarPixCopiaCola() {
-    const valorPix = converterNumero(pagPix);
-
-    if (valorPix <= 0 || !chavePix) {
-      return "";
-    }
-
-    const nome = removerAcentos(nomeRecebedorPix).substring(0, 25);
-    const cidade = removerAcentos(cidadePix).substring(0, 15);
-    const txid = "TH" + Date.now().toString().slice(-10);
-
-    const gui = campoPix("00", "br.gov.bcb.pix");
-    const chave = campoPix("01", chavePix.trim());
-    const merchantAccount = campoPix("26", gui + chave);
-
-    const payloadSemCRC =
-      campoPix("00", "01") +
-      campoPix("01", "12") +
-      merchantAccount +
-      campoPix("52", "0000") +
-      campoPix("53", "986") +
-      campoPix("54", valorPix.toFixed(2)) +
-      campoPix("58", "BR") +
-      campoPix("59", nome || "TH GESTAO") +
-      campoPix("60", cidade || "SAO PAULO") +
-      campoPix("62", campoPix("05", txid)) +
-      "6304";
-
-    return payloadSemCRC + crc16(payloadSemCRC);
-  }
-
-  async function copiarPix() {
-    const payload = gerarPixCopiaCola();
-
-    if (!payload) {
-      alert("Informe a chave PIX e o valor PIX.");
-      return;
-    }
-
-    await navigator.clipboard.writeText(payload);
-    alert("PIX Copia e Cola copiado com sucesso!");
   }
 
   function montarCupomVendaSalva(venda: VendaDetalhada) {
@@ -3913,6 +3865,8 @@ export default function PdvPage() {
       `Venda Nº ${formatarNumeroVenda(numeroVenda)} finalizada com sucesso!`,
     );
 
+    registrarDocumentoFiscalPendente(vendaId, totalFinal());
+
     if (
       ehDelivery &&
       configuracoesSistema.imprimir_cupom_automatico &&
@@ -3958,10 +3912,7 @@ export default function PdvPage() {
     carregarOrdemServicoPendenteParaPdv();
   }, []);
 
-  useEffect(() => {
-    const relogio = window.setInterval(() => setDataHoraAtual(new Date()), 1000);
-    return () => window.clearInterval(relogio);
-  }, []);
+  // (o intervalo do relógio agora vive dentro do componente RelogioPdv)
 
   useEffect(() => {
     atualizarStatusTelaCheia();
@@ -3978,6 +3929,17 @@ export default function PdvPage() {
 
   useEffect(() => {
     function atalhos(event: KeyboardEvent) {
+      // Enquanto o usuário estiver digitando dentro de um campo de texto
+      // (input, textarea, campo de senha, etc.), a tecla Delete e o
+      // Ctrl+X precisam continuar se comportando normalmente (apagar
+      // texto/recortar), em vez de disparar os atalhos do PDV (cancelar
+      // item, cancelar venda) por baixo dos panos.
+      const elementoAtivo = document.activeElement;
+      const estaDigitandoEmCampo =
+        elementoAtivo instanceof HTMLInputElement ||
+        elementoAtivo instanceof HTMLTextAreaElement ||
+        (elementoAtivo instanceof HTMLElement && elementoAtivo.isContentEditable);
+
       if (event.key === "F1") {
         event.preventDefault();
         setModalAtalhos(true);
@@ -4053,12 +4015,12 @@ export default function PdvPage() {
         alternarTelaCheia();
       }
 
-      if (event.key === "Delete") {
+      if (event.key === "Delete" && !estaDigitandoEmCampo) {
         event.preventDefault();
         cancelarUltimoItem();
       }
 
-      if (event.ctrlKey && event.key.toLowerCase() === "x") {
+      if (event.ctrlKey && event.key.toLowerCase() === "x" && !estaDigitandoEmCampo) {
         event.preventDefault();
         cancelarVendaAtual();
       }
@@ -4157,14 +4119,7 @@ export default function PdvPage() {
           </div>
 
           <div className="flex flex-col xl:items-end gap-2">
-            <div className="text-right hidden md:block">
-              <p className="text-xs text-slate-500 font-bold">
-                {dataHoraAtual.toLocaleDateString("pt-BR")}
-              </p>
-              <p className="text-2xl font-black text-slate-900 leading-none">
-                {dataHoraAtual.toLocaleTimeString("pt-BR")}
-              </p>
-            </div>
+            <RelogioPdv />
 
             <div className="flex flex-wrap gap-2 justify-end">
               <button
@@ -4328,6 +4283,21 @@ export default function PdvPage() {
               </div>
             )}
           </div>
+
+          {orcamentoPdv && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-black text-amber-800">
+                📋 Orçamento Nº {formatarNumeroVenda(orcamentoPdv.numero_orcamento)} carregado nesta venda
+              </p>
+              <button
+                type="button"
+                onClick={cancelarOrcamentoNoPdv}
+                className="rounded-xl border border-amber-400 bg-white px-3 py-1.5 text-xs font-black text-amber-700 hover:bg-amber-100"
+              >
+                Remover orçamento
+              </button>
+            </div>
+          )}
 
           <div className="overflow-auto flex-1 min-h-0">
             <table className="w-full">
@@ -5030,7 +5000,7 @@ export default function PdvPage() {
               <div className="lg:col-span-2 space-y-4">
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                   <p className="font-black text-slate-900">
-                    Venda: {vendaDevolucao.id}
+                    Venda: Nº {formatarNumeroVenda(vendaDevolucao.numero_venda)}
                   </p>
                   <p className="text-slate-700">
                     Cliente: {nomeClienteVenda(vendaDevolucao.cliente_id)}
@@ -5098,10 +5068,17 @@ export default function PdvPage() {
                 </div>
 
                 <textarea
-                  value={motivoDevolucao}
-                  onChange={(e) => setMotivoDevolucao(e.target.value)}
+                  ref={motivoDevolucaoRef}
+                  key={vendaDevolucao?.id || "sem-venda"}
+                  defaultValue=""
                   placeholder="Motivo da devolução"
                   className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900 min-h-24"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  name="motivo-devolucao"
+                  data-lpignore="true"
+                  data-1p-ignore
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -5110,6 +5087,10 @@ export default function PdvPage() {
                     onChange={(e) => setLoginOperacao(e.target.value)}
                     placeholder="Usuário/e-mail autorizador"
                     className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900"
+                    autoComplete="off"
+                    name="operador-devolucao-login"
+                    data-lpignore="true"
+                    data-1p-ignore
                   />
                   <input
                     type="password"
@@ -5117,6 +5098,10 @@ export default function PdvPage() {
                     onChange={(e) => setSenhaOperacao(e.target.value)}
                     placeholder="Senha"
                     className="w-full border border-slate-300 p-3 rounded-2xl text-slate-900"
+                    autoComplete="new-password"
+                    name="operador-devolucao-senha"
+                    data-lpignore="true"
+                    data-1p-ignore
                   />
                 </div>
               </div>
@@ -5946,6 +5931,10 @@ export default function PdvPage() {
                 onChange={(e) => setLoginOperacao(e.target.value)}
                 placeholder="Usuário ou e-mail"
                 className="w-full border border-slate-300 p-3 rounded-lg text-slate-900"
+                autoComplete="off"
+                name="operador-abertura-login"
+                data-lpignore="true"
+                data-1p-ignore
               />
 
               <input
@@ -5954,6 +5943,10 @@ export default function PdvPage() {
                 onChange={(e) => setSenhaOperacao(e.target.value)}
                 placeholder="Senha"
                 className="w-full border border-slate-300 p-3 rounded-lg text-slate-900"
+                autoComplete="new-password"
+                name="operador-abertura-senha"
+                data-lpignore="true"
+                data-1p-ignore
               />
             </div>
 
@@ -6008,6 +6001,10 @@ export default function PdvPage() {
                 onChange={(e) => setLoginOperacao(e.target.value)}
                 placeholder="Usuário ou e-mail"
                 className="w-full border border-slate-300 p-3 rounded-lg text-slate-900"
+                autoComplete="off"
+                name="operador-movimento-login"
+                data-lpignore="true"
+                data-1p-ignore
               />
 
               <input
@@ -6016,6 +6013,10 @@ export default function PdvPage() {
                 onChange={(e) => setSenhaOperacao(e.target.value)}
                 placeholder="Senha"
                 className="w-full border border-slate-300 p-3 rounded-lg text-slate-900"
+                autoComplete="new-password"
+                name="operador-movimento-senha"
+                data-lpignore="true"
+                data-1p-ignore
               />
             </div>
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { formatarData, formatarMoeda } from "../../../components/global/THFormat";
 
 type Caixa = {
   id: string;
@@ -26,18 +27,6 @@ export default function AberturaCaixaPage() {
 
   function converterNumero(valor: string) {
     return Number(String(valor || "0").replace(",", "."));
-  }
-
-  function formatarMoeda(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data).toLocaleString("pt-BR");
   }
 
   async function carregarDados() {

@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
+import { formatarData } from "../../../components/global/THFormat";
 
 type Empresa = {
   id: string;
@@ -99,11 +100,6 @@ export default function AdminCobrancasPage() {
       style: "currency",
       currency: "BRL",
     });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-    return new Date(data + "T00:00:00").toLocaleDateString("pt-BR");
   }
 
   function nomeEmpresa(empresa?: Empresa | null) {

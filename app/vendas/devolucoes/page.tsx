@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { getEmpresaId } from "../../../lib/empresa";
+import { formatarData, formatarMoeda } from "../../../components/global/THFormat";
 
 type Cliente = {
   id: string;
@@ -114,19 +115,6 @@ export default function DevolucoesPage() {
 
   function converterNumero(valor: string) {
     return Number(String(valor || "0").replace(",", "."));
-  }
-
-  function formatarMoeda(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  }
-
-  function formatarData(data: string | null) {
-    if (!data) return "-";
-
-    return new Date(data).toLocaleString("pt-BR");
   }
 
   function formatarNumeroVenda(numero: number | null | undefined) {
@@ -352,24 +340,20 @@ export default function DevolucoesPage() {
       return null;
     }
 
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .or(`email.eq.${loginAutorizador.trim()},usuario.eq.${loginAutorizador.trim()},nome.eq.${loginAutorizador.trim()}`)
-      .maybeSingle();
+    const { data: usuarios, error } = await supabase.rpc("verificar_login", {
+      p_login: loginAutorizador.trim().toLowerCase(),
+      p_senha: senhaAutorizador.trim(),
+      p_empresa_id: empresaId,
+    });
+
+    const data = usuarios && usuarios[0];
 
     if (error || !data) {
-      alert("Usuário autorizador não encontrado.");
+      alert("Usuário ou senha do autorizador inválidos.");
       return null;
     }
 
-    if (data.senha !== senhaAutorizador.trim()) {
-      alert("Senha do autorizador inválida.");
-      return null;
-    }
-
-    const perfil = String(data.perfil || data.tipo || data.cargo || "").toLowerCase();
+    const perfil = String(data.perfil || "").toLowerCase();
 
     if (
       perfil &&
