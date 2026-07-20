@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, MessageCircle, UserRound, ShieldCheck, Cloud, TrendingUp, Package } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { salvarTokenSessao } from "../../lib/sessao";
 
 const WHATSAPP_NUMERO = "5598988761840";
 const EMAIL_SUPORTE = "thcloudsistemas@gmail.com";
@@ -43,7 +44,7 @@ export default function LoginPage() {
       .trim()
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+      .replace(/[̀-ͯ]/g, "");
   }
 
   function ehSuperAdmin(usuario: UsuarioLogin | null) {
@@ -106,18 +107,23 @@ export default function LoginPage() {
     const loginLimpo = login.trim().toLowerCase();
 
     try {
-      const { data: usuarios, error: erroLogin } = await supabase.rpc("verificar_login", {
-        p_login: loginLimpo,
-        p_senha: senha,
+      const respostaLogin = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ login: loginLimpo, senha }),
       });
 
+      const { usuarios, token, error: erroLogin } = await respostaLogin.json();
+
       if (erroLogin) {
-        alert("Erro ao acessar: " + erroLogin.message);
+        alert("Erro ao acessar: " + erroLogin);
         setCarregando(false);
         return;
       }
 
       const usuario = (usuarios && usuarios[0]) as UsuarioLogin | null;
+
+      salvarTokenSessao(token);
 
       if (!usuario) {
         alert("Usuário ou senha inválidos.");

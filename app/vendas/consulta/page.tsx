@@ -257,7 +257,7 @@ export default function ConsultaVendasPage() {
             table { width: 100%; border-collapse: collapse; }
             td { padding: 3px 0; vertical-align: top; }
             .total { font-size: 17px; font-weight: bold; }
-            @media print { body { width: 80mm; } button { display:none; } }
+            @media print { body { width: 80mm; } button { display:none; } tr { page-break-inside: avoid; break-inside: avoid; } }
           </style>
         </head>
         <body>

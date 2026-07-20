@@ -313,7 +313,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (!liberado) return null;
 
   return (
-    <div className="th-app-shell min-h-screen bg-slate-50 flex overflow-x-hidden">
+    <div className="th-app-shell th-compact min-h-screen bg-slate-50 flex overflow-x-hidden">
       <Sidebar />
 
       <main className="th-main-area flex-1 min-w-0 overflow-x-hidden">

@@ -271,6 +271,23 @@ export default function RelatorioContasPagarPage() {
           .quebra-pagina {
             page-break-inside: avoid;
           }
+
+          table {
+            border-collapse: collapse;
+          }
+
+          thead {
+            display: table-header-group;
+          }
+
+          tfoot {
+            display: table-footer-group;
+          }
+
+          tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
         }
       `}</style>
 

@@ -139,6 +139,24 @@ export function getPermissoesSessao() {
   return {};
 }
 
+// Token assinado no login (JWT contendo a empresa do usuario).
+// Por enquanto ele so e guardado - nenhuma consulta ao banco usa
+// esse token ainda, entao salvar/ler/limpar aqui nao muda nada
+// no funcionamento atual do sistema.
+export function salvarTokenSessao(token: string | null) {
+  if (typeof window === "undefined") return;
+  if (!token) return;
+
+  sessionStorage.setItem("th_token", token);
+  localStorage.setItem("th_token", token);
+}
+
+export function getTokenSessao(): string | null {
+  if (typeof window === "undefined") return null;
+
+  return sessionStorage.getItem("th_token") || localStorage.getItem("th_token");
+}
+
 export function sairSessao() {
   if (typeof window === "undefined") return;
 
@@ -146,9 +164,11 @@ export function sairSessao() {
   sessionStorage.removeItem("th_empresa");
   sessionStorage.removeItem("th_permissoes");
   sessionStorage.removeItem("th_configuracoes_gerais");
+  sessionStorage.removeItem("th_token");
 
   localStorage.removeItem("th_usuario");
   localStorage.removeItem("th_empresa");
   localStorage.removeItem("th_permissoes");
   localStorage.removeItem("th_configuracoes_gerais");
+  localStorage.removeItem("th_token");
 }

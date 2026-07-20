@@ -1667,6 +1667,11 @@ export default function PdvPage() {
               button {
                 display: none;
               }
+
+              tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
             }
           </style>
         </head>
@@ -2766,6 +2771,11 @@ export default function PdvPage() {
               button {
                 display: none;
               }
+
+              tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
             }
           </style>
         </head>
@@ -2948,6 +2958,11 @@ export default function PdvPage() {
 
               button {
                 display: none;
+              }
+
+              tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
               }
             }
           </style>
@@ -3178,6 +3193,11 @@ export default function PdvPage() {
               button {
                 display: none;
               }
+
+              tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
             }
           </style>
         </head>
@@ -3396,6 +3416,11 @@ export default function PdvPage() {
 
               button {
                 display: none;
+              }
+
+              tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
               }
             }
           </style>

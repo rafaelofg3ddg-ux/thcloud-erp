@@ -44,8 +44,8 @@ canvas {
 .th-main-area {
   min-width: 0;
   flex: 1 1 auto;
-  width: calc(100vw - 280px);
-  max-width: calc(100vw - 280px);
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
 }
 
@@ -173,8 +173,8 @@ canvas {
 
 @media (max-width: 1536px) {
   .th-main-area {
-    width: calc(100vw - 280px);
-    max-width: calc(100vw - 280px);
+    width: 100%;
+    max-width: 100%;
   }
 
   .th-page-content {
@@ -198,8 +198,8 @@ canvas {
 
 @media (max-width: 1366px) {
   .th-main-area {
-    width: calc(100vw - 280px);
-    max-width: calc(100vw - 280px);
+    width: 100%;
+    max-width: 100%;
   }
 
   .th-page-content {

@@ -676,7 +676,7 @@ export default function DevolucoesPage() {
             td { padding: 3px 0; vertical-align: top; }
             .total { font-size: 16px; font-weight: bold; }
             .small { font-size: 11px; }
-            @media print { body { width: 80mm; } button { display:none; } }
+            @media print { body { width: 80mm; } button { display:none; } tr { page-break-inside: avoid; break-inside: avoid; } }
           </style>
         </head>
         <body>

@@ -899,6 +899,13 @@ export default function OrcamentosPage() {
                 min-height: 297mm;
                 padding: 14mm;
               }
+              thead {
+                display: table-header-group;
+              }
+              tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
             }
           </style>
         </head>

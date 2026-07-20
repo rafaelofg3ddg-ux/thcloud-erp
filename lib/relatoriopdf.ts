@@ -34,6 +34,8 @@ export async function gerarPDFPadrao(
             border-bottom: 2px solid #111827;
             padding-bottom: 15px;
             margin-bottom: 20px;
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
 
           .logo {
@@ -75,6 +77,19 @@ export async function gerarPDFPadrao(
             margin-top: 10px;
           }
 
+          thead {
+            display: table-header-group;
+          }
+
+          tfoot {
+            display: table-footer-group;
+          }
+
+          tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
           th {
             background: #e5e7eb;
             border: 1px solid #cbd5e1;
@@ -87,6 +102,7 @@ export async function gerarPDFPadrao(
             border: 1px solid #e5e7eb;
             padding: 7px;
             font-size: 11px;
+            word-break: break-word;
           }
 
           tr:nth-child(even) {
@@ -101,11 +117,22 @@ export async function gerarPDFPadrao(
             justify-content: space-between;
             font-size: 10px;
             color: #64748b;
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
 
           @media print {
             body {
               margin: 0;
+            }
+
+            thead {
+              display: table-header-group;
+            }
+
+            tr {
+              break-inside: avoid;
+              page-break-inside: avoid;
             }
           }
         </style>

@@ -18,6 +18,7 @@ import {
   ShoppingCart,
   SlidersHorizontal,
   Wallet,
+  Wrench,
 } from "lucide-react";
 
 type ConfiguracoesGerais = {
@@ -48,6 +49,8 @@ type ConfiguracoesGerais = {
   permitir_arredondamento_operador: boolean;
   intervalo_parcelas_padrao_dias: number;
   gerar_promissoria_crediario: boolean;
+  termo_garantia_condicoes: string;
+  termo_entrega_declaracao: string;
 };
 
 type EmpresaLocal = {
@@ -57,6 +60,12 @@ type EmpresaLocal = {
   telefone: string;
   logo_url: string;
 };
+
+const TERMO_GARANTIA_PADRAO =
+  "A garantia cobre somente o serviço executado e/ou peças substituídas descritas na Ordem de Serviço. Não cobre mau uso, queda, oxidação, violação, tentativa de reparo por terceiros, descarga elétrica, danos físicos, instalação indevida ou defeitos diferentes dos informados nesta OS.";
+
+const TERMO_ENTREGA_PADRAO =
+  "Declaro que recebi o equipamento acima identificado, conferi as condições de entrega e estou ciente dos serviços executados, valores e condições de garantia informados pela empresa.";
 
 const configuracaoPadrao = (empresaId: string): ConfiguracoesGerais => ({
   empresa_id: empresaId,
@@ -86,6 +95,8 @@ const configuracaoPadrao = (empresaId: string): ConfiguracoesGerais => ({
   permitir_arredondamento_operador: true,
   intervalo_parcelas_padrao_dias: 30,
   gerar_promissoria_crediario: true,
+  termo_garantia_condicoes: TERMO_GARANTIA_PADRAO,
+  termo_entrega_declaracao: TERMO_ENTREGA_PADRAO,
 });
 
 export default function ConfiguracoesGeraisPage() {
@@ -99,7 +110,7 @@ export default function ConfiguracoesGeraisPage() {
   });
 
   const [aba, setAba] = useState<
-    "geral" | "vendas" | "financeiro" | "impressao" | "whatsapp" | "seguranca" | "backup"
+    "geral" | "vendas" | "financeiro" | "impressao" | "whatsapp" | "ordem_servico" | "seguranca" | "backup"
   >("geral");
 
   const [carregando, setCarregando] = useState(true);
@@ -243,6 +254,8 @@ export default function ConfiguracoesGeraisPage() {
       permitir_arredondamento_operador: data.permitir_arredondamento_operador !== false,
       intervalo_parcelas_padrao_dias: Number(data.intervalo_parcelas_padrao_dias || 30),
       gerar_promissoria_crediario: data.gerar_promissoria_crediario !== false,
+      termo_garantia_condicoes: data.termo_garantia_condicoes || TERMO_GARANTIA_PADRAO,
+      termo_entrega_declaracao: data.termo_entrega_declaracao || TERMO_ENTREGA_PADRAO,
     };
   }
 
@@ -299,6 +312,8 @@ export default function ConfiguracoesGeraisPage() {
       permitir_arredondamento_operador: config.permitir_arredondamento_operador,
       intervalo_parcelas_padrao_dias: Number(config.intervalo_parcelas_padrao_dias || 30),
       gerar_promissoria_crediario: config.gerar_promissoria_crediario,
+      termo_garantia_condicoes: config.termo_garantia_condicoes || TERMO_GARANTIA_PADRAO,
+      termo_entrega_declaracao: config.termo_entrega_declaracao || TERMO_ENTREGA_PADRAO,
     };
 
     const { data, error } = await supabase
@@ -396,6 +411,7 @@ export default function ConfiguracoesGeraisPage() {
     { id: "financeiro", titulo: "Financeiro", icone: <Wallet size={18} /> },
     { id: "impressao", titulo: "Impressão", icone: <Printer size={18} /> },
     { id: "whatsapp", titulo: "WhatsApp", icone: <MessageCircle size={18} /> },
+    { id: "ordem_servico", titulo: "Ordem de Serviço", icone: <Wrench size={18} /> },
     { id: "seguranca", titulo: "Segurança", icone: <ShieldCheck size={18} /> },
     { id: "backup", titulo: "Backup", icone: <DatabaseBackup size={18} /> },
   ] as const;
@@ -790,6 +806,66 @@ export default function ConfiguracoesGeraisPage() {
                   placeholder="Mensagem padrão..."
                 />
               </Campo>
+            </Card>
+          )}
+
+          {aba === "ordem_servico" && (
+            <Card
+              titulo="Termos da Ordem de Serviço"
+              descricao="Personalize os textos impressos no Termo de Garantia e no Comprovante de Entrega. Cada empresa pode ter sua própria política."
+              icone={<Wrench size={24} />}
+            >
+              <Campo titulo="Condições da garantia (impresso no Termo de Garantia)">
+                <textarea
+                  value={config.termo_garantia_condicoes}
+                  onChange={(e) => atualizar("termo_garantia_condicoes", e.target.value)}
+                  className="input-config min-h-36"
+                  placeholder="Ex.: A garantia cobre somente o serviço executado..."
+                />
+              </Campo>
+
+              <div className="flex justify-end -mt-3">
+                <button
+                  type="button"
+                  onClick={() => atualizar("termo_garantia_condicoes", TERMO_GARANTIA_PADRAO)}
+                  className="text-sm font-black text-blue-700 hover:text-blue-900"
+                >
+                  Restaurar texto padrão
+                </button>
+              </div>
+
+              <Campo titulo="Declaração de recebimento (impresso no Comprovante de Entrega)">
+                <textarea
+                  value={config.termo_entrega_declaracao}
+                  onChange={(e) => atualizar("termo_entrega_declaracao", e.target.value)}
+                  className="input-config min-h-32"
+                  placeholder="Ex.: Declaro que recebi o equipamento acima identificado..."
+                />
+              </Campo>
+
+              <div className="flex justify-end -mt-3">
+                <button
+                  type="button"
+                  onClick={() => atualizar("termo_entrega_declaracao", TERMO_ENTREGA_PADRAO)}
+                  className="text-sm font-black text-blue-700 hover:text-blue-900"
+                >
+                  Restaurar texto padrão
+                </button>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-3xl p-5">
+                <div className="flex items-start gap-3">
+                  <Wrench className="text-blue-700 mt-1" size={22} />
+                  <div>
+                    <h3 className="font-black text-blue-900">
+                      Onde esses textos aparecem
+                    </h3>
+                    <p className="text-blue-700 mt-1">
+                      As condições de garantia saem no Termo de Garantia da OS. A declaração de recebimento sai no Comprovante de Entrega. Ambos são impressos a partir da tela de Ordem de Serviço.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </Card>
           )}
 

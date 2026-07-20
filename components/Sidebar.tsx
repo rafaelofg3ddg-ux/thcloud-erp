@@ -9,6 +9,8 @@ import {
   Bell,
   Building2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   FileText,
   Home,
@@ -112,6 +114,19 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const [mobileAberto, setMobileAberto] = useState(false);
+  const [colapsado, setColapsado] = useState(false);
+
+  useEffect(() => {
+    setColapsado(localStorage.getItem("th_sidebar_colapsado") === "1");
+  }, []);
+
+  function alternarColapso() {
+    setColapsado((atual) => {
+      const novo = !atual;
+      localStorage.setItem("th_sidebar_colapsado", novo ? "1" : "0");
+      return novo;
+    });
+  }
   const [cadastros, setCadastros] = useState(true);
   const [estoque, setEstoque] = useState(false);
   const [vendas, setVendas] = useState(false);
@@ -442,7 +457,9 @@ export default function Sidebar() {
   }
 
   const menu = (
-    <aside className="w-[280px] bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] text-white h-screen min-h-screen shadow-2xl flex flex-col sticky top-0 relative overflow-hidden">
+    <aside
+      className={`${colapsado ? "w-0" : "w-[280px]"} bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] text-white h-screen min-h-screen shadow-2xl flex flex-col sticky top-0 relative overflow-hidden transition-[width] duration-200 ease-in-out`}
+    >
       <div className="absolute inset-x-0 top-0 h-56 bg-sky-400/10 blur-3xl rounded-full -translate-y-36" />
       <div className="absolute -right-24 top-24 h-56 w-56 bg-blue-300/20 blur-3xl rounded-full" />
       <div className="absolute -left-24 bottom-24 h-60 w-60 bg-blue-500/20 blur-3xl rounded-full" />
@@ -926,7 +943,17 @@ export default function Sidebar() {
         <Menu size={24} />
       </button>
 
-      <div className="hidden lg:block w-[280px] shrink-0 bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] min-h-screen self-stretch">{menu}</div>
+      <div className={`hidden lg:block ${colapsado ? "w-0" : "w-[280px]"} shrink-0 bg-gradient-to-b from-blue-700 via-blue-900 to-[#031a55] min-h-screen self-stretch transition-[width] duration-200 ease-in-out overflow-hidden`}>{menu}</div>
+
+      <button
+        onClick={alternarColapso}
+        className="hidden lg:flex fixed bottom-6 z-[95] h-8 w-8 rounded-full bg-blue-800 border-2 border-white text-white shadow-lg items-center justify-center hover:bg-blue-700 transition-all duration-200"
+        style={{ left: colapsado ? "8px" : "266px" }}
+        aria-label={colapsado ? "Expandir menu" : "Recolher menu"}
+        title={colapsado ? "Expandir menu" : "Recolher menu"}
+      >
+        {colapsado ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+      </button>
 
       {mobileAberto && (
         <div className="lg:hidden fixed inset-0 z-[100]">

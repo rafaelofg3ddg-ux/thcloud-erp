@@ -492,6 +492,41 @@ export function useOrdemServico() {
     return carregarEmpresaPDF();
   }
 
+  const TERMO_GARANTIA_PADRAO =
+    "A garantia cobre somente o serviço executado e/ou peças substituídas descritas na Ordem de Serviço. Não cobre mau uso, queda, oxidação, violação, tentativa de reparo por terceiros, descarga elétrica, danos físicos, instalação indevida ou defeitos diferentes dos informados nesta OS.";
+
+  const TERMO_ENTREGA_PADRAO =
+    "Declaro que recebi o equipamento acima identificado, conferi as condições de entrega e estou ciente dos serviços executados, valores e condições de garantia informados pela empresa.";
+
+  async function carregarTermosOS() {
+    const empresaId = empresaAtualId();
+
+    if (!empresaId) {
+      return {
+        condicoesGarantia: TERMO_GARANTIA_PADRAO,
+        declaracaoEntrega: TERMO_ENTREGA_PADRAO,
+      };
+    }
+
+    try {
+      const { data } = await supabase
+        .from("configuracoes_gerais")
+        .select("termo_garantia_condicoes, termo_entrega_declaracao")
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+      return {
+        condicoesGarantia: data?.termo_garantia_condicoes || TERMO_GARANTIA_PADRAO,
+        declaracaoEntrega: data?.termo_entrega_declaracao || TERMO_ENTREGA_PADRAO,
+      };
+    } catch {
+      return {
+        condicoesGarantia: TERMO_GARANTIA_PADRAO,
+        declaracaoEntrega: TERMO_ENTREGA_PADRAO,
+      };
+    }
+  }
+
   function textoHtml(valor: unknown) {
     return String(valor ?? "-")
       .replaceAll("&", "&amp;")
@@ -1130,22 +1165,6 @@ export function useOrdemServico() {
     itens: OrdemServicoItemBanco[]
   ) {
     const empresa = await empresaDadosOS();
-    const empresaId = empresaAtualId();
-    let historicoImpressao: HistoricoOrdemServico[] = [];
-
-    try {
-      const { data } = await supabase
-        .from("ordem_servico_historico")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("ordem_servico_id", ordem.id)
-        .order("created_at", { ascending: false })
-        .limit(6);
-
-      historicoImpressao = (data || []) as HistoricoOrdemServico[];
-    } catch {
-      historicoImpressao = [];
-    }
 
     const produtos = itens.filter((item) => item.tipo === "produto");
     const servicos = itens.filter((item) => item.tipo !== "produto");
@@ -1185,7 +1204,7 @@ export function useOrdemServico() {
             .ass { display:grid; grid-template-columns:1fr 1fr; gap:70px; margin-top:70px; }
             .ass div { border-top:1px solid #0f172a; padding-top:8px; text-align:center; }
             .print { padding:12px 18px; border:0; border-radius:12px; background:#2563eb; color:#fff; font-weight:900; margin-bottom:16px; cursor:pointer; }
-            @media print { .print { display:none; } body { margin:0 auto; } }
+            @media print { .print { display:none; } body { margin:0 auto; } tr { page-break-inside: avoid; break-inside: avoid; } }
           </style>
         </head>
         <body>
@@ -1612,22 +1631,6 @@ export function useOrdemServico() {
       return;
     }
 
-    let historicoImpressao: HistoricoOrdemServico[] = [];
-
-    try {
-      const { data } = await supabase
-        .from("ordem_servico_historico")
-        .select("*")
-        .eq("empresa_id", empresaId)
-        .eq("ordem_servico_id", ordem.id)
-        .order("created_at", { ascending: false })
-        .limit(6);
-
-      historicoImpressao = (data || []) as HistoricoOrdemServico[];
-    } catch {
-      historicoImpressao = [];
-    }
-
     const produtos = itens.filter((item) => item.tipo === "produto");
     const servicosDaOS = itens.filter((item) => item.tipo !== "produto");
     const subtotal = Number(ordem.valor_produtos || 0) + Number(ordem.valor_servicos || 0);
@@ -1690,7 +1693,8 @@ export function useOrdemServico() {
               margin: 0;
               background: #e5e7eb;
               color: #111827;
-              font-size: 12px;
+              font-size: 10.5px;
+              line-height: 1.25;
             }
 
             .page {
@@ -1698,7 +1702,7 @@ export function useOrdemServico() {
               min-height: 297mm;
               margin: 0 auto;
               background: #fff;
-              padding: 16mm;
+              padding: 8mm 12mm;
             }
 
             .top-actions {
@@ -1723,16 +1727,16 @@ export function useOrdemServico() {
 
             .header {
               display: grid;
-              grid-template-columns: 35mm 1fr 55mm;
-              gap: 12px;
+              grid-template-columns: 30mm 1fr 50mm;
+              gap: 8px;
               align-items: start;
               border-bottom: 2px solid #111827;
-              padding-bottom: 12px;
+              padding-bottom: 8px;
             }
 
             .logo-box {
-              width: 30mm;
-              height: 24mm;
+              width: 26mm;
+              height: 18mm;
               border: 1px solid #d1d5db;
               display: flex;
               align-items: center;
@@ -1753,42 +1757,51 @@ export function useOrdemServico() {
             }
 
             .company h1 {
-              font-size: 18px;
-              margin: 0 0 4px;
+              font-size: 15px;
+              margin: 0 0 3px;
               text-transform: uppercase;
             }
 
             .company p {
-              margin: 2px 0;
+              margin: 1px 0;
               color: #374151;
+              font-size: 9.5px;
+              line-height: 1.15;
             }
 
             .doc-box {
               border: 2px solid #111827;
-              padding: 8px;
+              padding: 5px;
               text-align: center;
             }
 
             .doc-box h2 {
               margin: 0;
-              font-size: 17px;
+              font-size: 13px;
             }
 
             .doc-box .numero {
-              font-size: 22px;
+              font-size: 17px;
               font-weight: 900;
-              margin-top: 4px;
+              margin-top: 2px;
+            }
+
+            .doc-box p {
+              margin: 2px 0 0;
+              font-size: 9px;
+              color: #374151;
+              line-height: 1.15;
             }
 
             .section {
-              margin-top: 14px;
+              margin-top: 5px;
             }
 
             .section-title {
               background: #111827;
               color: #fff;
-              padding: 7px 9px;
-              font-size: 12px;
+              padding: 3px 8px;
+              font-size: 9px;
               font-weight: bold;
               text-transform: uppercase;
             }
@@ -1801,10 +1814,11 @@ export function useOrdemServico() {
             }
 
             .cell {
-              padding: 8px;
+              padding: 3px 8px;
               border-right: 1px solid #d1d5db;
               border-bottom: 1px solid #d1d5db;
-              min-height: 32px;
+              min-height: 18px;
+              line-height: 1.15;
             }
 
             .cell:nth-child(2n) { border-right: 0; }
@@ -1812,9 +1826,9 @@ export function useOrdemServico() {
             .label {
               display: block;
               color: #6b7280;
-              font-size: 10px;
+              font-size: 8px;
               text-transform: uppercase;
-              margin-bottom: 3px;
+              margin-bottom: 1px;
             }
 
             table {
@@ -1826,28 +1840,29 @@ export function useOrdemServico() {
             th {
               background: #f3f4f6;
               border: 1px solid #d1d5db;
-              padding: 7px;
+              padding: 3px 6px;
               text-align: left;
-              font-size: 11px;
+              font-size: 9px;
               text-transform: uppercase;
             }
 
             td {
               border: 1px solid #d1d5db;
-              padding: 7px;
+              padding: 3px 6px;
               vertical-align: top;
+              line-height: 1.15;
             }
 
             td span {
               color: #6b7280;
-              font-size: 10px;
+              font-size: 9px;
             }
 
             .right { text-align: right; }
 
             .totals {
               margin-left: auto;
-              width: 80mm;
+              width: 75mm;
               border: 1px solid #d1d5db;
               border-top: 0;
             }
@@ -1856,45 +1871,48 @@ export function useOrdemServico() {
               display: flex;
               justify-content: space-between;
               border-top: 1px solid #d1d5db;
-              padding: 8px;
+              padding: 3px 8px;
+              line-height: 1.15;
             }
 
             .grand-total {
               background: #111827;
               color: #fff;
-              font-size: 16px;
+              font-size: 12px;
               font-weight: 900;
             }
 
             .obs {
               border: 1px solid #d1d5db;
               border-top: 0;
-              padding: 10px;
-              min-height: 28mm;
+              padding: 5px 8px;
+              min-height: 6mm;
               white-space: pre-line;
+              line-height: 1.2;
             }
 
             .signatures {
               display: grid;
               grid-template-columns: repeat(2, 1fr);
-              gap: 24px;
-              margin-top: 24mm;
+              gap: 20px;
+              margin-top: 6mm;
             }
 
             .signature {
               border-top: 1px solid #111827;
               text-align: center;
-              padding-top: 5px;
+              padding-top: 3px;
               color: #374151;
+              font-size: 9px;
             }
 
             .footer {
-              margin-top: 16px;
-              padding-top: 8px;
+              margin-top: 6px;
+              padding-top: 4px;
               border-top: 1px solid #d1d5db;
               text-align: center;
               color: #6b7280;
-              font-size: 10px;
+              font-size: 8px;
             }
 
             .check-grid {
@@ -1905,10 +1923,12 @@ export function useOrdemServico() {
             }
 
             .check-item {
-              padding: 7px;
+              padding: 3px 7px;
               border-right: 1px solid #d1d5db;
               border-bottom: 1px solid #d1d5db;
               font-weight: 700;
+              font-size: 9px;
+              line-height: 1.15;
             }
 
             .foto-grid {
@@ -1933,13 +1953,34 @@ export function useOrdemServico() {
               color: #374151;
             }
 
+            @page {
+              size: A4;
+              margin: 8mm;
+            }
+
             @media print {
               body { background: #fff; }
               .top-actions { display: none; }
               .page {
                 width: 210mm;
-                min-height: 297mm;
-                padding: 14mm;
+                min-height: auto;
+                padding: 6mm 10mm;
+                margin: 0;
+              }
+              thead {
+                display: table-header-group;
+              }
+              tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              .section,
+              .grid,
+              .check-grid,
+              .totals,
+              .signatures {
+                page-break-inside: avoid;
+                break-inside: avoid;
               }
             }
           </style>
@@ -2057,27 +2098,6 @@ export function useOrdemServico() {
                 <div class="total-row grand-total"><span>TOTAL</span><strong>${dinheiro(ordem.valor_total)}</strong></div>
               </div>
             </section>
-
-            ${historicoImpressao.length ? `
-            <section class="section">
-              <div class="section-title">Histórico resumido</div>
-              <table>
-                <thead><tr><th style="width:36mm;">Data</th><th style="width:38mm;">Status</th><th>Descrição</th><th style="width:34mm;">Usuário</th></tr></thead>
-                <tbody>
-                  ${historicoImpressao
-                    .map((item) => `
-                      <tr>
-                        <td>${dataBR(item.created_at)}</td>
-                        <td>${textoHtml(statusLabel(item.status_novo || item.status_anterior || "-"))}</td>
-                        <td>${textoHtml(item.descricao || item.acao || "Movimentação registrada.")}</td>
-                        <td>${textoHtml(item.usuario || "Sistema")}</td>
-                      </tr>
-                    `)
-                    .join("")}
-                </tbody>
-              </table>
-            </section>
-            ` : ""}
 
             <section class="section">
               <div class="section-title">Observações e Condições</div>
@@ -2340,7 +2360,10 @@ export function useOrdemServico() {
     }
   }
 
-  function imprimirComprovanteEntrega(ordem: OrdemServico) {
+  async function imprimirComprovanteEntrega(ordem: OrdemServico) {
+    const empresa = await carregarEmpresaPDF();
+    const { declaracaoEntrega } = await carregarTermosOS();
+
     const html = `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -2351,14 +2374,19 @@ export function useOrdemServico() {
   body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 28px; background: #f8fafc; }
   .doc { max-width: 820px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; padding: 28px; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #111827; padding-bottom: 14px; margin-bottom: 18px; }
-  .brand { font-size: 24px; font-weight: 900; color: #1d4ed8; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 70px; height: 70px; display:flex; align-items:center; justify-content:center; flex-shrink: 0; }
+  .logo img { max-width:70px; max-height:70px; object-fit:contain; }
+  .logo-texto { width:70px; height:70px; border-radius:14px; background:#1d4ed8; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:22px; }
+  .brand-nome { font-size: 19px; font-weight: 900; color: #1d4ed8; }
+  .brand-info { font-size: 11px; color: #475569; margin-top: 2px; }
   .box { border: 1px solid #111827; padding: 10px 14px; text-align: right; font-weight: 900; }
   .section { border: 1px solid #e5e7eb; margin-top: 14px; }
   .section h2 { margin: 0; background: #111827; color: white; font-size: 13px; padding: 9px 12px; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
   .label { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 800; }
   .value { font-size: 13px; font-weight: 800; margin-top: 3px; }
-  .text { padding: 12px; line-height: 1.55; font-size: 13px; }
+  .text { padding: 12px; line-height: 1.55; font-size: 13px; white-space: pre-line; }
   .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; }
   .line { border-top: 1px solid #111827; padding-top: 8px; text-align: center; font-size: 12px; font-weight: 800; }
 </style>
@@ -2366,7 +2394,15 @@ export function useOrdemServico() {
 <body>
 <div class="doc">
   <div class="header">
-    <div><div class="brand">Th Cloud</div><div>Sistema de Gestão</div></div>
+    <div class="brand">
+      <div class="logo">${htmlLogoEmpresa(empresa, textoHtml)}</div>
+      <div>
+        <div class="brand-nome">${textoHtml(empresa.nome_fantasia)}</div>
+        ${empresa.cnpj ? `<div class="brand-info">CNPJ/CPF: ${textoHtml(empresa.cnpj)}</div>` : ""}
+        ${empresa.telefone ? `<div class="brand-info">Tel: ${textoHtml(empresa.telefone)}</div>` : ""}
+        ${empresa.endereco ? `<div class="brand-info">${textoHtml(empresa.endereco)}</div>` : ""}
+      </div>
+    </div>
     <div class="box">COMPROVANTE DE ENTREGA<br/>OS Nº ${numOS(ordem.numero_os)}</div>
   </div>
   <div class="section"><h2>DADOS DA ENTREGA</h2><div class="grid">
@@ -2377,9 +2413,7 @@ export function useOrdemServico() {
     <div><div class="label">Data da entrega</div><div class="value">${new Date().toLocaleString("pt-BR")}</div></div>
     <div><div class="label">Valor total</div><div class="value">${dinheiro(ordem.valor_total)}</div></div>
   </div></div>
-  <div class="section"><h2>DECLARAÇÃO</h2><div class="text">
-    Declaro que recebi o equipamento acima identificado, conferi as condições de entrega e estou ciente dos serviços executados, valores e condições de garantia informados pela empresa.
-  </div></div>
+  <div class="section"><h2>DECLARAÇÃO</h2><div class="text">${textoHtml(declaracaoEntrega)}</div></div>
   <div class="section"><h2>SERVIÇO / SOLUÇÃO</h2><div class="text">${textoHtml(ordem.solucao || ordem.diagnostico || "-")}</div></div>
   <div class="sign"><div class="line">Cliente / Responsável pela retirada</div><div class="line">Responsável pela entrega</div></div>
 </div>
@@ -2394,7 +2428,9 @@ export function useOrdemServico() {
     janela.document.close();
   }
 
-  function imprimirTermoGarantia(ordem: OrdemServico) {
+  async function imprimirTermoGarantia(ordem: OrdemServico) {
+    const empresa = await carregarEmpresaPDF();
+    const { condicoesGarantia } = await carregarTermosOS();
     const validade = new Date();
     validade.setDate(validade.getDate() + Number(ordem.garantia_dias || 0));
 
@@ -2408,7 +2444,12 @@ export function useOrdemServico() {
   body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 28px; background: #f8fafc; }
   .doc { max-width: 820px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; padding: 28px; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #111827; padding-bottom: 14px; margin-bottom: 18px; }
-  .brand { font-size: 24px; font-weight: 900; color: #1d4ed8; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 70px; height: 70px; display:flex; align-items:center; justify-content:center; flex-shrink: 0; }
+  .logo img { max-width:70px; max-height:70px; object-fit:contain; }
+  .logo-texto { width:70px; height:70px; border-radius:14px; background:#1d4ed8; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:22px; }
+  .brand-nome { font-size: 19px; font-weight: 900; color: #1d4ed8; }
+  .brand-info { font-size: 11px; color: #475569; margin-top: 2px; }
   .box { border: 1px solid #111827; padding: 10px 14px; text-align: right; font-weight: 900; }
   h1 { font-size: 20px; margin: 0 0 14px; }
   .section { border: 1px solid #e5e7eb; margin-top: 14px; }
@@ -2416,7 +2457,7 @@ export function useOrdemServico() {
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
   .label { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 800; }
   .value { font-size: 13px; font-weight: 800; margin-top: 3px; }
-  .text { padding: 12px; line-height: 1.55; font-size: 13px; }
+  .text { padding: 12px; line-height: 1.55; font-size: 13px; white-space: pre-line; }
   .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; }
   .line { border-top: 1px solid #111827; padding-top: 8px; text-align: center; font-size: 12px; font-weight: 800; }
 </style>
@@ -2424,7 +2465,15 @@ export function useOrdemServico() {
 <body>
 <div class="doc">
   <div class="header">
-    <div><div class="brand">Th Cloud</div><div>Sistema de Gestão</div></div>
+    <div class="brand">
+      <div class="logo">${htmlLogoEmpresa(empresa, textoHtml)}</div>
+      <div>
+        <div class="brand-nome">${textoHtml(empresa.nome_fantasia)}</div>
+        ${empresa.cnpj ? `<div class="brand-info">CNPJ/CPF: ${textoHtml(empresa.cnpj)}</div>` : ""}
+        ${empresa.telefone ? `<div class="brand-info">Tel: ${textoHtml(empresa.telefone)}</div>` : ""}
+        ${empresa.endereco ? `<div class="brand-info">${textoHtml(empresa.endereco)}</div>` : ""}
+      </div>
+    </div>
     <div class="box">TERMO DE GARANTIA<br/>OS Nº ${numOS(ordem.numero_os)}</div>
   </div>
   <h1>Termo de Garantia do Serviço</h1>
@@ -2436,9 +2485,7 @@ export function useOrdemServico() {
     <div><div class="label">Garantia</div><div class="value">${Number(ordem.garantia_dias || 0)} dias</div></div>
     <div><div class="label">Válida até</div><div class="value">${validade.toLocaleDateString("pt-BR")}</div></div>
   </div></div>
-  <div class="section"><h2>CONDIÇÕES</h2><div class="text">
-    A garantia cobre somente o serviço executado e/ou peças substituídas descritas na Ordem de Serviço. Não cobre mau uso, queda, oxidação, violação, tentativa de reparo por terceiros, descarga elétrica, danos físicos, instalação indevida ou defeitos diferentes dos informados nesta OS.
-  </div></div>
+  <div class="section"><h2>CONDIÇÕES</h2><div class="text">${textoHtml(condicoesGarantia)}</div></div>
   <div class="section"><h2>SERVIÇO / SOLUÇÃO</h2><div class="text">${textoHtml(ordem.solucao || ordem.diagnostico || "-")}</div></div>
   <div class="sign"><div class="line">Cliente</div><div class="line">Responsável Técnico</div></div>
 </div>
