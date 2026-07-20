@@ -38,8 +38,8 @@ async function renovarToken(): Promise<string | null> {
 // accessToken é chamado pelo supabase-js antes de cada requisição.
 // Se não houver token válido, o cliente segue exatamente como hoje
 // (só com a chave pública) - nada muda pra quem não tem token ainda.
-async function accessToken(): Promise<string | undefined> {
-  if (typeof window === "undefined") return undefined;
+async function accessToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
 
   const tokenAtual = getTokenSessao();
 
@@ -54,7 +54,7 @@ async function accessToken(): Promise<string | undefined> {
   }
 
   const tokenRenovado = await renovacaoEmAndamento;
-  return tokenRenovado || undefined;
+  return tokenRenovado || null;
 }
 
 export const supabase = createClient(
